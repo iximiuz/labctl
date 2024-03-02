@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/docker/cli/cli/streams"
+	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/internal/config"
 )
 
 type Streams interface {
@@ -28,6 +30,14 @@ type CLI interface {
 
 	// Print to stderr unless quiet else - discard.
 	PrintAux(string, ...any)
+
+	SetConfig(*config.Config)
+
+	Config() *config.Config
+
+	SetClient(*api.Client)
+
+	Client() *api.Client
 }
 
 type cli struct {
@@ -35,6 +45,9 @@ type cli struct {
 	outputStream *streams.Out
 	auxStream    *streams.Out
 	errorStream  io.Writer
+
+	config *config.Config
+	client *api.Client
 }
 
 var _ CLI = &cli{}
@@ -46,6 +59,22 @@ func NewCLI(cin io.ReadCloser, cout io.Writer, cerr io.Writer) CLI {
 		auxStream:    streams.NewOut(cerr),
 		errorStream:  cerr,
 	}
+}
+
+func (c *cli) SetConfig(cfg *config.Config) {
+	c.config = cfg
+}
+
+func (c *cli) Config() *config.Config {
+	return c.config
+}
+
+func (c *cli) SetClient(client *api.Client) {
+	c.client = client
+}
+
+func (c *cli) Client() *api.Client {
+	return c.client
 }
 
 func (c *cli) InputStream() *streams.In {

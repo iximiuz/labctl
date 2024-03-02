@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/moby/term"
@@ -9,7 +10,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/cmd/auth"
-	"github.com/iximiuz/labctl/pkg/cliutil"
+	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/internal/cliutil"
+	"github.com/iximiuz/labctl/internal/config"
 )
 
 var (
@@ -22,13 +25,29 @@ func main() {
 	stdin, stdout, stderr := term.StdStreams()
 	cli := cliutil.NewCLI(stdin, stdout, stderr)
 
+	versionStr := fmt.Sprintf("%s (built: %s commit: %s)", version, date, commit)
+
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Debug("Unable to load config: %s", err)
+		cfg = config.Default()
+	}
+	cli.SetConfig(cfg)
+
+	cli.SetClient(api.NewClient(api.ClientOptions{
+		BaseURL:     cfg.APIBaseURL,
+		SessionID:   cfg.SessionID,
+		AccessToken: cfg.AccessToken,
+		UserAgent:   fmt.Sprintf("labctl/%s", versionStr),
+	}))
+
 	var logLevel string
 	logrus.SetOutput(cli.ErrorStream())
 
 	cmd := &cobra.Command{
 		Short:   "This is labctl, the iximiuz Labs command line interface.",
 		Use:     "labctl <auth|playgrounds|port-forward|ssh> [flags]",
-		Version: fmt.Sprintf("%s (built: %s commit: %s)", version, date, commit),
+		Version: versionStr,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			setLogLevel(cli, logLevel)
 			cmd.SilenceUsage = true

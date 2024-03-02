@@ -3,7 +3,7 @@ package auth
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/iximiuz/labctl/pkg/cliutil"
+	"github.com/iximiuz/labctl/internal/cliutil"
 )
 
 // type authOptions struct {
@@ -13,7 +13,7 @@ func NewCommand(cli cliutil.CLI) *cobra.Command {
 	// var opts options
 
 	cmd := &cobra.Command{
-		Short: "Authenticate the current machine with iximiuz Labs.",
+		Short: "Authenticate the current machine with iximiuz Labs",
 		Use:   "auth <login|logout>",
 		// Args: cobra.MinimumNArgs(1),
 		// RunE: func(cmd *cobra.Command, args []string) error {
@@ -38,7 +38,8 @@ func NewCommand(cli cliutil.CLI) *cobra.Command {
 
 	cmd.AddCommand(
 		newLoginCommand(cli),
-		// newLogoutCommand(cli),
+		newLogoutCommand(cli),
+		newWhoAmICommand(cli),
 	)
 
 	return cmd
