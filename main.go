@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/cmd/auth"
+	"github.com/iximiuz/labctl/cmd/portforward"
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/cliutil"
 	"github.com/iximiuz/labctl/internal/config"
@@ -59,6 +60,7 @@ func main() {
 
 	cmd.AddCommand(
 		auth.NewCommand(cli),
+		portforward.NewCommand(cli),
 		// TODO: other commands
 	)
 

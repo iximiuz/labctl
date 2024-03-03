@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -53,7 +55,7 @@ func (c *Client) Get(
 		return nil, err
 	}
 
-	return c.httpClient.Do(req)
+	return c.doRequest(req)
 }
 
 func (c *Client) GetInto(
@@ -68,7 +70,7 @@ func (c *Client) GetInto(
 		return err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return err
 	}
@@ -93,7 +95,7 @@ func (c *Client) Post(
 		return nil, err
 	}
 
-	return c.httpClient.Do(req)
+	return c.doRequest(req)
 }
 
 func (c *Client) PostInto(
@@ -109,7 +111,7 @@ func (c *Client) PostInto(
 		return err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return err
 	}
@@ -133,7 +135,7 @@ func (c *Client) Delete(
 		return nil, err
 	}
 
-	return c.httpClient.Do(req)
+	return c.doRequest(req)
 }
 
 func (c *Client) newRequest(
@@ -165,6 +167,29 @@ func (c *Client) newRequest(
 	return req, nil
 }
 
+func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body)
+	}
+
+	return resp, nil
+}
+
 func base64Encode(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
+func toJSONBody(req any) (io.Reader, error) {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(req); err != nil {
+		return nil, fmt.Errorf("failed to encode request body: %w", err)
+	}
+	return &buf, nil
 }
