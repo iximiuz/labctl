@@ -69,6 +69,15 @@ func ReadPublicKey(dirpath string) (string, error) {
 	return string(publicKey), nil
 }
 
+func ReadPrivateKey(dirpath string) (string, error) {
+	privateKey, err := os.ReadFile(filepath.Join(dirpath, identityFile))
+	if err != nil {
+		return "", fmt.Errorf("read SSH private key: %w", err)
+	}
+
+	return string(privateKey), nil
+}
+
 func generateKeys() ([]byte, []byte, error) {
 	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
