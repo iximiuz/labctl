@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/iximiuz/labctl/internal/cliutil"
+	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 )
 
@@ -31,7 +31,7 @@ type options struct {
 //   - LOCAL_HOST:LOCAL_PORT:REMOTE_PORT              # similar to LOCAL_PORT:REMOTE_PORT but LOCAL_HOST is used instead of 127.0.0.1
 //   - LOCAL_HOST:LOCAL_PORT:REMOTE_HOST:REMOTE_PORT  # the most explicit form
 
-func NewCommand(cli cliutil.CLI) *cobra.Command {
+func NewCommand(cli labcli.CLI) *cobra.Command {
 	var opts options
 
 	cmd := &cobra.Command{
@@ -43,17 +43,17 @@ refers to the labctl side. The word "remote" always refers to the target playgro
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(opts.locals)+len(opts.remotes) == 0 {
-				return cliutil.NewStatusError(1, "at least one -L or -R flag must be provided")
+				return labcli.NewStatusError(1, "at least one -L or -R flag must be provided")
 			}
 			if len(opts.remotes) > 0 {
 				// TODO: Implement me!
-				return cliutil.NewStatusError(1, "remote port forwarding is not implemented yet")
+				return labcli.NewStatusError(1, "remote port forwarding is not implemented yet")
 			}
 
 			for _, local := range opts.locals {
 				parsed, err := portforward.ParseLocal(local)
 				if err != nil {
-					return cliutil.NewStatusError(1, "invalid local port forwarding spec: %s", local)
+					return labcli.NewStatusError(1, "invalid local port forwarding spec: %s", local)
 				}
 				opts.localsParsed = append(opts.localsParsed, parsed)
 			}
@@ -62,7 +62,7 @@ refers to the labctl side. The word "remote" always refers to the target playgro
 
 			opts.playID = args[0]
 
-			return cliutil.WrapStatusError(runPortForward(cmd.Context(), cli, &opts))
+			return labcli.WrapStatusError(runPortForward(cmd.Context(), cli, &opts))
 		},
 	}
 
@@ -73,7 +73,7 @@ refers to the labctl side. The word "remote" always refers to the target playgro
 		"machine",
 		"m",
 		"",
-		`Target machine`,
+		`Target machine (default: the first machine in the playground)`,
 	)
 	flags.StringSliceVarP(
 		&opts.locals,
@@ -100,10 +100,10 @@ refers to the labctl side. The word "remote" always refers to the target playgro
 	return cmd
 }
 
-func runPortForward(ctx context.Context, cli cliutil.CLI, opts *options) error {
+func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 	p, err := cli.Client().GetPlay(ctx, opts.playID)
 	if err != nil {
-		return fmt.Errorf("failed to get play: %w", err)
+		return fmt.Errorf("couldn't get playground: %w", err)
 	}
 
 	if opts.machine == "" {
@@ -115,7 +115,7 @@ func runPortForward(ctx context.Context, cli cliutil.CLI, opts *options) error {
 		Machine: opts.machine,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to start tunnel: %w", err)
+		return fmt.Errorf("couldn't start tunnel: %w", err)
 	}
 
 	var (

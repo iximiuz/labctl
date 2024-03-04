@@ -10,10 +10,26 @@ import (
 )
 
 const (
-	defaultAPIBaseURL = "https://labs-dev.iximiuz.com/api"
+	defaultAPIBaseURL = "https://labs.iximiuz.com/api"
+
+	defaultSSHDir = "ssh"
 )
 
-func configFilePath() (string, error) {
+type Config struct {
+	mu sync.RWMutex
+
+	FilePath string `yaml:"-"`
+
+	APIBaseURL string `yaml:"api_base_url"`
+
+	SessionID string `yaml:"session_id"`
+
+	AccessToken string `yaml:"access_token"`
+
+	SSHDirPath string `yaml:"ssh_dir_path"`
+}
+
+func ConfigFilePath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -22,62 +38,49 @@ func configFilePath() (string, error) {
 	return filepath.Join(homeDir, ".iximiuz", "labctl", "config.yaml"), nil
 }
 
-type Config struct {
-	mu sync.RWMutex
-
-	APIBaseURL string `yaml:"api_base_url"`
-
-	SessionID string `yaml:"session_id"`
-
-	AccessToken string `yaml:"access_token"`
+func Default(path string) *Config {
+	return &Config{
+		FilePath:   path,
+		APIBaseURL: defaultAPIBaseURL,
+		SSHDirPath: filepath.Join(filepath.Dir(path), defaultSSHDir),
+	}
 }
 
-func Load() (*Config, error) {
-	filename, err := configFilePath()
-	if err != nil {
-		return nil, fmt.Errorf("unable to get config file path: %s", err)
+func Load(path string) (*Config, error) {
+	file, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return Default(path), nil
 	}
-
-	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("unable to open config file: %s", err)
 	}
 	defer file.Close()
 
-	cfg := Default()
-	if err := yaml.NewDecoder(file).Decode(cfg); err != nil {
+	var cfg Config
+	if err := yaml.NewDecoder(file).Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("unable to decode config from YAML: %s", err)
 	}
 
-	return cfg, nil
+	cfg.FilePath = path
+
+	return &cfg, nil
 }
 
-func Default() *Config {
-	return &Config{
-		APIBaseURL: defaultAPIBaseURL,
-	}
-}
+func (c *Config) Dump() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-func (cfg *Config) Dump() error {
-	cfg.mu.Lock()
-	defer cfg.mu.Unlock()
-
-	filename, err := configFilePath()
-	if err != nil {
-		return fmt.Errorf("unable to get config file path: %s", err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.FilePath), 0o700); err != nil {
 		return fmt.Errorf("unable to create config directory: %s", err)
 	}
 
-	file, err := os.OpenFile(filename+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	file, err := os.OpenFile(c.FilePath+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("unable to open config file: %s", err)
 	}
 	defer file.Close()
 
-	if err := yaml.NewEncoder(file).Encode(cfg); err != nil {
+	if err := yaml.NewEncoder(file).Encode(c); err != nil {
 		return fmt.Errorf("unable to encode config to YAML: %s", err)
 	}
 
@@ -85,7 +88,7 @@ func (cfg *Config) Dump() error {
 		return fmt.Errorf("unable to close config file: %s", err)
 	}
 
-	if err := os.Rename(filename+".tmp", filename); err != nil {
+	if err := os.Rename(c.FilePath+".tmp", c.FilePath); err != nil {
 		return fmt.Errorf("unable to rename config file: %s", err)
 	}
 

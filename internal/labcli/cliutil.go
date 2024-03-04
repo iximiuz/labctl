@@ -1,4 +1,4 @@
-package cliutil
+package labcli
 
 import (
 	"fmt"

@@ -6,14 +6,13 @@ import (
 	"os"
 
 	"github.com/moby/term"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/cmd/auth"
 	"github.com/iximiuz/labctl/cmd/portforward"
 	"github.com/iximiuz/labctl/internal/api"
-	"github.com/iximiuz/labctl/internal/cliutil"
 	"github.com/iximiuz/labctl/internal/config"
+	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 var (
@@ -22,37 +21,36 @@ var (
 	date    = "unknown"
 )
 
+type configOverrides struct {
+	endpoint string
+}
+
 func main() {
 	stdin, stdout, stderr := term.StdStreams()
-	cli := cliutil.NewCLI(stdin, stdout, stderr)
+	cli := labcli.NewCLI(stdin, stdout, stderr)
 
-	versionStr := fmt.Sprintf("%s (built: %s commit: %s)", version, date, commit)
-
-	cfg, err := config.Load()
-	if err != nil {
-		slog.Debug("Unable to load config: %s", err)
-		cfg = config.Default()
-	}
-	cli.SetConfig(cfg)
-
-	cli.SetClient(api.NewClient(api.ClientOptions{
-		BaseURL:     cfg.APIBaseURL,
-		SessionID:   cfg.SessionID,
-		AccessToken: cfg.AccessToken,
-		UserAgent:   fmt.Sprintf("labctl/%s", versionStr),
-	}))
-
-	var logLevel string
-	logrus.SetOutput(cli.ErrorStream())
+	var (
+		logLevel  string
+		overrides configOverrides
+	)
 
 	cmd := &cobra.Command{
-		Short:   "This is labctl, the iximiuz Labs command line interface.",
-		Use:     "labctl <auth|playgrounds|port-forward|ssh> [flags]",
-		Version: versionStr,
+		Use:     "labctl <auth|playgrounds|port-forward|ssh|...>",
+		Short:   "labctl - iximiuz Labs command line interface.",
+		Version: fmt.Sprintf("%s (built: %s commit: %s)", version, date, commit),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			setLogLevel(cli, logLevel)
 			cmd.SilenceUsage = true
 			cmd.SilenceErrors = true
+
+			loadConfigOrFail(cli, overrides)
+
+			cli.SetClient(api.NewClient(api.ClientOptions{
+				BaseURL:     cli.Config().APIBaseURL,
+				SessionID:   cli.Config().SessionID,
+				AccessToken: cli.Config().AccessToken,
+				UserAgent:   fmt.Sprintf("labctl/%s", cmd.Version),
+			}))
 		},
 	}
 	cmd.SetOut(cli.OutputStream())
@@ -74,24 +72,52 @@ func main() {
 		"info",
 		`log level for labctl ("debug" | "info" | "warn" | "error" | "fatal")`,
 	)
+	flags.StringVar(
+		&overrides.endpoint,
+		"endpoint",
+		"",
+		"iximiuz Labs API endpoint URL",
+	)
 
 	if err := cmd.Execute(); err != nil {
-		if sterr, ok := err.(cliutil.StatusError); ok {
+		if sterr, ok := err.(labcli.StatusError); ok {
 			cli.PrintErr("labctl: %s\n", sterr)
 			os.Exit(sterr.Code())
 		}
 
 		// Hopefully, only usage errors.
-		logrus.Debugf("Exit error: %s", err)
+		slog.Debug("Exit error: %s", err)
 		os.Exit(1)
 	}
 }
 
-func setLogLevel(cli cliutil.CLI, logLevel string) {
-	lvl, err := logrus.ParseLevel(logLevel)
+func loadConfigOrFail(cli labcli.CLI, overrides configOverrides) {
+	configPath, err := config.ConfigFilePath()
 	if err != nil {
+		cli.PrintErr("Unable to determine config path: %s\n", err)
+		os.Exit(1)
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		cli.PrintErr("Unable to load config: %s\n", err)
+		cli.PrintErr("Is %s corrupted?\n", configPath)
+		cfg = config.Default(configPath)
+	}
+
+	if overrides.endpoint != "" {
+		cfg.APIBaseURL = overrides.endpoint
+	}
+
+	cli.SetConfig(cfg)
+}
+
+func setLogLevel(cli labcli.CLI, logLevel string) {
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(logLevel)); err != nil {
 		cli.PrintErr("Unable to parse log level: %s\n", logLevel)
 		os.Exit(1)
 	}
-	logrus.SetLevel(lvl)
+
+	slog.SetLogLoggerLevel(level)
 }
