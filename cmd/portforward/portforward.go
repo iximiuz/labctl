@@ -111,8 +111,9 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 	}
 
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
-		PlayID:  opts.playID,
-		Machine: opts.machine,
+		PlayID:     opts.playID,
+		Machine:    opts.machine,
+		SSHDirPath: cli.Config().SSHDirPath,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start tunnel: %w", err)

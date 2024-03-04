@@ -1,32 +1,23 @@
 package ssh
 
-// Based on https://gist.github.com/devinodaniel/8f9b8a4f31573f428f29ec0e884e6673
-
 import (
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/mikesmitty/edkey"
 	"golang.org/x/crypto/ssh"
 )
 
 const (
-	identityFile = "id_rsa"
-
-	bitSize = 4096
+	identityFile = "id_ed25519"
 )
 
 func GenerateIdentity(dirpath string) error {
-	privateKey, err := generatePrivateKey(bitSize)
-	if err != nil {
-		return fmt.Errorf("generate SSH private key: %w", err)
-	}
-
-	publicKey, err := generatePublicKey(&privateKey.PublicKey)
+	publicKey, privateKey, err := generateKeys()
 	if err != nil {
 		return err
 	}
@@ -40,7 +31,7 @@ func GenerateIdentity(dirpath string) error {
 
 	if err := os.WriteFile(
 		filepath.Join(dirpath, identityFile),
-		encodePrivateKeyToPEM(privateKey),
+		privateKey,
 		0600,
 	); err != nil {
 		return fmt.Errorf("write SSH private key to file: %w", err)
@@ -69,36 +60,30 @@ func RemoveIdentity(dirpath string) error {
 	return nil
 }
 
-func generatePrivateKey(bitSize int) (*rsa.PrivateKey, error) {
-	key, err := rsa.GenerateKey(rand.Reader, bitSize)
+func ReadPublicKey(dirpath string) (string, error) {
+	publicKey, err := os.ReadFile(filepath.Join(dirpath, identityFile+".pub"))
 	if err != nil {
-		return nil, fmt.Errorf("generate SSH private key: %w", err)
+		return "", fmt.Errorf("read SSH public key: %w", err)
 	}
 
-	if err = key.Validate(); err != nil {
-		return nil, fmt.Errorf("validate SSH private key: %w", err)
-	}
-
-	return key, nil
+	return string(publicKey), nil
 }
 
-func encodePrivateKeyToPEM(privateKey *rsa.PrivateKey) []byte {
-	privDER := x509.MarshalPKCS1PrivateKey(privateKey)
-
-	privBlock := pem.Block{
-		Type:    "RSA PRIVATE KEY",
-		Headers: nil,
-		Bytes:   privDER,
-	}
-
-	return pem.EncodeToMemory(&privBlock)
-}
-
-func generatePublicKey(privatekey *rsa.PublicKey) ([]byte, error) {
-	key, err := ssh.NewPublicKey(privatekey)
+func generateKeys() ([]byte, []byte, error) {
+	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("generate SSH public key: %w", err)
+		return nil, nil, fmt.Errorf("generate ed25519 keys: %w", err)
 	}
 
-	return ssh.MarshalAuthorizedKey(key), nil
+	publicKey, err := ssh.NewPublicKey(pubKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create SSH public key: %w", err)
+	}
+
+	pemKey := &pem.Block{
+		Type:  "OPENSSH PRIVATE KEY",
+		Bytes: edkey.MarshalED25519PrivateKey(privKey),
+	}
+
+	return ssh.MarshalAuthorizedKey(publicKey), pem.EncodeToMemory(pemKey), nil
 }

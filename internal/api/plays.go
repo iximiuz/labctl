@@ -49,6 +49,7 @@ type StartTunnelRequest struct {
 	Port             int        `json:"port"`
 	Access           PortAccess `json:"access"`
 	GenerateLoginURL bool       `json:"generateLoginUrl"`
+	SSHPubKey        string     `json:"sshPubKey"`
 }
 
 type StartTunnelResponse struct {

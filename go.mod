@@ -7,6 +7,7 @@ require (
 	github.com/docker/cli v25.0.3+incompatible
 	github.com/google/uuid v1.6.0
 	github.com/iximiuz/wsmux v0.0.2
+	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
 	github.com/moby/term v0.5.0
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/spf13/cobra v1.8.0

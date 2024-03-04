@@ -10,6 +10,7 @@ import (
 	"github.com/iximiuz/wsmux/pkg/client"
 
 	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/internal/ssh"
 )
 
 const (
@@ -17,8 +18,9 @@ const (
 )
 
 type TunnelOptions struct {
-	PlayID  string
-	Machine string
+	PlayID     string
+	Machine    string
+	SSHDirPath string
 }
 
 type Tunnel struct {
@@ -27,8 +29,20 @@ type Tunnel struct {
 }
 
 func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*Tunnel, error) {
+	var (
+		sshPubKey string
+		err       error
+	)
+	if opts.SSHDirPath != "" {
+		sshPubKey, err = ssh.ReadPublicKey(opts.SSHDirPath)
+		if err != nil {
+			return nil, fmt.Errorf("ssh.ReadPublicKey(): %w", err)
+		}
+	}
+
 	resp, err := client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
 		Machine:          opts.Machine,
+		SSHPubKey:        sshPubKey,
 		Access:           api.PortAccessPrivate,
 		GenerateLoginURL: true,
 	})
