@@ -19,6 +19,15 @@ type Play struct {
 	Machines []Machine `json:"machines" yaml:"machines"`
 }
 
+func (p *Play) GetMachine(name string) *Machine {
+	for _, m := range p.Machines {
+		if m.Name == name {
+			return &m
+		}
+	}
+	return nil
+}
+
 type Machine struct {
 	Name        string `json:"name"`
 	CPUCount    int    `json:"cpuCount"`

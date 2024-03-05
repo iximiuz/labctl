@@ -70,8 +70,12 @@ func ParseLocal(s string) (ForwardingSpec, error) {
 	if cfg.LocalPort == "" {
 		// Should use 0 to avoid conflicts but wsmux won't report back the actual port.
 		// Hence, we use a poor man's random port instead.
-		cfg.LocalPort = fmt.Sprintf("%d", 40000+rand.Intn(20000))
+		cfg.LocalPort = RandomLocalPort()
 	}
 
 	return cfg, nil
+}
+
+func RandomLocalPort() string {
+	return fmt.Sprintf("%d", 40000+rand.Intn(20000))
 }

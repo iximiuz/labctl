@@ -10,6 +10,7 @@ import (
 	"github.com/iximiuz/wsmux/pkg/client"
 
 	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/internal/retry"
 	"github.com/iximiuz/labctl/internal/ssh"
 )
 
@@ -51,10 +52,10 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 	}
 
 	var cookie string
-	if err := retry(ctx, func() error {
+	if err := retry.UntilSuccess(ctx, func() error {
 		cookie, err = authenticate(ctx, resp.LoginURL, conductorSessionCookieName)
 		return err
-	}, 10, 1000); err != nil {
+	}, 10, 1*time.Second); err != nil {
 		return nil, fmt.Errorf("authenticate(): %w", err)
 	}
 
@@ -92,22 +93,4 @@ func authenticate(ctx context.Context, url string, name string) (string, error) 
 	}
 
 	return "", fmt.Errorf("session cookie not found: %s", name)
-}
-
-func retry(ctx context.Context, f func() error, retries int, delay int) error {
-	var err error
-	for i := 0; i < retries; i++ {
-		err = f()
-		if err == nil {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return err
-
-		case <-time.After(time.Duration(delay) * time.Millisecond):
-		}
-	}
-	return err
 }

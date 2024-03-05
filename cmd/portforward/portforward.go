@@ -108,6 +108,10 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 
 	if opts.machine == "" {
 		opts.machine = p.Machines[0].Name
+	} else {
+		if p.GetMachine(opts.machine) == nil {
+			return fmt.Errorf("machine %q not found in the playground", opts.machine)
+		}
 	}
 
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
