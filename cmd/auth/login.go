@@ -65,8 +65,8 @@ func runLogin(ctx context.Context, cli labcli.CLI) error {
 				return fmt.Errorf("couldn't save the credentials to the config file: %w", err)
 			}
 
-			if err := ssh.GenerateIdentity(cli.Config().SSHDirPath); err != nil {
-				return fmt.Errorf("couldn't generate SSH identity in %s: %w", cli.Config().SSHDirPath, err)
+			if err := ssh.GenerateIdentity(cli.Config().SSHDir); err != nil {
+				return fmt.Errorf("couldn't generate SSH identity in %s: %w", cli.Config().SSHDir, err)
 			}
 
 			cli.PrintAux("\nSession authorized. You can now use labctl commands.\n")

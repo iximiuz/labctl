@@ -76,9 +76,10 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 	}
 
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
-		PlayID:     opts.playID,
-		Machine:    opts.machine,
-		SSHDirPath: cli.Config().SSHDirPath,
+		PlayID:   opts.playID,
+		Machine:  opts.machine,
+		PlaysDir: cli.Config().PlaysDir,
+		SSHDir:   cli.Config().SSHDir,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start tunnel: %w", err)
@@ -127,7 +128,7 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 	}
 	defer conn.Close()
 
-	sess, err := ssh.NewSession(conn, "root", cli.Config().SSHDirPath)
+	sess, err := ssh.NewSession(conn, "root", cli.Config().SSHDir)
 	if err != nil {
 		return fmt.Errorf("couldn't create SSH session: %w", err)
 	}

@@ -2,8 +2,12 @@ package portforward
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,23 +23,29 @@ const (
 )
 
 type TunnelOptions struct {
-	PlayID     string
-	Machine    string
-	SSHDirPath string
+	PlayID   string
+	Machine  string
+	PlaysDir string
+	SSHDir   string
 }
 
 type Tunnel struct {
-	url    string
-	cookie string
+	url   string
+	token string
 }
 
 func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*Tunnel, error) {
+	tunnelFile := filepath.Join(opts.PlaysDir, opts.PlayID, "tunnel.json")
+	if t, err := loadTunnel(tunnelFile); err == nil {
+		return t, nil
+	}
+
 	var (
 		sshPubKey string
 		err       error
 	)
-	if opts.SSHDirPath != "" {
-		sshPubKey, err = ssh.ReadPublicKey(opts.SSHDirPath)
+	if opts.SSHDir != "" {
+		sshPubKey, err = ssh.ReadPublicKey(opts.SSHDir)
 		if err != nil {
 			return nil, fmt.Errorf("ssh.ReadPublicKey(): %w", err)
 		}
@@ -51,27 +61,51 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 		return nil, fmt.Errorf("client.StartTunnel(): %w", err)
 	}
 
-	var cookie string
+	var token string
 	if err := retry.UntilSuccess(ctx, func() error {
-		cookie, err = authenticate(ctx, resp.LoginURL, conductorSessionCookieName)
+		token, err = authenticate(ctx, resp.LoginURL, conductorSessionCookieName)
 		return err
 	}, 10, 1*time.Second); err != nil {
 		return nil, fmt.Errorf("authenticate(): %w", err)
 	}
 
-	return &Tunnel{
-		url:    resp.URL,
-		cookie: cookie,
-	}, nil
+	t := &Tunnel{
+		url:   resp.URL,
+		token: token,
+	}
+
+	if err := saveTunnel(tunnelFile, t); err != nil {
+		slog.Warn("Couldn't save tunnel info to file: %v", err)
+	}
+
+	return t, nil
 }
 
 func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan error) error {
 	wsUrl := "wss://" + strings.Split(t.url, "://")[1]
 
 	wsmux := client.NewClient(ctx, spec.LocalAddr(), spec.RemoteAddr(), wsUrl, errCh)
-	wsmux.SetHeader("Cookie", conductorSessionCookieName+"="+t.cookie)
+	wsmux.SetHeader("Cookie", conductorSessionCookieName+"="+t.token)
 
 	return wsmux.ListenAndServe()
+}
+
+func (t *Tunnel) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{
+		"url":   t.url,
+		"token": t.token,
+	})
+}
+
+func (t *Tunnel) UnmarshalJSON(data []byte) error {
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+
+	t.url = m["url"]
+	t.token = m["token"]
+	return nil
 }
 
 func authenticate(ctx context.Context, url string, name string) (string, error) {
@@ -93,4 +127,31 @@ func authenticate(ctx context.Context, url string, name string) (string, error) 
 	}
 
 	return "", fmt.Errorf("session cookie not found: %s", name)
+}
+
+func loadTunnel(file string) (*Tunnel, error) {
+	bytes, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	var t Tunnel
+	if err := json.Unmarshal(bytes, &t); err != nil {
+		return nil, err
+	}
+
+	return &t, nil
+}
+
+func saveTunnel(file string, t *Tunnel) error {
+	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
+		return err
+	}
+
+	bytes, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(file, bytes, 0644)
 }

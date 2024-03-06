@@ -70,9 +70,10 @@ func runSSHProxy(ctx context.Context, cli labcli.CLI, opts *options) error {
 	}
 
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
-		PlayID:     opts.playID,
-		Machine:    opts.machine,
-		SSHDirPath: cli.Config().SSHDirPath,
+		PlayID:   opts.playID,
+		Machine:  opts.machine,
+		PlaysDir: cli.Config().PlaysDir,
+		SSHDir:   cli.Config().SSHDir,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start tunnel: %w", err)
@@ -113,14 +114,14 @@ func runSSHProxy(ctx context.Context, cli labcli.CLI, opts *options) error {
 	cli.PrintOut("SSH proxy is running on %s\n", localPort)
 	cli.PrintOut(
 		"\nConnect with: ssh -i %s/id_ed25519 ssh://root@%s:%s\n",
-		cli.Config().SSHDirPath, localHost, localPort,
+		cli.Config().SSHDir, localHost, localPort,
 	)
 	cli.PrintOut("\nOr add the following to your ~/.ssh/config:\n")
 	cli.PrintOut("Host %s\n", opts.playID+"-"+opts.machine)
 	cli.PrintOut("  HostName %s\n", localHost)
 	cli.PrintOut("  Port %s\n", localPort)
 	cli.PrintOut("  User root\n")
-	cli.PrintOut("  IdentityFile %s/id_ed25519\n", cli.Config().SSHDirPath)
+	cli.PrintOut("  IdentityFile %s/id_ed25519\n", cli.Config().SSHDir)
 	cli.PrintOut("  StrictHostKeyChecking no\n")
 	cli.PrintOut("  UserKnownHostsFile /dev/null\n")
 

@@ -11,8 +11,6 @@ import (
 
 const (
 	defaultAPIBaseURL = "https://labs.iximiuz.com/api"
-
-	defaultSSHDir = "ssh"
 )
 
 type Config struct {
@@ -26,7 +24,9 @@ type Config struct {
 
 	AccessToken string `yaml:"access_token"`
 
-	SSHDirPath string `yaml:"ssh_dir_path"`
+	PlaysDir string `yaml:"plays_dir"`
+
+	SSHDir string `yaml:"ssh_dir"`
 }
 
 func ConfigFilePath() (string, error) {
@@ -42,7 +42,8 @@ func Default(path string) *Config {
 	return &Config{
 		FilePath:   path,
 		APIBaseURL: defaultAPIBaseURL,
-		SSHDirPath: filepath.Join(filepath.Dir(path), defaultSSHDir),
+		PlaysDir:   filepath.Join(filepath.Dir(path), "plays"),
+		SSHDir:     filepath.Join(filepath.Dir(path), "ssh"),
 	}
 }
 
