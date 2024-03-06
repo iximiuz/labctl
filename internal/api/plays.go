@@ -5,16 +5,21 @@ import (
 )
 
 type Play struct {
-	ID        string `json:"id" yaml:"id"`
-	CreatedAt string `json:"createdAt" yaml:"createdAt"`
-	UpdatedAt string `json:"updatedAt" yaml:"updatedAt"`
-	ExpiresIn int    `json:"expiresIn" yaml:"expiresIn"`
+	ID string `json:"id" yaml:"id"`
+
+	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt   string `json:"updatedAt" yaml:"updatedAt"`
+	LastStateAt string `json:"lastStateAt" yaml:"lastStateAt"`
+
+	ExpiresIn int `json:"expiresIn" yaml:"expiresIn"`
 
 	Playground Playground `json:"playground" yaml:"playground"`
 
-	PageURL string `json:"pageUrl" yaml:"pageUrl"`
-	Active  bool   `json:"active" yaml:"active"`
-	Running bool   `json:"running" yaml:"running"`
+	PageURL   string `json:"pageUrl" yaml:"pageUrl"`
+	Active    bool   `json:"active" yaml:"active"`
+	Running   bool   `json:"running" yaml:"running"`
+	Destroyed bool   `json:"destroyed" yaml:"destroyed"`
+	Failed    bool   `json:"failed" yaml:"failed"`
 
 	Machines []Machine `json:"machines" yaml:"machines"`
 }
@@ -36,14 +41,38 @@ type Machine struct {
 	NetworkPerf string `json:"networkPerf"`
 }
 
+type CreatePlayRequest struct {
+	Playground string `json:"playground"`
+}
+
+func (c *Client) CreatePlay(ctx context.Context, req CreatePlayRequest) (*Play, error) {
+	body, err := toJSONBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays", nil, nil, body, &p)
+}
+
 func (c *Client) GetPlay(ctx context.Context, id string) (*Play, error) {
 	var p Play
 	return &p, c.GetInto(ctx, "/plays/"+id, nil, nil, &p)
 }
 
-func (c *Client) ListPlays(ctx context.Context) ([]Play, error) {
-	var plays []Play
+func (c *Client) ListPlays(ctx context.Context) ([]*Play, error) {
+	var plays []*Play
 	return plays, c.GetInto(ctx, "/plays", nil, nil, &plays)
+}
+
+func (c *Client) DeletePlay(ctx context.Context, id string) error {
+	resp, err := c.Delete(ctx, "/plays/"+id, nil, nil)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+
+	return nil
 }
 
 type PortAccess string

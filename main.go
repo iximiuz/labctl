@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/cmd/auth"
+	"github.com/iximiuz/labctl/cmd/playground"
 	"github.com/iximiuz/labctl/cmd/portforward"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
@@ -60,6 +61,7 @@ func main() {
 
 	cmd.AddCommand(
 		auth.NewCommand(cli),
+		playground.NewCommand(cli),
 		portforward.NewCommand(cli),
 		ssh.NewCommand(cli),
 		sshproxy.NewCommand(cli),

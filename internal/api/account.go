@@ -9,7 +9,7 @@ type Me struct {
 	GithubProfileId string `json:"githubProfileId" yaml:"githubProfileId"`
 }
 
-func (c *Client) GetMe(ctx context.Context) (*Me, error) {
+func (c *Client) GetAccount(ctx context.Context) (*Me, error) {
 	var me Me
 	return &me, c.GetInto(ctx, "/account", nil, nil, &me)
 }
