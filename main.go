@@ -33,14 +33,15 @@ func main() {
 	cli := labcli.NewCLI(stdin, stdout, stderr)
 
 	var (
-		logLevel  string
-		overrides configOverrides
+		logLevel   string
+		overrides  configOverrides
+		versionStr = fmt.Sprintf("%s (built: %s commit: %s)", version, date, commit)
 	)
 
 	cmd := &cobra.Command{
 		Use:     "labctl <auth|playgrounds|port-forward|ssh|...>",
 		Short:   "labctl - iximiuz Labs command line interface.",
-		Version: fmt.Sprintf("%s (built: %s commit: %s)", version, date, commit),
+		Version: versionStr,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			setLogLevel(cli, logLevel)
 			cmd.SilenceUsage = true
@@ -52,7 +53,7 @@ func main() {
 				BaseURL:     cli.Config().APIBaseURL,
 				SessionID:   cli.Config().SessionID,
 				AccessToken: cli.Config().AccessToken,
-				UserAgent:   fmt.Sprintf("labctl/%s", cmd.Version),
+				UserAgent:   fmt.Sprintf("labctl/%s", versionStr),
 			}))
 		},
 	}
