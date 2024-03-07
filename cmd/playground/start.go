@@ -3,6 +3,7 @@ package playground
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
@@ -29,9 +30,15 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start [flags] <playground-name>",
 		Short: `Start a new playground, possibly open it in a browser`,
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
+
+			if len(args) == 0 {
+				return labcli.NewStatusError(1,
+					"playground name is required\n\nAvailable playgrounds:\n%s",
+					listKnownPlaygrounds(cmd.Context(), cli))
+			}
 
 			opts.playground = args[0]
 
@@ -78,7 +85,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		return fmt.Errorf("couldn't create a new playground: %w", err)
 	}
 
-	cli.PrintAux("Playground %q has been created.\n", play.ID)
+	cli.PrintAux("New %s playground created with ID %s\n", opts.playground, play.ID)
 
 	if opts.open {
 		cli.PrintAux("Opening %s in your browser...\n", play.PageURL)
@@ -105,4 +112,19 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	cli.PrintOut("%s\n", play.ID)
 
 	return nil
+}
+
+func listKnownPlaygrounds(ctx context.Context, cli labcli.CLI) string {
+	playgrounds, err := cli.Client().ListPlaygrounds(ctx)
+	if err != nil {
+		cli.PrintErr("Couldn't list known playgrounds: %v\n", err)
+		return ""
+	}
+
+	var res []string
+	for _, p := range playgrounds {
+		res = append(res, fmt.Sprintf("  - %s - %s", p.Name, p.Description))
+	}
+
+	return strings.Join(res, "\n")
 }

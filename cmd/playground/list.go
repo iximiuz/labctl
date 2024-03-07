@@ -28,7 +28,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 		Aliases: []string{"ls"},
 		Short:   `List recent playgrounds (up to 50)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return labcli.WrapStatusError(runListPlaygrounds(cmd.Context(), cli, &opts))
+			return labcli.WrapStatusError(runListPlays(cmd.Context(), cli, &opts))
 		},
 	}
 
@@ -52,7 +52,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	return cmd
 }
 
-func runListPlaygrounds(ctx context.Context, cli labcli.CLI, opts *listOptions) error {
+func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error {
 	printer := newListPrinter(cli.OutputStream(), opts.quiet)
 	defer printer.flush()
 
