@@ -71,7 +71,7 @@ labctl ssh <playground-id> -- ls -la /
 
 ### Using IDE (VSCode, JetBrains, etc) to access playgrounds
 
-You can use the **SSH proxy mode** to access playgrounds from your IDEs:
+You can use the **SSH proxy mode** to access playgrounds from your IDE:
 
 ```sh
 labctl ssh-proxy <playground-id>
@@ -97,8 +97,7 @@ Press Ctrl+C to stop
 ```
 
 After adding the above piece to your SSH config,
-you can use the [Visual Studio Code Remote - SSH extension](https://code.visualstudio.com/docs/remote/ssh) to develop on the playground's machine.
-The JetBrains IDEs also have a similar remote development over SSH feature.
+you'll be able to develop right on the playground machine using the [Visual Studio Code Remote - SSH extension](https://code.visualstudio.com/docs/remote/ssh) or its JetBrains' counterpart.
 
 ### Port forwarding
 

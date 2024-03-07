@@ -6,7 +6,6 @@ require (
 	github.com/briandowns/spinner v1.23.0
 	github.com/docker/cli v25.0.3+incompatible
 	github.com/dustin/go-humanize v1.0.1
-	github.com/google/uuid v1.6.0
 	github.com/iximiuz/wsmux v0.0.2
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
 	github.com/moby/term v0.5.0
