@@ -107,7 +107,7 @@ func (p *listPrinter) printOne(play *api.Play) {
 	}
 
 	var link string
-	if play.Active {
+	if play.Active || play.TutorialName+play.ChallengeName+play.CourseName != "" {
 		link = play.PageURL
 	}
 

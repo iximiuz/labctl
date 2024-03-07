@@ -15,11 +15,40 @@ type Play struct {
 
 	Playground Playground `json:"playground" yaml:"playground"`
 
-	PageURL   string `json:"pageUrl" yaml:"pageUrl"`
-	Active    bool   `json:"active" yaml:"active"`
-	Running   bool   `json:"running" yaml:"running"`
-	Destroyed bool   `json:"destroyed" yaml:"destroyed"`
-	Failed    bool   `json:"failed" yaml:"failed"`
+	TutorialName string `json:"tutorialName,omitempty" yaml:"tutorialName"`
+
+	Tutorial *struct {
+		Name  string `json:"name" yaml:"name"`
+		Title string `json:"title" yaml:"title"`
+	} `json:"tutorial,omitempty" yaml:"tutorial"`
+
+	ChallengeName string `json:"challengeName,omitempty" yaml:"challengeName"`
+
+	Challenge *struct {
+		Name  string `json:"name" yaml:"name"`
+		Title string `json:"title" yaml:"title"`
+	} `json:"challenge,omitempty" yaml:"challenge"`
+
+	CourseName string `json:"courseName,omitempty" yaml:"courseName"`
+
+	Course *struct {
+		Name  string `json:"name" yaml:"name"`
+		Title string `json:"title" yaml:"title"`
+	} `json:"course,omitempty" yaml:"course"`
+
+	LessonPath string `json:"lessonPath,omitempty" yaml:"lessonPath"`
+
+	Lesson *struct {
+		Name  string `json:"name" yaml:"name"`
+		Title string `json:"title" yaml:"title"`
+	} `json:"lesson,omitempty" yaml:"lesson"`
+
+	PageURL string `json:"pageUrl" yaml:"pageUrl"`
+
+	Active    bool `json:"active" yaml:"active"`
+	Running   bool `json:"running" yaml:"running"`
+	Destroyed bool `json:"destroyed" yaml:"destroyed"`
+	Failed    bool `json:"failed" yaml:"failed"`
 
 	Machines []Machine `json:"machines" yaml:"machines"`
 }
