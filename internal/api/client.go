@@ -124,6 +124,47 @@ func (c *Client) PostInto(
 	return err
 }
 
+func (c *Client) Put(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	headers http.Header,
+	body io.Reader,
+) (*http.Response, error) {
+	req, err := c.newRequest(ctx, http.MethodPut, path, query, headers, body)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req)
+}
+
+func (c *Client) PutInto(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	headers http.Header,
+	body io.Reader,
+	into any,
+) error {
+	req, err := c.newRequest(ctx, http.MethodPut, path, query, headers, body)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
+		return err
+	}
+
+	return err
+}
+
 func (c *Client) Delete(
 	ctx context.Context,
 	path string,

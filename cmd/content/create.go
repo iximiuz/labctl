@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/internal/api"
@@ -135,14 +136,56 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 }
 
 func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
-	// ch, err := cli.Client().CreateChallenge(ctx, labcli.CreateChallengeRequest{
-	// 	Name: opts.name,
-	// })
-	// if err != nil {
-	// 	return fmt.Errorf("couldn't create challenge: %w", err)
-	// }
+	ch, err := cli.Client().CreateChallenge(ctx, api.CreateChallengeRequest{
+		Name: opts.name,
+	})
+	if err != nil {
+		return fmt.Errorf("couldn't create challenge: %w", err)
+	}
 
-	return nil
+	cli.PrintAux("Created a new challenge %s\n", ch.PageURL)
+	if err := open.Run(ch.PageURL); err != nil {
+		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually.\n")
+	}
+
+	if err := cli.Client().PutMarkdown(ctx, api.PutMarkdownRequest{
+		Kind: "challenge",
+		Name: opts.name,
+		Content: `---
+title: Sample Challenge
+description: |
+  This is a sample challenge.
+
+kind: challenge
+playground: docker
+
+createdAt: 2024-01-01
+updatedAt: 2024-02-09
+
+difficulty: medium
+
+categories:
+  - containers
+
+tagz:
+  - containerd
+  - ctr
+  - docker
+
+tasks:
+  init_run_container_labs_are_fun:
+    init: true
+    run: |
+      docker run -q -d --name labs-are-fun busybox sleep 999999
+---
+# Sample Challenge
+
+This is a sample challenge. You can edit this file in ... .`,
+	}); err != nil {
+		return fmt.Errorf("couldn't create a sample markdown file: %w", err)
+	}
+
+	return labcli.NewStatusError(0, "Happy authoring!")
 }
 
 func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
