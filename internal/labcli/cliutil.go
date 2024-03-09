@@ -38,6 +38,8 @@ type CLI interface {
 	SetClient(*api.Client)
 
 	Client() *api.Client
+
+	Version() string
 }
 
 type cli struct {
@@ -48,16 +50,19 @@ type cli struct {
 
 	config *config.Config
 	client *api.Client
+
+	version string
 }
 
 var _ CLI = &cli{}
 
-func NewCLI(cin io.ReadCloser, cout io.Writer, cerr io.Writer) CLI {
+func NewCLI(cin io.ReadCloser, cout io.Writer, cerr io.Writer, version string) CLI {
 	return &cli{
 		inputStream:  streams.NewIn(cin),
 		outputStream: streams.NewOut(cout),
 		auxStream:    streams.NewOut(cerr),
 		errorStream:  cerr,
+		version:      version,
 	}
 }
 
@@ -111,6 +116,10 @@ func (c *cli) PrintErr(format string, a ...any) {
 
 func (c *cli) PrintAux(format string, a ...any) {
 	fmt.Fprintf(c.AuxStream(), format, a...)
+}
+
+func (c *cli) Version() string {
+	return c.version
 }
 
 type StatusError struct {

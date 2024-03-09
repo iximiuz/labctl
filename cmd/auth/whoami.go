@@ -26,7 +26,7 @@ func runWhoAmI(ctx context.Context, cli labcli.CLI) error {
 		return nil
 	}
 
-	me, err := cli.Client().GetAccount(ctx)
+	me, err := cli.Client().GetMe(ctx)
 	if err != nil {
 		return err
 	}
