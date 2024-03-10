@@ -16,6 +16,8 @@ Some popular playgrounds:
 
 See the full list of playgrounds at [labs.iximiuz.com/playgrounds](https://labs.iximiuz.com/playgrounds).
 
+[![Getting started with labctl](https://img.youtube.com/vi/7JOY9YpF8f0/0.jpg)](https://youtu.be/7JOY9YpF8f0 "Getting started with labctl")
+
 ## Installation
 
 The below command will download the latest release to `~/.iximiuz/labctl/bin` adding it to your PATH.
@@ -97,7 +99,8 @@ Press Ctrl+C to stop
 ```
 
 After adding the above piece to your SSH config,
-you'll be able to develop right on the playground machine using the [Visual Studio Code Remote - SSH extension](https://code.visualstudio.com/docs/remote/ssh) or its JetBrains' counterpart.
+you'll be able to develop right on the playground machine using the [Visual Studio Code Remote - SSH extension](https://code.visualstudio.com/docs/remote/ssh) or its JetBrains counterpart.
+Check out this [short recording on YouTube](https://youtu.be/wah_yLoYk0M) demonstrating the use case.
 
 ### Port forwarding
 
