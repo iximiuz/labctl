@@ -16,11 +16,17 @@ Some popular playgrounds:
 
 See the full list of playgrounds at [labs.iximiuz.com/playgrounds](https://labs.iximiuz.com/playgrounds).
 
-[![Getting started with labctl](https://img.youtube.com/vi/7JOY9YpF8f0/0.jpg)](https://youtu.be/7JOY9YpF8f0 "Getting started with labctl")
+## 🎬 Getting started
+
+Check out this short recording on YouTube to get started:
+
+<div align="center">
+  <a target="_blank" href="https://youtu.be/7JOY9YpF8f0"><img src="https://img.youtube.com/vi/7JOY9YpF8f0/0.jpg" alt="Getting started with labctl"></a>
+</div>
 
 ## Installation
 
-The below command will download the latest release to `~/.iximiuz/labctl/bin` adding it to your PATH.
+The below command will download the latest release to `~/.iximiuz/labctl/bin`, adding it to your PATH.
 
 ```sh
 curl -sf https://labs.iximiuz.com/cli/install.sh | sh
