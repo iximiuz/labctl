@@ -5,9 +5,11 @@ import (
 	"io"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/docker/cli/cli/streams"
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/config"
+	"github.com/sirupsen/logrus"
 )
 
 type Streams interface {
@@ -38,6 +40,8 @@ type CLI interface {
 	SetClient(*api.Client)
 
 	Client() *api.Client
+
+	Confirm(title, affirmative, negative string) bool
 
 	Version() string
 }
@@ -116,6 +120,17 @@ func (c *cli) PrintErr(format string, a ...any) {
 
 func (c *cli) PrintAux(format string, a ...any) {
 	fmt.Fprintf(c.AuxStream(), format, a...)
+}
+
+func (c *cli) Confirm(title, affirmative, negative string) bool {
+	var confirm bool
+
+	if err := huh.NewConfirm().Title(title).Affirmative(affirmative).Negative(negative).Value(&confirm).Run(); err != nil {
+		logrus.WithError(err).Warn("Confirmation prompt failed")
+		return false
+	}
+
+	return confirm
 }
 
 func (c *cli) Version() string {

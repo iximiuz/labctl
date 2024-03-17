@@ -16,29 +16,6 @@ import (
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
-type ContentKind string
-
-const (
-	KindChallenge ContentKind = "challenge"
-	KindTutorial  ContentKind = "tutorial"
-	KindCourse    ContentKind = "course"
-)
-
-func (k *ContentKind) UnmarshalText(text []byte) error {
-	switch string(text) {
-	case "challenge":
-		*k = KindChallenge
-	case "tutorial":
-		*k = KindTutorial
-	case "course":
-		*k = KindCourse
-	default:
-		return fmt.Errorf("unknown content kind: %s", text)
-	}
-
-	return nil
-}
-
 type createOptions struct {
 	kind ContentKind
 	name string
@@ -56,7 +33,7 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 		Short: "Create a new piece of content (visible only to the author)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := opts.kind.UnmarshalText([]byte(args[0])); err != nil {
+			if err := opts.kind.Set(args[0]); err != nil {
 				return labcli.WrapStatusError(err)
 			}
 			opts.name = args[1]
@@ -152,7 +129,7 @@ func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) e
 		Kind: "challenge",
 		Name: opts.name,
 		Content: `---
-title: Sample Challenge
+title: Sample Challenge 444
 description: |
   This is a sample challenge.
 
@@ -213,17 +190,10 @@ func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {
 }
 
 func maybeCreateAuthorProfile(ctx context.Context, cli labcli.CLI) error {
-	confirm := true
-	if err := huh.NewConfirm().
-		Title("You don't have an author profile yet. Would you like to create one now?").
-		Affirmative("Yes!").
-		Negative("No.").
-		Value(&confirm).
-		Run(); err != nil {
-		return err
-	}
-
-	if !confirm {
+	if !cli.Confirm(
+		"You don't have an author profile yet. Would you like to create one now?",
+		"Yes", "No",
+	) {
 		return labcli.NewStatusError(0, "See you later!")
 	}
 
