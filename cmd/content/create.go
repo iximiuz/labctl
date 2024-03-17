@@ -45,6 +45,11 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 					opts.dir = filepath.Join(cwd, opts.name)
 				}
 			}
+			if absDir, err := filepath.Abs(opts.dir); err != nil {
+				return labcli.WrapStatusError(fmt.Errorf("couldn't get the absolute path of %s: %w", opts.dir, err))
+			} else {
+				opts.dir = absDir
+			}
 
 			return labcli.WrapStatusError(runCreateContent(cmd.Context(), cli, &opts))
 		},
@@ -127,7 +132,7 @@ func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) e
 
 	if err := cli.Client().PutMarkdown(ctx, api.PutMarkdownRequest{
 		Kind: "challenge",
-		Name: opts.name,
+		Name: ch.Name,
 		Content: `---
 title: Sample Challenge 444
 description: |

@@ -19,9 +19,10 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	var opts listOptions
 
 	cmd := &cobra.Command{
-		Use:   "list [--kind challenge|tutorial|course]",
-		Short: "List authored content, possibly filtered by kind.",
-		Args:  cobra.NoArgs,
+		Use:     "list [--kind challenge|tutorial|course]",
+		Aliases: []string{"ls"},
+		Short:   "List authored content, possibly filtered by kind.",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return labcli.WrapStatusError(runListContent(cmd.Context(), cli, &opts))
 		},

@@ -19,9 +19,10 @@ func newRemoveCommand(cli labcli.CLI) *cobra.Command {
 	var opts removeOptions
 
 	cmd := &cobra.Command{
-		Use:   "remove [flags] <challenge|tutorial|course> <name>",
-		Short: "Remove a piece of content you authored.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "remove [flags] <challenge|tutorial|course> <name>",
+		Aliases: []string{"rm"},
+		Short:   "Remove a piece of content you authored.",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := opts.kind.Set(args[0]); err != nil {
 				return labcli.WrapStatusError(err)
@@ -32,13 +33,23 @@ func newRemoveCommand(cli labcli.CLI) *cobra.Command {
 		},
 	}
 
+	flags := cmd.Flags()
+
+	flags.BoolVarP(
+		&opts.force,
+		"force",
+		"f",
+		false,
+		"Remove without confirmation.",
+	)
+
 	return cmd
 }
 
 func runRemoveContent(ctx context.Context, cli labcli.CLI, opts *removeOptions) error {
-	cli.PrintAux("Removing %s %s...\n", opts.kind, opts.name)
-
 	if !opts.force {
+		cli.PrintAux("Removing %s %s...\n", opts.kind, opts.name)
+
 		if !cli.Confirm(
 			"This action is irreversible. Are you sure?",
 			"Yes", "No",
