@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -22,7 +20,7 @@ type createOptions struct {
 
 	dir string
 
-	noSample bool
+	// noSample bool
 }
 
 func newCreateCommand(cli labcli.CLI) *cobra.Command {
@@ -38,31 +36,18 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 			}
 			opts.name = args[1]
 
-			if opts.dir == "" {
-				if cwd, err := os.Getwd(); err != nil {
-					return labcli.WrapStatusError(fmt.Errorf("couldn't get the current working directory: %w", err))
-				} else {
-					opts.dir = filepath.Join(cwd, opts.name)
-				}
-			}
-			if absDir, err := filepath.Abs(opts.dir); err != nil {
-				return labcli.WrapStatusError(fmt.Errorf("couldn't get the absolute path of %s: %w", opts.dir, err))
-			} else {
-				opts.dir = absDir
-			}
-
 			return labcli.WrapStatusError(runCreateContent(cmd.Context(), cli, &opts))
 		},
 	}
 
 	flags := cmd.Flags()
 
-	flags.BoolVar(
-		&opts.noSample,
-		"no-sample",
-		false,
-		`Don't create a sample piece of content`,
-	)
+	// flags.BoolVar(
+	// 	&opts.noSample,
+	// 	"no-sample",
+	// 	false,
+	// 	`Don't create a sample piece of content`,
+	// )
 	flags.StringVar(
 		&opts.dir,
 		"dir",
@@ -87,15 +72,33 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 		}
 	}
 
-	cli.PrintAux("Creating a new %s in %s...\n", opts.kind, opts.dir)
+	cli.PrintAux("Creating a new %s...\n", opts.kind)
 
-	if _, err := os.Stat(opts.dir); err == nil {
-		return fmt.Errorf("directory %s already exists - aborting to avoid overwriting existing files", opts.dir)
-	}
+	// if _, err := os.Stat(opts.dir); err == nil {
+	// 	return fmt.Errorf("directory %s already exists - aborting to avoid overwriting existing files", opts.dir)
+	// }
 
-	if err := os.MkdirAll(opts.dir, 0755); err != nil {
-		return fmt.Errorf("couldn't create directory %s: %w", opts.dir, err)
-	}
+	// 			if cwd, err := os.Getwd(); err != nil {
+	// 				return labcli.WrapStatusError(fmt.Errorf("couldn't get the current working directory: %w", err))
+	// 			} else {
+	// 				opts.dir = cwd
+	// 			}
+	// 		if opts.dir == "" {
+	// 			if cwd, err := os.Getwd(); err != nil {
+	// 				return labcli.WrapStatusError(fmt.Errorf("couldn't get the current working directory: %w", err))
+	// 			} else {
+	// 				opts.dir = cwd
+	// 			}
+	// 		}
+	// 		if absDir, err := filepath.Abs(opts.dir); err != nil {
+	// 			return labcli.WrapStatusError(fmt.Errorf("couldn't get the absolute path of %s: %w", opts.dir, err))
+	// 		} else {
+	// 			opts.dir = absDir
+	// 		}
+
+	// if err := os.MkdirAll(opts.dir, 0755); err != nil {
+	// 	return fmt.Errorf("couldn't create directory %s: %w", opts.dir, err)
+	// }
 
 	switch opts.kind {
 	case KindChallenge:
@@ -167,7 +170,7 @@ This is a sample challenge. You can edit this file in ... .`,
 		return fmt.Errorf("couldn't create a sample markdown file: %w", err)
 	}
 
-	return labcli.NewStatusError(0, "Happy authoring!")
+	return labcli.NewStatusError(0, "Happy authoring..")
 }
 
 func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
@@ -175,7 +178,20 @@ func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) er
 }
 
 func createCourse(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
-	return nil
+	ch, err := cli.Client().CreateCourse(ctx, api.CreateCourseRequest{
+		Name:    opts.name,
+		Variant: api.CourseVariantModular,
+	})
+	if err != nil {
+		return fmt.Errorf("couldn't create course: %w", err)
+	}
+
+	cli.PrintAux("Created a new course %s\n", ch.PageURL)
+	if err := open.Run(ch.PageURL); err != nil {
+		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually.\n")
+	}
+
+	return labcli.NewStatusError(0, "Happy authoring..")
 }
 
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {
