@@ -6,11 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 type removeOptions struct {
-	kind  ContentKind
+	kind  content.ContentKind
 	name  string
 	force bool
 }
@@ -59,14 +60,14 @@ func runRemoveContent(ctx context.Context, cli labcli.CLI, opts *removeOptions) 
 	}
 
 	switch opts.kind {
-	case KindChallenge:
+	case content.KindChallenge:
 		return cli.Client().DeleteChallenge(ctx, opts.name)
 
-	case KindTutorial:
+	case content.KindTutorial:
 		return cli.Client().DeleteTutorial(ctx, opts.name)
 
-	case KindCourse:
-		return fmt.Errorf("removing courses is not supported yet")
+	case content.KindCourse:
+		return cli.Client().DeleteCourse(ctx, opts.name)
 
 	default:
 		return fmt.Errorf("unknown content kind %q", opts.kind)

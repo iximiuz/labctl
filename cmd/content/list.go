@@ -8,11 +8,12 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/internal/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 type listOptions struct {
-	kind ContentKind
+	kind content.ContentKind
 }
 
 func newListCommand(cli labcli.CLI) *cobra.Command {
@@ -42,31 +43,40 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 type AuthoredContent struct {
 	Challenges []api.Challenge `json:"challenges" yaml:"challenges"`
 	Tutorials  []api.Tutorial  `json:"tutorials" yaml:"tutorials"`
-	// Courses    []api.Course    `json:"courses"    yaml:"courses"`
+	Courses    []api.Course    `json:"courses"    yaml:"courses"`
 }
 
 func runListContent(ctx context.Context, cli labcli.CLI, opts *listOptions) error {
-	var content AuthoredContent
+	var authored AuthoredContent
 
-	if opts.kind == "" || opts.kind == KindChallenge {
+	if opts.kind == "" || opts.kind == content.KindChallenge {
 		challenges, err := cli.Client().ListAuthoredChallenges(ctx)
 		if err != nil {
 			return fmt.Errorf("cannot list authored challenges: %w", err)
 		}
 
-		content.Challenges = challenges
+		authored.Challenges = challenges
 	}
 
-	if opts.kind == "" || opts.kind == KindTutorial {
+	if opts.kind == "" || opts.kind == content.KindTutorial {
 		tutorials, err := cli.Client().ListAuthoredTutorials(ctx)
 		if err != nil {
 			return fmt.Errorf("cannot list authored tutorials: %w", err)
 		}
 
-		content.Tutorials = tutorials
+		authored.Tutorials = tutorials
 	}
 
-	if err := yaml.NewEncoder(cli.OutputStream()).Encode(content); err != nil {
+	if opts.kind == "" || opts.kind == content.KindCourse {
+		courses, err := cli.Client().ListAuthoredCourses(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot list authored courses: %w", err)
+		}
+
+		authored.Courses = courses
+	}
+
+	if err := yaml.NewEncoder(cli.OutputStream()).Encode(authored); err != nil {
 		return err
 	}
 

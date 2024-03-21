@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+
+	"github.com/iximiuz/labctl/internal/content"
 )
 
 type Challenge struct {
@@ -14,6 +16,20 @@ type Challenge struct {
 
 	AttemptCount    int `json:"attemptCount" yaml:"attemptCount"`
 	CompletionCount int `json:"completionCount" yaml:"completionCount"`
+}
+
+var _ content.Content = (*Challenge)(nil)
+
+func (ch *Challenge) GetKind() content.ContentKind {
+	return content.KindChallenge
+}
+
+func (ch *Challenge) GetName() string {
+	return ch.Name
+}
+
+func (ch *Challenge) GetPageURL() string {
+	return ch.PageURL
 }
 
 type CreateChallengeRequest struct {

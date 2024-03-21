@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+
+	"github.com/iximiuz/labctl/internal/content"
 )
 
 type Course struct {
@@ -11,6 +13,20 @@ type Course struct {
 	Name string `json:"name" yaml:"name"`
 
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
+}
+
+var _ content.Content = (*Course)(nil)
+
+func (c *Course) GetKind() content.ContentKind {
+	return content.KindCourse
+}
+
+func (c *Course) GetName() string {
+	return c.Name
+}
+
+func (c *Course) GetPageURL() string {
+	return c.PageURL
 }
 
 type CourseVariant string

@@ -2,12 +2,16 @@ package content
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/iximiuz/labctl/internal/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
+
+var _ pflag.Value = (*content.ContentKind)(nil)
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
@@ -26,35 +30,23 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	return cmd
 }
 
-type ContentKind string
+type dirOptions struct {
+	dir string
+}
 
-var _ pflag.Value = (*ContentKind)(nil)
+func (o *dirOptions) AddDirFlag(fs *pflag.FlagSet) {
+	fs.StringVarP(&o.dir, "dir", "d", "", "Local directory with content files (default: $CWD/<content-name>)")
+}
 
-const (
-	KindChallenge ContentKind = "challenge"
-	KindTutorial  ContentKind = "tutorial"
-	KindCourse    ContentKind = "course"
-)
-
-func (k *ContentKind) Set(v string) error {
-	switch string(v) {
-	case string(KindChallenge):
-		*k = KindChallenge
-	case string(KindTutorial):
-		*k = KindTutorial
-	case string(KindCourse):
-		*k = KindCourse
-	default:
-		return fmt.Errorf("unknown content kind: %s", v)
+func (o *dirOptions) ContentDir(c content.Content) (string, error) {
+	dir := o.dir
+	if dir == "" {
+		dir = c.GetName()
 	}
 
-	return nil
-}
-
-func (k *ContentKind) String() string {
-	return string(*k)
-}
-
-func (k *ContentKind) Type() string {
-	return "content-kind"
+	if abs, err := filepath.Abs(dir); err != nil {
+		return "", fmt.Errorf("couldn't get the absolute path of %s: %w", dir, err)
+	} else {
+		return abs, nil
+	}
 }

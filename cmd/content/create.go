@@ -4,21 +4,22 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/internal/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 type createOptions struct {
-	kind ContentKind
+	kind content.ContentKind
 	name string
 
-	dir string
+	dirOptions
 
 	// noSample bool
 }
@@ -48,12 +49,8 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	// 	false,
 	// 	`Don't create a sample piece of content`,
 	// )
-	flags.StringVar(
-		&opts.dir,
-		"dir",
-		"",
-		`Local directory to create the content in (default: current working directory)`,
-	)
+
+	opts.AddDirFlag(flags)
 
 	return cmd
 }
@@ -74,124 +71,92 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 	cli.PrintAux("Creating a new %s...\n", opts.kind)
 
-	// if _, err := os.Stat(opts.dir); err == nil {
-	// 	return fmt.Errorf("directory %s already exists - aborting to avoid overwriting existing files", opts.dir)
-	// }
-
-	// 			if cwd, err := os.Getwd(); err != nil {
-	// 				return labcli.WrapStatusError(fmt.Errorf("couldn't get the current working directory: %w", err))
-	// 			} else {
-	// 				opts.dir = cwd
-	// 			}
-	// 		if opts.dir == "" {
-	// 			if cwd, err := os.Getwd(); err != nil {
-	// 				return labcli.WrapStatusError(fmt.Errorf("couldn't get the current working directory: %w", err))
-	// 			} else {
-	// 				opts.dir = cwd
-	// 			}
-	// 		}
-	// 		if absDir, err := filepath.Abs(opts.dir); err != nil {
-	// 			return labcli.WrapStatusError(fmt.Errorf("couldn't get the absolute path of %s: %w", opts.dir, err))
-	// 		} else {
-	// 			opts.dir = absDir
-	// 		}
-
-	// if err := os.MkdirAll(opts.dir, 0755); err != nil {
-	// 	return fmt.Errorf("couldn't create directory %s: %w", opts.dir, err)
-	// }
+	var cont content.Content
 
 	switch opts.kind {
-	case KindChallenge:
-		if err := createChallenge(ctx, cli, opts); err != nil {
-			return err
-		}
+	case content.KindChallenge:
+		cont, err = createChallenge(ctx, cli, opts)
 
-	case KindTutorial:
-		if err := createTutorial(ctx, cli, opts); err != nil {
-			return err
-		}
+	case content.KindTutorial:
+		cont, err = createTutorial(ctx, cli, opts)
 
-	case KindCourse:
-		if err := createCourse(ctx, cli, opts); err != nil {
-			return err
-		}
+	case content.KindCourse:
+		cont, err = createCourse(ctx, cli, opts)
 	}
 
+	if err != nil {
+		return err
+	}
+
+	cli.PrintAux("Created a new %s %s\n", cont.GetKind(), cont.GetPageURL())
+	if err := open.Run(cont.GetPageURL()); err != nil {
+		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually.\n")
+	}
+
+	dir, err := opts.ContentDir(cont)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(dir); err == nil {
+		cli.PrintErr("WARNING: Directory %s already exists and not empty.\n", dir)
+		cli.PrintErr("Skipping pulling the sample content files to avoid\noverwriting existing local files\n.")
+		cli.PrintErr("Use `labctl pull %s %s --dir <some-other-dir>` to\npull the sample content files manually.\n")
+		return nil
+	}
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("couldn't create directory %s: %w", dir, err)
+	}
+
+	files, err := cli.Client().ListContentFiles(ctx, cont.GetKind(), cont.GetName())
+	if err != nil {
+		return fmt.Errorf("couldn't list content files: %w", err)
+	}
+
+	for _, file := range files {
+		// if err := cli.Client().DownloadContentFile(ctx, file, dir); err != nil {
+		// 	return fmt.Errorf("couldn't download content file %s: %w", file, err)
+		// }
+		fmt.Printf("Downloading %s\n", file)
+	}
+
+	cli.PrintAux("Happy authoring!\n")
 	return nil
 }
 
-func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
+func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	ch, err := cli.Client().CreateChallenge(ctx, api.CreateChallengeRequest{
 		Name: opts.name,
 	})
 	if err != nil {
-		return fmt.Errorf("couldn't create challenge: %w", err)
+		return nil, fmt.Errorf("couldn't create challenge: %w", err)
 	}
 
-	cli.PrintAux("Created a new challenge %s\n", ch.PageURL)
-	if err := open.Run(ch.PageURL); err != nil {
-		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually.\n")
-	}
-
-	if err := cli.Client().PutMarkdown(ctx, api.PutMarkdownRequest{
-		Kind: "challenge",
-		Name: ch.Name,
-		Content: `---
-title: Sample Challenge 444
-description: |
-  This is a sample challenge.
-
-kind: challenge
-playground: docker
-
-createdAt: 2024-01-01
-updatedAt: 2024-02-09
-
-difficulty: medium
-
-categories:
-  - containers
-
-tagz:
-  - containerd
-  - ctr
-  - docker
-
-tasks:
-  init_run_container_labs_are_fun:
-    init: true
-    run: |
-      docker run -q -d --name labs-are-fun busybox sleep 999999
----
-# Sample Challenge
-
-This is a sample challenge. You can edit this file in ... .`,
-	}); err != nil {
-		return fmt.Errorf("couldn't create a sample markdown file: %w", err)
-	}
-
-	return labcli.NewStatusError(0, "Happy authoring..")
+	return ch, nil
 }
 
-func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
-	return nil
+func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	t, err := cli.Client().CreateTutorial(ctx, api.CreateTutorialRequest{
+		Name: opts.name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create tutorial: %w", err)
+	}
+
+	return t, nil
 }
 
-func createCourse(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
-	ch, err := cli.Client().CreateCourse(ctx, api.CreateCourseRequest{
+func createCourse(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	c, err := cli.Client().CreateCourse(ctx, api.CreateCourseRequest{
 		Name:    opts.name,
 		Variant: api.CourseVariantModular,
 	})
 	if err != nil {
-		return fmt.Errorf("couldn't create course: %w", err)
+		return nil, fmt.Errorf("couldn't create course: %w", err)
 	}
 
-	cli.PrintAux("Created a new course %s\n", ch.PageURL)
-	if err := open.Run(ch.PageURL); err != nil {
-		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually.\n")
-	}
-
-	return labcli.NewStatusError(0, "Happy authoring..")
+	return c, nil
 }
 
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {
@@ -221,45 +186,35 @@ func maybeCreateAuthorProfile(ctx context.Context, cli labcli.CLI) error {
 	cli.PrintAux("Creating an author profile...\n")
 
 	displayName := "John Doe"
-	if err := huh.NewInput().
-		Title("Please enter your full name:").
-		Prompt("?").
-		Validate(func(v string) error {
-			if v == "" {
-				return fmt.Errorf("display name cannot be empty")
-			}
-			if !strings.Contains(v, " ") {
-				return fmt.Errorf("display name must contain at least two words")
-			}
-			if len(v) < 5 {
-				return fmt.Errorf("display name is too short")
-			}
-			if len(v) > 24 {
-				return fmt.Errorf("display name is too long")
-			}
-			return nil
-		}).
-		Value(&displayName).
-		Run(); err != nil {
+	if err := cli.Input("Please enter your full name:", "?", &displayName, func(v string) error {
+		if v == "" {
+			return fmt.Errorf("display name cannot be empty")
+		}
+		if !strings.Contains(v, " ") {
+			return fmt.Errorf("display name must contain at least two words")
+		}
+		if len(v) < 5 {
+			return fmt.Errorf("display name is too short")
+		}
+		if len(v) > 24 {
+			return fmt.Errorf("display name is too long")
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
 
 	var profileURL string
-	if err := huh.NewInput().
-		Title("Please enter your X, LinkedIn, or other public profile URL:").
-		Prompt("?").
-		Validate(func(v string) error {
-			parsed, err := url.Parse(v)
-			if err != nil {
-				return fmt.Errorf("invalid URL: %w", err)
-			}
-			if parsed.Host == "" {
-				return fmt.Errorf("invalid URL: hostname is required")
-			}
-			return nil
-		}).
-		Value(&profileURL).
-		Run(); err != nil {
+	if err := cli.Input("Please enter your X, LinkedIn, or other public profile URL:", "?", &profileURL, func(v string) error {
+		parsed, err := url.Parse(v)
+		if err != nil {
+			return fmt.Errorf("invalid URL: %w", err)
+		}
+		if parsed.Host == "" {
+			return fmt.Errorf("invalid URL: hostname is required")
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
 

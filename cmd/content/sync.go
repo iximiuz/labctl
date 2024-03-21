@@ -51,7 +51,7 @@ func runSyncContent(ctx context.Context, cli labcli.CLI, opts *syncOptions) erro
 			return fmt.Errorf("couldn't read index.md: %w", err)
 		}
 
-		if err := cli.Client().PutMarkdown(ctx, api.PutMarkdownRequest{
+		if err := cli.Client().PutContentMarkdown(ctx, api.PutContentMarkdownRequest{
 			Kind:    "challenge",
 			Name:    "foobar-qux",
 			Content: string(data),

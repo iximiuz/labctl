@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/briandowns/spinner v1.23.0
 	github.com/charmbracelet/huh v0.3.0
-	github.com/docker/cli v25.0.5+incompatible
+	github.com/docker/cli v26.0.0+incompatible
 	github.com/dustin/go-humanize v1.0.1
 	github.com/iximiuz/wsmux v0.0.2
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a

@@ -43,6 +43,8 @@ type CLI interface {
 
 	Confirm(title, affirmative, negative string) bool
 
+	Input(title, prompt string, value *string, validate func(string) error) error
+
 	Version() string
 }
 
@@ -131,6 +133,15 @@ func (c *cli) Confirm(title, affirmative, negative string) bool {
 	}
 
 	return confirm
+}
+
+func (c *cli) Input(
+	title string,
+	prompt string,
+	value *string,
+	validate func(string) error,
+) error {
+	return huh.NewInput().Title(title).Prompt(prompt).Validate(validate).Value(value).Run()
 }
 
 func (c *cli) Version() string {

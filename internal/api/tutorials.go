@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+
+	"github.com/iximiuz/labctl/internal/content"
 )
 
 type Tutorial struct {
@@ -11,6 +13,20 @@ type Tutorial struct {
 	Name string `json:"name"`
 
 	PageURL string `json:"pageUrl"`
+}
+
+var _ content.Content = (*Tutorial)(nil)
+
+func (t *Tutorial) GetKind() content.ContentKind {
+	return content.KindTutorial
+}
+
+func (t *Tutorial) GetName() string {
+	return t.Name
+}
+
+func (t *Tutorial) GetPageURL() string {
+	return t.PageURL
 }
 
 type CreateTutorialRequest struct {
