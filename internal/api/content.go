@@ -10,12 +10,6 @@ import (
 	"github.com/iximiuz/labctl/internal/content"
 )
 
-type PutContentMarkdownRequest struct {
-	Kind    string `json:"kind"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-
 func (c *Client) ListContentFiles(
 	ctx context.Context,
 	kind content.ContentKind,
@@ -32,8 +26,19 @@ func (c *Client) ListContentFiles(
 	return files, nil
 }
 
-func (c *Client) PutContentMarkdown(ctx context.Context, req PutContentMarkdownRequest) error {
-	body, err := toJSONBody(req)
+func (c *Client) PutContentMarkdown(
+	ctx context.Context,
+	kind content.ContentKind,
+	name string,
+	file string,
+	content string,
+) error {
+	body, err := toJSONBody(map[string]string{
+		"kind":    kind.String(),
+		"name":    name,
+		"file":    file,
+		"content": content,
+	})
 	if err != nil {
 		return err
 	}

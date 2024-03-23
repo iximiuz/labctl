@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -70,62 +71,78 @@ func runPushContent(ctx context.Context, cli labcli.CLI, opts *pushOptions) erro
 	if err != nil {
 		return fmt.Errorf("couldn't list remote content files: %w", err)
 	}
-	fmt.Println(remoteFiles)
 
 	localFiles, err := listContentFilesLocal(dir)
 	if err != nil {
 		return fmt.Errorf("couldn't list local content files: %w", err)
 	}
 
-	for _, file := range localFiles {
-		cli.PrintAux("Uploading %s\n", file)
+	var merr error
+
+	// Upload new and update existing files.
+	for _, abspath := range localFiles {
+		relpath := strings.TrimPrefix(strings.TrimPrefix(abspath, dir), string(filepath.Separator))
+
+		cli.PrintAux("Pushing %s\n", relpath)
 
 		// TODO: If file exists remotely, ask permission to overwrite
+		if slices.Contains(remoteFiles, relpath) && !opts.force {
+			if !cli.Confirm(fmt.Sprintf("File %s already exists remotely. Overwrite?", relpath), "Yes", "No") {
+				cli.PrintAux("Skipping...\n")
+				continue
+			}
+		}
 
-		if err := cli.Client().UploadContentFile(
-			ctx,
-			opts.kind,
-			opts.name,
-			strings.TrimPrefix(strings.TrimPrefix(file, dir), string(filepath.Separator)),
-			file,
-		); err != nil {
-			return fmt.Errorf("couldn't upload content file %s: %w", file, err)
+		cli.PrintAux("Uploading...\n")
+
+		if filepath.Ext(relpath) == ".md" {
+			content, err := os.ReadFile(abspath)
+			if err != nil {
+				merr = errors.Join(merr, fmt.Errorf("couldn't read content markdown %s: %w", relpath, err))
+				continue
+			}
+
+			if err := cli.Client().PutContentMarkdown(
+				ctx,
+				opts.kind,
+				opts.name,
+				relpath,
+				string(content),
+			); err != nil {
+				merr = errors.Join(merr, fmt.Errorf("couldn't upload content markdown %s: %w", relpath, err))
+			}
+		} else {
+			if err := cli.Client().UploadContentFile(
+				ctx,
+				opts.kind,
+				opts.name,
+				relpath,
+				abspath,
+			); err != nil {
+				merr = errors.Join(merr, fmt.Errorf("couldn't upload content file %s: %w", relpath, err))
+			}
 		}
 	}
 
-	// TODO: ...
-	// for _, file := range remoteFiles {
-	// 	if !contains(localFiles, file) {
-	// 		cli.PrintAux("Deleting %s\n", file)
+	// Delete remote files that don't exist locally.
+	for _, relpath := range remoteFiles {
+		if slices.Contains(localFiles, filepath.Join(dir, relpath)) {
+			continue
+		}
 
-	// 		if err := cli.Client().DeleteContentFile(ctx, opts.kind, opts.name, file); err != nil {
-	// 			return fmt.Errorf("couldn't delete content file %s: %w", file, err)
-	// 		}
-	// 	}
-	// }
+		if !opts.force && !cli.Confirm(fmt.Sprintf("File %s doesn't exist locally. Delete remotely?", relpath), "Yes", "No") {
+			cli.PrintAux("Skipping...\n")
+			continue
+		}
 
-	// TODO: --stream
-	// cli.PrintAux("Starting content sync in %s...\n", opts.dir)
-	//
-	// for ctx.Err() == nil {
-	// 	data, err := os.ReadFile(filepath.Join(opts.dir, "index.md"))
-	// 	if err != nil {
-	// 		return fmt.Errorf("couldn't read index.md: %w", err)
-	// 	}
+		cli.PrintAux("Deleting remote %s\n", relpath)
 
-	// 	if err := cli.Client().PutContentMarkdown(ctx, api.PutContentMarkdownRequest{
-	// 		Kind:    opts.kind.String(),
-	// 		Name:    opts.name,
-	// 		Content: string(data),
-	// 	}); err != nil {
-	// 		return fmt.Errorf("couldn't update content: %w", err)
-	// 	}
+		if err := cli.Client().DeleteContentFile(ctx, opts.kind, opts.name, relpath); err != nil {
+			merr = errors.Join(merr, fmt.Errorf("couldn't delete remote content file %s: %w", relpath, err))
+		}
+	}
 
-	// 	cli.PrintAux("Synced content...\n")
-	// 	time.Sleep(5 * time.Second)
-	// }
-
-	return nil
+	return merr
 }
 
 func listContentFilesLocal(dir string) ([]string, error) {
