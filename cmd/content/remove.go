@@ -11,8 +11,9 @@ import (
 )
 
 type removeOptions struct {
-	kind  content.ContentKind
-	name  string
+	kind content.ContentKind
+	name string
+
 	force bool
 }
 
@@ -41,7 +42,7 @@ func newRemoveCommand(cli labcli.CLI) *cobra.Command {
 		"force",
 		"f",
 		false,
-		"Remove without confirmation.",
+		"Remove without confirmation",
 	)
 
 	return cmd

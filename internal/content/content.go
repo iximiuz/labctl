@@ -29,6 +29,19 @@ func (k *ContentKind) String() string {
 	return string(*k)
 }
 
+func (k *ContentKind) Plural() string {
+	switch *k {
+	case KindChallenge:
+		return "challenges"
+	case KindTutorial:
+		return "tutorials"
+	case KindCourse:
+		return "courses"
+	default:
+		panic(fmt.Sprintf("unknown content kind: %s", k))
+	}
+}
+
 func (k *ContentKind) Type() string {
 	return "content-kind"
 }

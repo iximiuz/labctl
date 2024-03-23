@@ -4,19 +4,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v2"
 )
 
 const (
-	defaultAPIBaseURL = "https://labs.iximiuz.com/api"
+	defaultBaseURL = "https://labs.iximiuz.com"
+
+	defaultAPIBaseURL = defaultBaseURL + "/api"
 )
 
 type Config struct {
 	mu sync.RWMutex
 
 	FilePath string `yaml:"-"`
+
+	BaseURL string `yaml:"base_url"`
 
 	APIBaseURL string `yaml:"api_base_url"`
 
@@ -41,6 +46,7 @@ func ConfigFilePath() (string, error) {
 func Default(path string) *Config {
 	return &Config{
 		FilePath:   path,
+		BaseURL:    defaultBaseURL,
 		APIBaseURL: defaultAPIBaseURL,
 		PlaysDir:   filepath.Join(filepath.Dir(path), "plays"),
 		SSHDir:     filepath.Join(filepath.Dir(path), "ssh"),
@@ -60,6 +66,11 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.NewDecoder(file).Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("unable to decode config from YAML: %s", err)
+	}
+
+	// Migrations
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = strings.TrimSuffix(cfg.APIBaseURL, "/api")
 	}
 
 	cfg.FilePath = path

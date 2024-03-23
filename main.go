@@ -54,7 +54,8 @@ func main() {
 			loadConfigOrFail(cli, overrides)
 
 			cli.SetClient(api.NewClient(api.ClientOptions{
-				BaseURL:     cli.Config().APIBaseURL,
+				BaseURL:     cli.Config().BaseURL,
+				APIBaseURL:  cli.Config().APIBaseURL,
 				SessionID:   cli.Config().SessionID,
 				AccessToken: cli.Config().AccessToken,
 				UserAgent:   fmt.Sprintf("labctl/%s", cli.Version()),

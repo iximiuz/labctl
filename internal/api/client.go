@@ -9,10 +9,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 )
 
 type Client struct {
-	baseURL string
+	baseURL    string
+	apiBaseURL string
 
 	sessionID   string
 	accessToken string
@@ -24,6 +27,7 @@ type Client struct {
 
 type ClientOptions struct {
 	BaseURL     string
+	APIBaseURL  string
 	SessionID   string
 	AccessToken string
 	UserAgent   string
@@ -32,6 +36,7 @@ type ClientOptions struct {
 func NewClient(opts ClientOptions) *Client {
 	return &Client{
 		baseURL:     opts.BaseURL,
+		apiBaseURL:  opts.APIBaseURL,
 		sessionID:   opts.SessionID,
 		accessToken: opts.AccessToken,
 		userAgent:   opts.UserAgent,
@@ -50,7 +55,7 @@ func (c *Client) Get(
 	query url.Values,
 	headers http.Header,
 ) (*http.Response, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, path, query, headers, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, c.apiBaseURL+path, query, headers, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +70,7 @@ func (c *Client) GetInto(
 	headers http.Header,
 	into any,
 ) error {
-	req, err := c.newRequest(ctx, http.MethodGet, path, query, headers, nil)
+	req, err := c.newRequest(ctx, http.MethodGet, c.apiBaseURL+path, query, headers, nil)
 	if err != nil {
 		return err
 	}
@@ -90,7 +95,7 @@ func (c *Client) Post(
 	headers http.Header,
 	body io.Reader,
 ) (*http.Response, error) {
-	req, err := c.newRequest(ctx, http.MethodPost, path, query, headers, body)
+	req, err := c.newRequest(ctx, http.MethodPost, c.apiBaseURL+path, query, headers, body)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +111,7 @@ func (c *Client) PostInto(
 	body io.Reader,
 	into any,
 ) error {
-	req, err := c.newRequest(ctx, http.MethodPost, path, query, headers, body)
+	req, err := c.newRequest(ctx, http.MethodPost, c.apiBaseURL+path, query, headers, body)
 	if err != nil {
 		return err
 	}
@@ -131,7 +136,7 @@ func (c *Client) Put(
 	headers http.Header,
 	body io.Reader,
 ) (*http.Response, error) {
-	req, err := c.newRequest(ctx, http.MethodPut, path, query, headers, body)
+	req, err := c.newRequest(ctx, http.MethodPut, c.apiBaseURL+path, query, headers, body)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +152,7 @@ func (c *Client) PutInto(
 	body io.Reader,
 	into any,
 ) error {
-	req, err := c.newRequest(ctx, http.MethodPut, path, query, headers, body)
+	req, err := c.newRequest(ctx, http.MethodPut, c.apiBaseURL+path, query, headers, body)
 	if err != nil {
 		return err
 	}
@@ -171,7 +176,7 @@ func (c *Client) Delete(
 	query url.Values,
 	headers http.Header,
 ) (*http.Response, error) {
-	req, err := c.newRequest(ctx, http.MethodDelete, path, query, headers, nil)
+	req, err := c.newRequest(ctx, http.MethodDelete, c.apiBaseURL+path, query, headers, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -179,15 +184,93 @@ func (c *Client) Delete(
 	return c.doRequest(req)
 }
 
+func (c *Client) Download(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	headers http.Header,
+	dest io.Writer,
+) error {
+	req, err := c.newRequest(
+		ctx, http.MethodGet,
+		c.baseURL+path,
+		query, headers, nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(dest, resp.Body); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) DownloadTo(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	headers http.Header,
+	file string,
+) error {
+	dest, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	defer dest.Close()
+
+	return c.Download(ctx, path, query, headers, dest)
+}
+
+func (c *Client) Upload(
+	ctx context.Context,
+	url string,
+	src io.Reader,
+) (*http.Response, error) {
+	req, err := c.newRequest(ctx, http.MethodPut, url, nil, nil, src)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req)
+}
+
+func (c *Client) UploadFrom(
+	ctx context.Context,
+	url string,
+	file string,
+) (*http.Response, error) {
+	src, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer src.Close()
+
+	// FIX+HACK: This is a hacky way of ensuring the Content-Length header is set.
+	// This is necessary because Tigris seems to expect the Content-Length header to be set.
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, src); err != nil {
+		return nil, err
+	}
+
+	return c.Upload(ctx, url, &buf)
+}
+
 func (c *Client) newRequest(
 	ctx context.Context,
 	method,
-	path string,
+	url string,
 	query url.Values,
 	headers http.Header,
 	body io.Reader,
 ) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -199,11 +282,15 @@ func (c *Client) newRequest(
 	req.Header = headers.Clone()
 	req.Header.Set("User-Agent", c.userAgent)
 
-	if c.sessionID != "" && c.accessToken != "" {
-		req.Header.Set("Authorization", "Basic "+base64Encode(c.sessionID+":"+c.accessToken))
+	if strings.HasPrefix(url, c.baseURL) || strings.HasPrefix(url, c.apiBaseURL) {
+		if c.sessionID != "" && c.accessToken != "" {
+			req.Header.Set("Authorization", "Basic "+base64Encode(c.sessionID+":"+c.accessToken))
+		}
 	}
 
-	req.URL.RawQuery = query.Encode()
+	if query != nil {
+		req.URL.RawQuery = query.Encode()
+	}
 
 	return req, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/skratchdot/open-golang/open"
@@ -93,7 +94,7 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually.\n")
 	}
 
-	dir, err := opts.ContentDir(cont)
+	dir, err := opts.ContentDir(cont.GetName())
 	if err != nil {
 		return err
 	}
@@ -105,6 +106,7 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 		return nil
 	}
 
+	cli.PrintAux("Preparing the working directory %s...\n", dir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("couldn't create directory %s: %w", dir, err)
 	}
@@ -114,11 +116,19 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 		return fmt.Errorf("couldn't list content files: %w", err)
 	}
 
+	cli.PrintAux("Pulling the sample content files...\n")
 	for _, file := range files {
-		// if err := cli.Client().DownloadContentFile(ctx, file, dir); err != nil {
-		// 	return fmt.Errorf("couldn't download content file %s: %w", file, err)
-		// }
-		fmt.Printf("Downloading %s\n", file)
+		cli.PrintAux("Downloading %s\n", file)
+
+		if err := cli.Client().DownloadContentFile(
+			ctx,
+			cont.GetKind(),
+			cont.GetName(),
+			file,
+			filepath.Join(dir, file),
+		); err != nil {
+			return fmt.Errorf("couldn't download content file %s: %w", file, err)
+		}
 	}
 
 	cli.PrintAux("Happy authoring!\n")
