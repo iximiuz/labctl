@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/huh v0.3.0
 	github.com/docker/cli v26.0.0+incompatible
 	github.com/dustin/go-humanize v1.0.1
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/iximiuz/wsmux v0.0.2
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
 	github.com/moby/term v0.5.0
