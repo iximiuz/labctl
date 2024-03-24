@@ -79,6 +79,12 @@ labctl ssh <playground-id> -- ls -la /
 
 ### Using IDE (VSCode, JetBrains, etc) to access playgrounds
 
+You can start a playground and open it in your IDE with:
+
+```sh
+labctl playground start docker --ide
+```
+
 You can use the **SSH proxy mode** to access playgrounds from your IDE:
 
 ```sh
@@ -90,16 +96,21 @@ Example output:
 ```text
 SSH proxy is running on 58279
 
-Connect with: ssh -i ~/.iximiuz/labctl/ssh/id_ed25519 ssh://root@127.0.0.1:58279
+# Connect from the terminal:
+ssh -i ~/.ssh/iximiuz_labs_user ssh://root@127.0.0.1:58279
 
-Or add the following to your ~/.ssh/config:
+# Or add the following to your ~/.ssh/config:
 Host 65ea1e10f6af43783e69fe68-docker-01
   HostName 127.0.0.1
   Port 58279
   User root
-  IdentityFile ~/.iximiuz/labctl/ssh/id_ed25519
+  IdentityFile ~/.ssh/iximiuz_labs_user
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
+
+# To access the playground in Visual Studio Code:
+code --folder-uri vscode-remote://ssh-remote+127.0.0.1:58279/root
+
 
 Press Ctrl+C to stop
 ```
@@ -121,7 +132,7 @@ You can also expose locally running services to the playground using **remote po
 ```sh
 labctl ssh-proxy --address <local-proxy-address> <playground-id>
 
-ssh -i ~/.iximiuz/labctl/ssh/id_ed25519 \
+ssh -i ~/.ssh/iximiuz_labs_user \
   -R <remote-host>:<remote-port>:<local-host>:<local-port> \
   ssh://root@<local-proxy-address>
 ```

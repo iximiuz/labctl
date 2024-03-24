@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	identityFile = "id_ed25519"
+	IdentityFile = "iximiuz_labs_user"
 )
 
 func GenerateIdentity(dirpath string) error {
@@ -30,7 +30,7 @@ func GenerateIdentity(dirpath string) error {
 	}
 
 	if err := os.WriteFile(
-		filepath.Join(dirpath, identityFile),
+		filepath.Join(dirpath, IdentityFile),
 		privateKey,
 		0600,
 	); err != nil {
@@ -38,7 +38,7 @@ func GenerateIdentity(dirpath string) error {
 	}
 
 	if err := os.WriteFile(
-		filepath.Join(dirpath, identityFile+".pub"),
+		filepath.Join(dirpath, IdentityFile+".pub"),
 		publicKey,
 		0600,
 	); err != nil {
@@ -49,11 +49,11 @@ func GenerateIdentity(dirpath string) error {
 }
 
 func RemoveIdentity(dirpath string) error {
-	if err := os.Remove(filepath.Join(dirpath, identityFile)); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(dirpath, IdentityFile)); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove SSH private key: %w", err)
 	}
 
-	if err := os.Remove(filepath.Join(dirpath, identityFile+".pub")); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(dirpath, IdentityFile+".pub")); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove SSH public key: %w", err)
 	}
 
@@ -61,7 +61,7 @@ func RemoveIdentity(dirpath string) error {
 }
 
 func ReadPublicKey(dirpath string) (string, error) {
-	publicKey, err := os.ReadFile(filepath.Join(dirpath, identityFile+".pub"))
+	publicKey, err := os.ReadFile(filepath.Join(dirpath, IdentityFile+".pub"))
 	if err != nil {
 		return "", fmt.Errorf("read SSH public key: %w", err)
 	}
@@ -70,7 +70,7 @@ func ReadPublicKey(dirpath string) (string, error) {
 }
 
 func ReadPrivateKey(dirpath string) (string, error) {
-	privateKey, err := os.ReadFile(filepath.Join(dirpath, identityFile))
+	privateKey, err := os.ReadFile(filepath.Join(dirpath, IdentityFile))
 	if err != nil {
 		return "", fmt.Errorf("read SSH private key: %w", err)
 	}

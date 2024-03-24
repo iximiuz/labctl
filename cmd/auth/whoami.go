@@ -10,9 +10,10 @@ import (
 
 func newWhoAmICommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "whoami",
-		Short: "Print the current user info",
-		Args:  cobra.NoArgs,
+		Use:     "whoami",
+		Aliases: []string{"who", "me"},
+		Short:   "Print the current user info",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return labcli.WrapStatusError(runWhoAmI(cmd.Context(), cli))
 		},

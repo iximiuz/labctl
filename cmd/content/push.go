@@ -246,7 +246,7 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 
 	// Delete remote files that don't exist locally.
 	for _, file := range state.toDelete() {
-		cli.PrintAux("🗑️ Deleting remote %s\n", file)
+		cli.PrintAux("🗑️  Deleting remote %s\n", file)
 
 		if !opts.force && !cli.Confirm(fmt.Sprintf("File %s doesn't exist locally. Delete remotely?", file), "Yes", "No") {
 			cli.PrintAux("Skipping...\n")

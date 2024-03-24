@@ -34,29 +34,28 @@ type Config struct {
 	SSHDir string `yaml:"ssh_dir"`
 }
 
-func ConfigFilePath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(homeDir, ".iximiuz", "labctl", "config.yaml"), nil
+func ConfigFilePath(homeDir string) string {
+	return filepath.Join(homeDir, ".iximiuz", "labctl", "config.yaml")
 }
 
-func Default(path string) *Config {
+func Default(homeDir string) *Config {
+	configFilePath := ConfigFilePath(homeDir)
+
 	return &Config{
-		FilePath:   path,
+		FilePath:   configFilePath,
 		BaseURL:    defaultBaseURL,
 		APIBaseURL: defaultAPIBaseURL,
-		PlaysDir:   filepath.Join(filepath.Dir(path), "plays"),
-		SSHDir:     filepath.Join(filepath.Dir(path), "ssh"),
+		PlaysDir:   filepath.Join(filepath.Dir(configFilePath), "plays"),
+		SSHDir:     filepath.Join(homeDir, ".ssh"),
 	}
 }
 
-func Load(path string) (*Config, error) {
+func Load(homeDir string) (*Config, error) {
+	path := ConfigFilePath(homeDir)
+
 	file, err := os.Open(path)
 	if os.IsNotExist(err) {
-		return Default(path), nil
+		return Default(homeDir), nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to open config file: %s", err)

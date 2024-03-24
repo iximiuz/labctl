@@ -105,17 +105,18 @@ func main() {
 }
 
 func loadConfigOrFail(cli labcli.CLI, overrides configOverrides) {
-	configPath, err := config.ConfigFilePath()
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		cli.PrintErr("Unable to determine config path: %s\n", err)
+		cli.PrintErr("Unable to determine home directory: %s\n", err)
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load(configPath)
+	cfg, err := config.Load(homeDir)
 	if err != nil {
 		cli.PrintErr("Unable to load config: %s\n", err)
-		cli.PrintErr("Is %s corrupted?\n", configPath)
-		cfg = config.Default(configPath)
+		cli.PrintErr("Is %s corrupted?\n", config.ConfigFilePath(homeDir))
+		cli.PrintErr("Using default config...\n")
+		cfg = config.Default(homeDir)
 	}
 
 	if overrides.endpoint != "" {

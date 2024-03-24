@@ -9,17 +9,20 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/cmd/ssh"
+	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 type startOptions struct {
 	playground string
+	machine    string
 
 	open bool
 
-	ssh     bool
-	machine string
+	ssh bool
+
+	ide bool
 
 	quiet bool
 }
@@ -38,6 +41,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 				return labcli.NewStatusError(1,
 					"playground name is required\n\nAvailable playgrounds:\n%s",
 					listKnownPlaygrounds(cmd.Context(), cli))
+			}
+
+			if opts.ide && opts.ssh {
+				return labcli.NewStatusError(1, "can't use --ide and --ssh flags at the same time")
 			}
 
 			opts.playground = args[0]
@@ -59,6 +66,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"ssh",
 		false,
 		`SSH into the playground immediately after it's created`,
+	)
+	flags.BoolVar(
+		&opts.ide,
+		"ide",
+		false,
+		`Open the playground in the IDE (only VSCode is supported at the moment)`,
 	)
 	flags.StringVar(
 		&opts.machine,
@@ -93,6 +106,14 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		if err := open.Run(play.PageURL); err != nil {
 			cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually to access the playground.\n")
 		}
+	}
+
+	if opts.ide {
+		return sshproxy.RunSSHProxy(ctx, cli, &sshproxy.Options{
+			PlayID:  play.ID,
+			Machine: opts.machine,
+			IDE:     true,
+		})
 	}
 
 	if opts.ssh {
