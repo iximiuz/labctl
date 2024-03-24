@@ -14,16 +14,16 @@ import (
 	"github.com/iximiuz/labctl/cmd/portforward"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
-	"github.com/iximiuz/labctl/cmd/version"
+	versioncmd "github.com/iximiuz/labctl/cmd/version"
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/config"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 var (
-	tagVersion = "dev"
-	tagCommit  = "none"
-	tagDate    = "unknown"
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 type configOverrides struct {
@@ -34,7 +34,7 @@ func main() {
 	stdin, stdout, stderr := term.StdStreams()
 	cli := labcli.NewCLI(
 		stdin, stdout, stderr,
-		fmt.Sprintf("%s (built: %s commit: %s)", tagVersion, tagDate, tagCommit),
+		fmt.Sprintf("%s (built: %s commit: %s)", version, date, commit),
 	)
 
 	var (
@@ -72,7 +72,7 @@ func main() {
 		portforward.NewCommand(cli),
 		ssh.NewCommand(cli),
 		sshproxy.NewCommand(cli),
-		version.NewCommand(cli),
+		versioncmd.NewCommand(cli),
 	)
 
 	flags := cmd.PersistentFlags()

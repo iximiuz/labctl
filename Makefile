@@ -4,13 +4,13 @@ UTC_NOW=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 .PHONY: build-dev
 build-dev:
 	go build \
-		-ldflags="-X 'main.tagVersion=dev' -X 'main.tagCommit=${GIT_COMMIT}' -X 'main.tagDate=${UTC_NOW}'" \
+		-ldflags="-X 'main.version=dev' -X 'main.commit=${GIT_COMMIT}' -X 'main.date=${UTC_NOW}'" \
 		-o labctl
 
 .PHONY: build-dev-darwin-arm64
 build-dev-darwin-arm64:
 	GOOS=darwin GOARCH=arm64 go build \
-		-ldflags="-X 'main.tagVersion=dev' -X 'main.tagCommit=${GIT_COMMIT}' -X 'main.tagDate=${UTC_NOW}'" \
+		-ldflags="-X 'main.version=dev' -X 'main.commit=${GIT_COMMIT}' -X 'main.date=${UTC_NOW}'" \
 		-o labctl
 
 .PHONY: release
