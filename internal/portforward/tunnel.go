@@ -35,7 +35,7 @@ type Tunnel struct {
 }
 
 func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*Tunnel, error) {
-	tunnelFile := filepath.Join(opts.PlaysDir, opts.PlayID, "tunnel.json")
+	tunnelFile := filepath.Join(opts.PlaysDir, opts.PlayID+"-"+opts.Machine, "tunnel.json")
 	if t, err := loadTunnel(tunnelFile); err == nil {
 		return t, nil
 	}
