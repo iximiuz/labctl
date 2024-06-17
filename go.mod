@@ -3,7 +3,7 @@ module github.com/iximiuz/labctl
 go 1.22.0
 
 require (
-	github.com/briandowns/spinner v1.23.0
+	github.com/briandowns/spinner v1.23.1
 	github.com/charmbracelet/huh v0.3.0
 	github.com/docker/cli v26.1.1+incompatible
 	github.com/dustin/go-humanize v1.0.1
