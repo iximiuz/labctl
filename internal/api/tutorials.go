@@ -7,12 +7,12 @@ import (
 )
 
 type Tutorial struct {
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	CreatedAt string `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt string `json:"updatedAt" yaml:"updatedAt"`
 
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 
-	PageURL string `json:"pageUrl"`
+	PageURL string `json:"pageUrl" yaml:"pageUrl"`
 }
 
 var _ content.Content = (*Tutorial)(nil)
