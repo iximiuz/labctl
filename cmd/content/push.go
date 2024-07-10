@@ -359,6 +359,10 @@ func listFiles(dir string) ([]string, error) {
 
 	var result []string
 	for _, file := range files {
+		if strings.HasPrefix(file.Name(), ".git") {
+			continue
+		}
+
 		if file.IsDir() {
 			children, err := listFiles(filepath.Join(dir, file.Name()))
 			if err != nil {
