@@ -24,7 +24,7 @@ func newStopCommand(cli labcli.CLI) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "stop [flags] <playground-id>",
-		Short: `Start a new playground, possibly open it in a browser`,
+		Short: `Stop one or more playgrounds`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
