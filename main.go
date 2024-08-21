@@ -99,7 +99,7 @@ func main() {
 		}
 
 		// Hopefully, only usage errors.
-		slog.Debug("Exit error: %s", err)
+		slog.Debug("Exit error: " + err.Error())
 		os.Exit(1)
 	}
 }

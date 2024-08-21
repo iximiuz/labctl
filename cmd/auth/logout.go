@@ -34,7 +34,7 @@ func runLogout(ctx context.Context, cli labcli.CLI) error {
 	}
 
 	if err := ssh.RemoveIdentity(cli.Config().SSHDir); err != nil {
-		slog.Warn("Failed to remove SSH identity file: %v", err)
+		slog.Warn("Failed to remove SSH identity file", "error", err.Error())
 	}
 
 	cli.Config().SessionID = ""

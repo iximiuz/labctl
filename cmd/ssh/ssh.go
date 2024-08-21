@@ -28,6 +28,7 @@ const example = `  # SSH into the first machine in the playground
 type options struct {
 	playID  string
 	machine string
+	user    string
 
 	command []string
 }
@@ -57,6 +58,13 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		"",
 		`Target machine (default: the first machine in the playground)`,
 	)
+	flags.StringVarP(
+		&opts.user,
+		"user",
+		"u",
+		"",
+		`SSH user (default: the machine's default login user)`,
+	)
 
 	return cmd
 }
@@ -75,7 +83,18 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 		}
 	}
 
-	return RunSSHSession(ctx, cli, opts.playID, opts.machine, opts.command)
+	if opts.user == "" {
+		if u := p.GetMachine(opts.machine).DefaultUser(); u != nil {
+			opts.user = u.Name
+		} else {
+			opts.user = "root"
+		}
+	}
+	if !p.GetMachine(opts.machine).HasUser(opts.user) {
+		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
+	}
+
+	return RunSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command)
 }
 
 func RunSSHSession(
@@ -83,12 +102,14 @@ func RunSSHSession(
 	cli labcli.CLI,
 	playID string,
 	machine string,
+	user string,
 	command []string,
 ) error {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:   playID,
 		Machine:  machine,
 		PlaysDir: cli.Config().PlaysDir,
+		SSHUser:  user,
 		SSHDir:   cli.Config().SSHDir,
 	})
 	if err != nil {
@@ -120,7 +141,7 @@ func RunSSHSession(
 				return
 
 			case err := <-errCh:
-				slog.Debug("Tunnel error: %v", err)
+				slog.Debug("Tunnel borked", "error", err.Error())
 			}
 		}
 	}()
@@ -138,7 +159,7 @@ func RunSSHSession(
 	}
 	defer conn.Close()
 
-	sess, err := ssh.NewSession(conn, "root", cli.Config().SSHDir)
+	sess, err := ssh.NewSession(conn, user, cli.Config().SSHDir)
 	if err != nil {
 		return fmt.Errorf("couldn't create SSH session: %w", err)
 	}

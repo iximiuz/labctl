@@ -17,6 +17,7 @@ import (
 type Options struct {
 	PlayID  string
 	Machine string
+	User    string
 	Address string
 
 	IDE bool
@@ -50,6 +51,12 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		`Target machine (default: the first machine in the playground)`,
 	)
 	flags.StringVar(
+		&opts.User,
+		"user",
+		"",
+		`Login user (default: the machine's default login user)`,
+	)
+	flags.StringVar(
 		&opts.Address,
 		"address",
 		"",
@@ -79,10 +86,22 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}
 	}
 
+	if opts.User == "" {
+		if u := p.GetMachine(opts.Machine).DefaultUser(); u != nil {
+			opts.User = u.Name
+		} else {
+			opts.User = "root"
+		}
+	}
+	if !p.GetMachine(opts.Machine).HasUser(opts.User) {
+		return fmt.Errorf("user %q not found in the machine %q", opts.User, opts.Machine)
+	}
+
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:   opts.PlayID,
 		Machine:  opts.Machine,
 		PlaysDir: cli.Config().PlaysDir,
+		SSHUser:  opts.User,
 		SSHDir:   cli.Config().SSHDir,
 	})
 	if err != nil {
@@ -116,7 +135,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 				return
 
 			case err := <-errCh:
-				slog.Debug("Tunnel error: %v", err)
+				slog.Debug("Tunnel borked", "error", err.Error())
 			}
 		}
 	}()
@@ -124,21 +143,22 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 	if !opts.IDE {
 		cli.PrintOut("SSH proxy is running on %s\n", localPort)
 		cli.PrintOut(
-			"\n# Connect from the terminal:\nssh -i %s/%s ssh://root@%s:%s\n",
-			cli.Config().SSHDir, ssh.IdentityFile, localHost, localPort,
+			"\n# Connect from the terminal:\nssh -i %s/%s ssh://%s@%s:%s\n",
+			cli.Config().SSHDir, ssh.IdentityFile, opts.User, localHost, localPort,
 		)
 
 		cli.PrintOut("\n# Or add the following to your ~/.ssh/config:\n")
 		cli.PrintOut("Host %s\n", opts.PlayID+"-"+opts.Machine)
 		cli.PrintOut("  HostName %s\n", localHost)
 		cli.PrintOut("  Port %s\n", localPort)
-		cli.PrintOut("  User root\n")
+		cli.PrintOut("  User %s\n", opts.User)
 		cli.PrintOut("  IdentityFile %s/%s\n", cli.Config().SSHDir, ssh.IdentityFile)
 		cli.PrintOut("  StrictHostKeyChecking no\n")
 		cli.PrintOut("  UserKnownHostsFile /dev/null\n\n")
 
 		cli.PrintOut("# To access the playground in Visual Studio Code:\n")
-		cli.PrintOut("code --folder-uri vscode-remote://ssh-remote+root@%s:%s/root\n\n", localHost, localPort)
+		cli.PrintOut("code --folder-uri vscode-remote://ssh-remote+%s@%s:%s/%s\n\n",
+			opts.User, localHost, localPort, userHomeDir(opts.User))
 
 		cli.PrintOut("\nPress Ctrl+C to stop\n")
 	} else {
@@ -151,12 +171,13 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 			"-o", "IdentitiesOnly=yes",
 			"-o", "PreferredAuthentications=publickey",
 			"-i", fmt.Sprintf("%s/%s", cli.Config().SSHDir, ssh.IdentityFile),
-			fmt.Sprintf("ssh://root@%s:%s", localHost, localPort),
+			fmt.Sprintf("ssh://%s@%s:%s", opts.User, localHost, localPort),
 		)
 		cmd.Run()
 
 		cmd = exec.Command("code",
-			"--folder-uri", fmt.Sprintf("vscode-remote://ssh-remote+root@%s:%s/root", localHost, localPort),
+			"--folder-uri", fmt.Sprintf("vscode-remote://ssh-remote+%s@%s:%s/%s",
+				opts.User, localHost, localPort, userHomeDir(opts.User)),
 		)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("couldn't open the IDE: %w", err)
@@ -191,4 +212,11 @@ func hostStr(address string) string {
 	}
 
 	return strings.Split(address, ":")[0]
+}
+
+func userHomeDir(user string) string {
+	if user == "root" {
+		return "/root"
+	}
+	return fmt.Sprintf("/home/%s", user)
 }

@@ -26,6 +26,7 @@ type TunnelOptions struct {
 	PlayID   string
 	Machine  string
 	PlaysDir string
+	SSHUser  string
 	SSHDir   string
 }
 
@@ -35,7 +36,11 @@ type Tunnel struct {
 }
 
 func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*Tunnel, error) {
-	tunnelFile := filepath.Join(opts.PlaysDir, opts.PlayID+"-"+opts.Machine, "tunnel.json")
+	uniq := opts.PlayID + "-" + opts.Machine
+	if opts.SSHUser != "" {
+		uniq += "-" + opts.SSHUser
+	}
+	tunnelFile := filepath.Join(opts.PlaysDir, uniq, "tunnel.json")
 	if t, err := loadTunnel(tunnelFile); err == nil {
 		return t, nil
 	}
@@ -53,9 +58,10 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 
 	resp, err := client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
 		Machine:          opts.Machine,
-		SSHPubKey:        sshPubKey,
 		Access:           api.PortAccessPrivate,
 		GenerateLoginURL: true,
+		SSHUser:          opts.SSHUser,
+		SSHPubKey:        sshPubKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("client.StartTunnel(): %w", err)
@@ -75,7 +81,7 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 	}
 
 	if err := saveTunnel(tunnelFile, t); err != nil {
-		slog.Warn("Couldn't save tunnel info to file: %v", err)
+		slog.Warn("Couldn't save tunnel info to file", "error", err.Error())
 	}
 
 	return t, nil

@@ -68,7 +68,7 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 
 	if streams.InputStream().IsTerminal() {
 		if err := streams.InputStream().SetRawTerminal(); err != nil {
-			slog.Warn("Could not enable raw terminal mode", err)
+			slog.Warn("Could not enable raw terminal mode", "error", err.Error())
 		} else {
 			defer streams.InputStream().RestoreTerminal()
 
@@ -90,7 +90,7 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 
 			go func() {
 				if err := watchWindowSize(ctx, streams.OutputStream(), sess); err != nil {
-					slog.Debug("Error watching window size", err)
+					slog.Debug("Error watching window size", "error", err.Error())
 				}
 			}()
 		}
@@ -121,7 +121,7 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 			err = sess.Shell()
 			if err == nil {
 				if err := sess.Wait(); err != nil {
-					slog.Debug("Error waiting for shell", err)
+					slog.Debug("Waiting for shell failed", "error", err.Error())
 				}
 			}
 		} else {

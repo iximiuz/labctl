@@ -17,6 +17,7 @@ import (
 type startOptions struct {
 	playground string
 	machine    string
+	user       string
 
 	open bool
 
@@ -55,6 +56,20 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 
 	flags := cmd.Flags()
 
+	flags.StringVar(
+		&opts.machine,
+		"machine",
+		"",
+		`SSH into the machine with the given name (requires --ssh flag, default to the first machine)`,
+	)
+	flags.StringVarP(
+		&opts.user,
+		"user",
+		"u",
+		"",
+		`SSH user (default: the machine's default login user)`,
+	)
+
 	flags.BoolVar(
 		&opts.open,
 		"open",
@@ -72,12 +87,6 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"ide",
 		false,
 		`Open the playground in the IDE (only VSCode is supported at the moment)`,
-	)
-	flags.StringVar(
-		&opts.machine,
-		"machine",
-		"",
-		`SSH into the machine with the given name (requires --ssh flag, default to the first machine)`,
 	)
 	flags.BoolVarP(
 		&opts.quiet,
@@ -112,6 +121,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		return sshproxy.RunSSHProxy(ctx, cli, &sshproxy.Options{
 			PlayID:  play.ID,
 			Machine: opts.machine,
+			User:    opts.user,
 			IDE:     true,
 		})
 	}
@@ -127,7 +137,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 
 		cli.PrintAux("SSH-ing into %s machine...\n", opts.machine)
 
-		return ssh.RunSSHSession(ctx, cli, play.ID, opts.machine, nil)
+		return ssh.RunSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil)
 	}
 
 	cli.PrintOut("%s\n", play.ID)

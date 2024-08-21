@@ -62,12 +62,41 @@ func (p *Play) GetMachine(name string) *Machine {
 	return nil
 }
 
+type MachineUser struct {
+	Name    string `json:"name"`
+	Default bool   `json:"default"`
+}
+
 type Machine struct {
-	Name        string `json:"name"`
-	CPUCount    int    `json:"cpuCount"`
-	RAMSize     string `json:"ramSize"`
-	DrivePerf   string `json:"drivePerf"`
-	NetworkPerf string `json:"networkPerf"`
+	Name        string        `json:"name"`
+	Users       []MachineUser `json:"users"`
+	CPUCount    int           `json:"cpuCount"`
+	RAMSize     string        `json:"ramSize"`
+	DrivePerf   string        `json:"drivePerf"`
+	NetworkPerf string        `json:"networkPerf"`
+}
+
+func (m *Machine) DefaultUser() *MachineUser {
+	for _, u := range m.Users {
+		if u.Default {
+			return &u
+		}
+	}
+	return nil
+}
+
+func (m *Machine) HasUser(name string) bool {
+	if name == "root" {
+		// Everyone has root
+		return true
+	}
+
+	for _, u := range m.Users {
+		if u.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 type CreatePlayRequest struct {
@@ -116,6 +145,7 @@ type StartTunnelRequest struct {
 	Port             int        `json:"port"`
 	Access           PortAccess `json:"access"`
 	GenerateLoginURL bool       `json:"generateLoginUrl"`
+	SSHUser          string     `json:"sshUser"`
 	SSHPubKey        string     `json:"sshPubKey"`
 }
 
