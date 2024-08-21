@@ -157,7 +157,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		cli.PrintOut("  UserKnownHostsFile /dev/null\n\n")
 
 		cli.PrintOut("# To access the playground in Visual Studio Code:\n")
-		cli.PrintOut("code --folder-uri vscode-remote://ssh-remote+%s@%s:%s/%s\n\n",
+		cli.PrintOut("code --folder-uri vscode-remote://ssh-remote+%s@%s:%s%s\n\n",
 			opts.User, localHost, localPort, userHomeDir(opts.User))
 
 		cli.PrintOut("\nPress Ctrl+C to stop\n")
@@ -176,7 +176,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		cmd.Run()
 
 		cmd = exec.Command("code",
-			"--folder-uri", fmt.Sprintf("vscode-remote://ssh-remote+%s@%s:%s/%s",
+			"--folder-uri", fmt.Sprintf("vscode-remote://ssh-remote+%s@%s:%s%s",
 				opts.User, localHost, localPort, userHomeDir(opts.User)),
 		)
 		if err := cmd.Run(); err != nil {
