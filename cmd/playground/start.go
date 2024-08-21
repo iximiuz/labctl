@@ -107,6 +107,25 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		return fmt.Errorf("couldn't create a new playground: %w", err)
 	}
 
+	if opts.machine == "" {
+		opts.machine = play.Machines[0].Name
+	} else {
+		if play.GetMachine(opts.machine) == nil {
+			return fmt.Errorf("machine %q not found in the playground", opts.machine)
+		}
+	}
+
+	if opts.user == "" {
+		if u := play.GetMachine(opts.machine).DefaultUser(); u != nil {
+			opts.user = u.Name
+		} else {
+			opts.user = "root"
+		}
+	}
+	if !play.GetMachine(opts.machine).HasUser(opts.user) {
+		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
+	}
+
 	cli.PrintAux("New %s playground created with ID %s\n", opts.playground, play.ID)
 
 	if opts.open {
@@ -127,14 +146,6 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	}
 
 	if opts.ssh {
-		if opts.machine == "" {
-			opts.machine = play.Machines[0].Name
-		} else {
-			if play.GetMachine(opts.machine) == nil {
-				return fmt.Errorf("machine %q not found in the playground", opts.machine)
-			}
-		}
-
 		cli.PrintAux("SSH-ing into %s machine...\n", opts.machine)
 
 		return ssh.RunSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil)
