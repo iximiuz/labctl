@@ -10,12 +10,17 @@ type Challenge struct {
 	CreatedAt string `json:"createdAt" yaml:"createdAt"`
 	UpdatedAt string `json:"updatedAt" yaml:"updatedAt"`
 
-	Name string `json:"name" yaml:"name"`
+	Name        string   `json:"name" yaml:"name"`
+	Description string   `json:"description" yaml:"description"`
+	Categories  []string `json:"categories" yaml:"categories"`
+	Tags        []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
 
 	AttemptCount    int `json:"attemptCount" yaml:"attemptCount"`
 	CompletionCount int `json:"completionCount" yaml:"completionCount"`
+
+	Play *Play `json:"play,omitempty" yaml:"play,omitempty"`
 }
 
 var _ content.Content = (*Challenge)(nil)
@@ -59,6 +64,36 @@ func (c *Client) ListChallenges(ctx context.Context) ([]Challenge, error) {
 func (c *Client) ListAuthoredChallenges(ctx context.Context) ([]Challenge, error) {
 	var challenges []Challenge
 	return challenges, c.GetInto(ctx, "/challenges/authored", nil, nil, &challenges)
+}
+
+func (c *Client) StartChallenge(ctx context.Context, name string) (*Challenge, error) {
+	body, err := toJSONBody(map[string]any{"started": true})
+	if err != nil {
+		return nil, err
+	}
+
+	var ch Challenge
+	return &ch, c.PatchInto(ctx, "/challenges/"+name, nil, nil, body, &ch)
+}
+
+func (c *Client) CompleteChallenge(ctx context.Context, name string) (*Challenge, error) {
+	body, err := toJSONBody(map[string]any{"completed": true})
+	if err != nil {
+		return nil, err
+	}
+
+	var ch Challenge
+	return &ch, c.PatchInto(ctx, "/challenges/"+name, nil, nil, body, &ch)
+}
+
+func (c *Client) StopChallenge(ctx context.Context, name string) (*Challenge, error) {
+	body, err := toJSONBody(map[string]any{"started": false})
+	if err != nil {
+		return nil, err
+	}
+
+	var ch Challenge
+	return &ch, c.PatchInto(ctx, "/challenges/"+name, nil, nil, body, &ch)
 }
 
 func (c *Client) DeleteChallenge(ctx context.Context, name string) error {

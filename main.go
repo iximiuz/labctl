@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/cmd/auth"
+	"github.com/iximiuz/labctl/cmd/challenge"
 	"github.com/iximiuz/labctl/cmd/content"
 	"github.com/iximiuz/labctl/cmd/playground"
 	"github.com/iximiuz/labctl/cmd/portforward"
@@ -67,6 +68,7 @@ func main() {
 
 	cmd.AddCommand(
 		auth.NewCommand(cli),
+		challenge.NewCommand(cli),
 		content.NewCommand(cli),
 		playground.NewCommand(cli),
 		portforward.NewCommand(cli),
