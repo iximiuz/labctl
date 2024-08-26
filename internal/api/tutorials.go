@@ -10,7 +10,8 @@ type Tutorial struct {
 	CreatedAt string `json:"createdAt" yaml:"createdAt"`
 	UpdatedAt string `json:"updatedAt" yaml:"updatedAt"`
 
-	Name string `json:"name" yaml:"name"`
+	Name  string `json:"name" yaml:"name"`
+	Title string `json:"title" yaml:"title"`
 
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
 }

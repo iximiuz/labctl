@@ -3,14 +3,11 @@ package challenge
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/internal/labcli"
 )
-
-const stopCommandTimeout = 5 * time.Minute
 
 type stopOptions struct {
 	challenge string

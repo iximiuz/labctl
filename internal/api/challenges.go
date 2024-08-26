@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/iximiuz/labctl/internal/content"
 )
@@ -11,6 +12,7 @@ type Challenge struct {
 	UpdatedAt string `json:"updatedAt" yaml:"updatedAt"`
 
 	Name        string   `json:"name" yaml:"name"`
+	Title       string   `json:"title" yaml:"title"`
 	Description string   `json:"description" yaml:"description"`
 	Categories  []string `json:"categories" yaml:"categories"`
 	Tags        []string `json:"tags,omitempty" yaml:"tags,omitempty"`
@@ -56,9 +58,17 @@ func (c *Client) GetChallenge(ctx context.Context, name string) (*Challenge, err
 	return &ch, c.GetInto(ctx, "/challenges/"+name, nil, nil, &ch)
 }
 
-func (c *Client) ListChallenges(ctx context.Context) ([]Challenge, error) {
+type ListChallengesOptions struct {
+	Category string
+}
+
+func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions) ([]Challenge, error) {
 	var challenges []Challenge
-	return challenges, c.GetInto(ctx, "/challenges", nil, nil, &challenges)
+	query := url.Values{}
+	if opts.Category != "" {
+		query.Set("category", opts.Category)
+	}
+	return challenges, c.GetInto(ctx, "/challenges", query, nil, &challenges)
 }
 
 func (c *Client) ListAuthoredChallenges(ctx context.Context) ([]Challenge, error) {
