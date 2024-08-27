@@ -23,6 +23,8 @@ type Challenge struct {
 	CompletionCount int `json:"completionCount" yaml:"completionCount"`
 
 	Play *Play `json:"play,omitempty" yaml:"play,omitempty"`
+
+	Tasks map[string]PlayTask `json:"tasks,omitempty" yaml:"tasks,omitempty"`
 }
 
 var _ content.Content = (*Challenge)(nil)
@@ -37,6 +39,53 @@ func (ch *Challenge) GetName() string {
 
 func (ch *Challenge) GetPageURL() string {
 	return ch.PageURL
+}
+
+func (ch *Challenge) IsInitialized() bool {
+	for _, task := range ch.Tasks {
+		if task.Init && task.Status != PlayTaskStatusCompleted {
+			return false
+		}
+	}
+	return true
+}
+
+func (ch *Challenge) IsCompletable() bool {
+	for _, task := range ch.Tasks {
+		if !task.Init && !task.Helper && task.Status != PlayTaskStatusCompleted {
+			return false
+		}
+	}
+	return true
+}
+
+func (ch *Challenge) IsFailed() bool {
+	for _, task := range ch.Tasks {
+		if task.Status == PlayTaskStatusFailed {
+			return true
+		}
+	}
+	return false
+}
+
+func (ch *Challenge) CountInitTasks() int {
+	count := 0
+	for _, task := range ch.Tasks {
+		if task.Init {
+			count++
+		}
+	}
+	return count
+}
+
+func (ch *Challenge) CountCompletedInitTasks() int {
+	count := 0
+	for _, task := range ch.Tasks {
+		if task.Init && task.Status == PlayTaskStatusCompleted {
+			count++
+		}
+	}
+	return count
 }
 
 type CreateChallengeRequest struct {

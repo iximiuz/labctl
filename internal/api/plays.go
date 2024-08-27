@@ -133,6 +133,15 @@ func (c *Client) DeletePlay(ctx context.Context, id string) error {
 	return nil
 }
 
+type PlayConnHandle struct {
+	URL string `json:"url"`
+}
+
+func (c *Client) RequestPlayConn(ctx context.Context, id string) (*PlayConnHandle, error) {
+	var conn PlayConnHandle
+	return &conn, c.PostInto(ctx, "/plays/"+id+"/conns", nil, nil, nil, &conn)
+}
+
 type PortAccess string
 
 const (

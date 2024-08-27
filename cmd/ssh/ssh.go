@@ -94,17 +94,25 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
 	}
 
-	return RunSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command)
+	if sess, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command); err != nil {
+		return fmt.Errorf("couldn't start SSH session: %w", err)
+	} else {
+		if err := sess.Wait(); err != nil {
+			slog.Debug("SSH session wait said: " + err.Error())
+		}
+	}
+
+	return nil
 }
 
-func RunSSHSession(
+func StartSSHSession(
 	ctx context.Context,
 	cli labcli.CLI,
 	playID string,
 	machine string,
 	user string,
 	command []string,
-) error {
+) (*ssh.Session, error) {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:   playID,
 		Machine:  machine,
@@ -113,7 +121,7 @@ func RunSSHSession(
 		SSHDir:   cli.Config().SSHDir,
 	})
 	if err != nil {
-		return fmt.Errorf("couldn't start tunnel: %w", err)
+		return nil, fmt.Errorf("couldn't start tunnel: %w", err)
 	}
 
 	var (
@@ -122,7 +130,6 @@ func RunSSHSession(
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	go func() {
 		if err := tunnel.Forward(ctx, portforward.ForwardingSpec{
@@ -155,18 +162,23 @@ func RunSSHSession(
 		conn, err = dial.DialContext(ctx, "tcp", addr)
 		return err
 	}, 10, 1*time.Second); err != nil {
-		return fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
+		cancel()
+		return nil, fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
 	}
-	defer conn.Close()
 
 	sess, err := ssh.NewSession(conn, user, cli.Config().SSHDir)
 	if err != nil {
-		return fmt.Errorf("couldn't create SSH session: %w", err)
+		cancel()
+		return nil, fmt.Errorf("couldn't create SSH session: %w", err)
 	}
 
-	if err := sess.Run(ctx, cli, strings.Join(command, " ")); err != nil {
-		return fmt.Errorf("SSH session error: %w", err)
-	}
+	go func() {
+		defer conn.Close()
+		defer cancel()
+		if err := sess.Run(ctx, cli, strings.Join(command, " ")); err != nil {
+			slog.Error("SSH session error", "error", err.Error())
+		}
+	}()
 
-	return nil
+	return sess, nil
 }

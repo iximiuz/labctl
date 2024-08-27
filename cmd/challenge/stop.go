@@ -45,14 +45,22 @@ func newStopCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runStopChallenge(ctx context.Context, cli labcli.CLI, opts *stopOptions) error {
-	cli.PrintAux("Stopping solution attempt for challenge %s...\n", opts.challenge)
+	cli.PrintAux("Stopping the attempt for challenge %s...\n", opts.challenge)
 
-	chal, err := cli.Client().StopChallenge(ctx, opts.challenge)
+	chal, err := cli.Client().GetChallenge(ctx, opts.challenge)
 	if err != nil {
+		return fmt.Errorf("couldn't get the challenge: %w", err)
+	}
+
+	if chal.Play == nil || !chal.Play.Active {
+		cli.PrintErr("Challenge is not being attempted - nothing to stop.\n")
+		return nil
+	}
+
+	if _, err = cli.Client().StopChallenge(ctx, opts.challenge); err != nil {
 		return fmt.Errorf("couldn't stop the challenge: %w", err)
 	}
 
-	cli.PrintAux("Challenge %s has been stopped.\n", chal.Name)
-
+	cli.PrintAux("Challenge attempt has been stopped.\n")
 	return nil
 }

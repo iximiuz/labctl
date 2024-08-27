@@ -34,6 +34,10 @@ type Config struct {
 	SSHDir string `yaml:"ssh_dir"`
 }
 
+func (c *Config) WebSocketOrigin() string {
+	return "https://cli." + strings.TrimPrefix(c.BaseURL, "https://")
+}
+
 func ConfigFilePath(homeDir string) string {
 	return filepath.Join(homeDir, ".iximiuz", "labctl", "config.yaml")
 }

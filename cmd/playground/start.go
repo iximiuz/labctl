@@ -3,6 +3,7 @@ package playground
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/skratchdot/open-golang/open"
@@ -148,7 +149,14 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	if opts.ssh {
 		cli.PrintAux("SSH-ing into %s machine...\n", opts.machine)
 
-		return ssh.RunSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil)
+		if sess, err := ssh.StartSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil); err != nil {
+			return fmt.Errorf("couldn't start SSH session: %w", err)
+		} else {
+			if err := sess.Wait(); err != nil {
+				slog.Debug("SSH session wait said: " + err.Error())
+			}
+			return nil
+		}
 	}
 
 	cli.PrintOut("%s\n", play.ID)

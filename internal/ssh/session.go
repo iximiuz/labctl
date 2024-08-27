@@ -55,10 +55,6 @@ func NewSession(
 	}, nil
 }
 
-func (s *Session) Close() error {
-	return s.client.Close()
-}
-
 func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) error {
 	sess, err := s.client.NewSession()
 	if err != nil {
@@ -140,6 +136,14 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 	case <-ctx.Done():
 		return errors.New("session forcibly closed; the remote process may still be running")
 	}
+}
+
+func (s *Session) Close() error {
+	return s.client.Close()
+}
+
+func (s *Session) Wait() error {
+	return s.client.Wait()
 }
 
 func watchWindowSize(ctx context.Context, out *streams.Out, sess *ssh.Session) error {

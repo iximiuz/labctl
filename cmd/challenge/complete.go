@@ -54,6 +54,5 @@ func runCompleteChallenge(ctx context.Context, cli labcli.CLI, opts *completeOpt
 	}
 
 	cli.PrintAux("Challenge %s has been completed.\n", chal.Name)
-
 	return nil
 }
