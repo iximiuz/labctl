@@ -17,19 +17,70 @@ const (
 	loginSessionTimeout = 10 * time.Minute
 )
 
+type loginOptions struct {
+	sessionID   string
+	accessToken string
+}
+
 func newLoginCommand(cli labcli.CLI) *cobra.Command {
+	var opts loginOptions
+
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Log in as a Labs user (you will be prompted to open a browser page with a one-time use URL)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return labcli.WrapStatusError(runLogin(cmd.Context(), cli))
+			if opts.sessionID != "" && opts.accessToken == "" {
+				return labcli.NewStatusError(1,
+					"Access token must be provided if session ID is specified.",
+				)
+			}
+			if opts.sessionID == "" && opts.accessToken != "" {
+				return labcli.NewStatusError(1,
+					"Session ID must be provided if access token is specified.",
+				)
+			}
+
+			return labcli.WrapStatusError(runLogin(cmd.Context(), cli, opts))
 		},
 	}
+
+	flags := cmd.Flags()
+
+	flags.StringVarP(
+		&opts.sessionID,
+		"session-id",
+		"s",
+		"",
+		`Session ID`,
+	)
+	flags.StringVarP(
+		&opts.accessToken,
+		"access-token",
+		"t",
+		"",
+		`Access token`,
+	)
+
 	return cmd
 }
 
-func runLogin(ctx context.Context, cli labcli.CLI) error {
+func runLogin(ctx context.Context, cli labcli.CLI, opts loginOptions) error {
+	if cli.Config().SessionID != "" && cli.Config().AccessToken != "" {
+		return labcli.NewStatusError(1,
+			"Already logged in. Use 'labctl auth logout' first if you want to log in as a different user.",
+		)
+	}
+
+	if opts.sessionID != "" && opts.accessToken != "" {
+		cli.Client().SetCredentials(opts.sessionID, opts.accessToken)
+		if err := saveSessionAndGenerateSSHIdentity(cli, opts.sessionID, opts.accessToken); err != nil {
+			return err
+		}
+		cli.PrintAux("Authenticated.\n")
+		return nil
+	}
+
 	ses, err := cli.Client().CreateSession(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't start a session: %w", err)
@@ -59,14 +110,8 @@ func runLogin(ctx context.Context, cli labcli.CLI) error {
 			s.FinalMSG = "Waiting for the session to be authorized... Done.\n"
 			s.Stop()
 
-			cli.Config().SessionID = ses.ID
-			cli.Config().AccessToken = accessToken
-			if err := cli.Config().Dump(); err != nil {
-				return fmt.Errorf("couldn't save the credentials to the config file: %w", err)
-			}
-
-			if err := ssh.GenerateIdentity(cli.Config().SSHDir); err != nil {
-				return fmt.Errorf("couldn't generate SSH identity in %s: %w", cli.Config().SSHDir, err)
+			if err := saveSessionAndGenerateSSHIdentity(cli, ses.ID, accessToken); err != nil {
+				return err
 			}
 
 			cli.PrintAux("\nSession authorized. You can now use labctl commands.\n")
@@ -74,6 +119,20 @@ func runLogin(ctx context.Context, cli labcli.CLI) error {
 		}
 
 		time.Sleep(2 * time.Second)
+	}
+
+	return nil
+}
+
+func saveSessionAndGenerateSSHIdentity(cli labcli.CLI, sessionID, accessToken string) error {
+	cli.Config().SessionID = sessionID
+	cli.Config().AccessToken = accessToken
+	if err := cli.Config().Dump(); err != nil {
+		return fmt.Errorf("couldn't save the credentials to the config file: %w", err)
+	}
+
+	if err := ssh.GenerateIdentity(cli.Config().SSHDir); err != nil {
+		return fmt.Errorf("couldn't generate SSH identity in %s: %w", cli.Config().SSHDir, err)
 	}
 
 	return nil
