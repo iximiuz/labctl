@@ -99,6 +99,17 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	return cmd
 }
 
+type challengeEvent string
+
+const (
+	EventChallengeReady       challengeEvent = "challenge-ready"
+	EventChallengeCompletable challengeEvent = "challenge-completable"
+	EventChallengeCompleted   challengeEvent = "challenge-completed"
+	EventChallengeFailed      challengeEvent = "challenge-failed"
+	EventSSHConnEnded         challengeEvent = "ssh-conn-ended"
+	EventWSConnFailed         challengeEvent = "ws-conn-failed"
+)
+
 func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) error {
 	chal, err := cli.Client().StartChallenge(ctx, opts.challenge)
 	if err != nil {
@@ -137,20 +148,36 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 		return fmt.Errorf("couldn't create a connection to the challenge playground: %w", err)
 	}
 
-	connCtx, playConnCh, err := startPlayConn(ctx, cli, hconn.URL)
-	if err != nil {
+	playConn := newPlayConn(ctx, cli, hconn.URL)
+	if err := playConn.Start(); err != nil {
 		return fmt.Errorf("couldn't start play connection: %w", err)
 	}
 
-	if err := waitChallengeReady(connCtx, cli, chal, playConnCh); err != nil {
-		return fmt.Errorf("couldn't wait for the challenge to be ready: %w", err)
-	}
+	eventCh := make(chan challengeEvent, 100)
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	go func() {
+		if err := playConn.WaitChallengeReady(chal); err != nil {
+			eventCh <- EventWSConnFailed
+			return
+		}
+		eventCh <- EventChallengeReady
+
+		if err := playConn.WaitChallengeDone(chal); err != nil {
+			eventCh <- EventWSConnFailed
+			return
+		}
+
+		if chal.IsCompletable() {
+			eventCh <- EventChallengeCompletable
+		} else {
+			eventCh <- EventChallengeFailed
+		}
+	}()
 
 	if opts.ide {
 		go func() {
+			cli.PrintAux("Opening local IDE...\n")
+
 			if err := sshproxy.RunSSHProxy(ctx, cli, &sshproxy.Options{
 				PlayID:  chal.Play.ID,
 				Machine: opts.machine,
@@ -163,74 +190,88 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 	}
 
 	var sess *issh.Session
-	if !opts.noSSH {
-		cli.PrintAux("SSH-ing into challenge playground (%s machine)...\n", opts.machine)
 
-		sess, err = ssh.StartSSHSession(ctx, cli, chal.Play.ID, opts.machine, opts.user, nil)
-		if err != nil {
-			return fmt.Errorf("couldn't start SSH session: %w", err)
-		}
-	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
 
-	go func() {
-		if err := waitChallengeDone(connCtx, chal, playConnCh); err != nil {
-			cli.PrintErr("Error waiting for the challenge to be completable: %v", err)
-		}
+		case ev := <-eventCh:
+			switch ev {
+			case EventChallengeReady:
+				if !opts.noSSH {
+					cli.PrintAux("SSH-ing into challenge playground (%s machine)...\n", opts.machine)
 
-		for ctx.Err() == nil {
-			if chal.IsCompletable() {
+					sess, err = ssh.StartSSHSession(ctx, cli, chal.Play.ID, opts.machine, opts.user, nil)
+					if err != nil {
+						return fmt.Errorf("couldn't start SSH session: %w", err) // critical error
+					}
+
+					go func() {
+						if err := sess.Wait(); err != nil {
+							slog.Debug("SSH session said: " + err.Error())
+						}
+						eventCh <- EventSSHConnEnded
+					}()
+				}
+
+			case EventChallengeCompletable:
 				if _, err := cli.Client().CompleteChallenge(ctx, chal.Name); err != nil {
 					slog.Debug("Error completing the challenge: " + err.Error())
-					time.Sleep(5 * time.Second)
-					continue
-				}
-			}
-
-			if !opts.keepAlive {
-				sess.Close()
-
-				// Reset terminal
-				cli.PrintAux("\033c\r")
-
-				if chal.IsFailed() {
-					cli.PrintAux("************************************************************************\r\n")
-					cli.PrintAux("** Oops... 🙈 The challenge playground has been irrecoverably broken. **\r\n")
-					cli.PrintAux("************************************************************************\r\n")
+					go func() {
+						time.Sleep(5 * time.Second) // retry in 5 seconds without blocking the event loop
+						eventCh <- EventChallengeCompletable
+					}()
 				} else {
+					cli.PrintAux("\033c\r") // Reset terminal
+					cli.PrintAux("\r\n\r\n")
 					cli.PrintAux("**********************************\r\n")
 					cli.PrintAux("** Yay! Challenge completed! 🎉 **\r\n")
 					cli.PrintAux("**********************************\r\n")
-				}
-				cli.PrintAux("\n\nStopping the playground...\r\n")
 
-				for ctx.Err() == nil {
+					if opts.keepAlive {
+						cli.PrintAux("\r\n\r\n")
+						cli.PrintAux("The challenge playground will be kept alive.\r\n")
+						cli.PrintAux("Press ENTER to continue...\r\n")
+					}
+
+					eventCh <- EventChallengeCompleted
+				}
+
+			case EventChallengeCompleted, EventChallengeFailed:
+				if chal.IsFailed() {
+					cli.PrintAux("\033c\r") // Reset terminal
+					cli.PrintAux("\r\n\r\n")
+					cli.PrintAux("************************************************************************\r\n")
+					cli.PrintAux("** Oops... 🙈 The challenge playground has been irrecoverably broken. **\r\n")
+					cli.PrintAux("************************************************************************\r\n")
+				}
+
+				if !opts.keepAlive {
+					if sess != nil {
+						sess.Close()
+						sess = nil
+						eventCh <- EventSSHConnEnded
+					}
+
+					cli.PrintAux("\r\n\r\nStopping the playground...\r\n")
+
 					if chal, err := cli.Client().StopChallenge(ctx, chal.Name); err != nil {
 						cli.PrintErr("Error stopping the challenge: %v", err)
 					} else if chal.Play == nil || !chal.Play.Active {
 						cli.PrintAux("Playground stopped.\r\n")
-						cancel()
-						break
 					}
-
-					time.Sleep(2 * time.Second)
 				}
+
+			case EventWSConnFailed:
+				return fmt.Errorf("play connection WebSocket closed unexpectedly")
+
+			case EventSSHConnEnded:
+				cli.PrintAux("\r\n")
+				return nil
 			}
-			break
-		}
-	}()
-
-	if sess != nil {
-		if err := sess.Wait(); err != nil {
-			slog.Debug("SSH session wait said: " + err.Error())
-		}
-
-		if opts.keepAlive {
-			cancel()
 		}
 	}
-
-	<-ctx.Done()
-	return nil
 }
 
 type PlayConnMessage struct {
@@ -239,72 +280,104 @@ type PlayConnMessage struct {
 	Task    api.PlayTask `json:"task,omitempty"`
 }
 
-func startPlayConn(
+type PlayConn struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	cli labcli.CLI
+
+	url  string
+	conn *websocket.Conn
+
+	msgCh chan PlayConnMessage
+	errCh chan error
+}
+
+func newPlayConn(
 	ctx context.Context,
 	cli labcli.CLI,
 	url string,
-) (context.Context, chan PlayConnMessage, error) {
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, http.Header{
-		"Origin": {cli.Config().WebSocketOrigin()},
+) *PlayConn {
+	ctx, cancel := context.WithCancel(ctx)
+
+	return &PlayConn{
+		ctx:    ctx,
+		cancel: cancel,
+		cli:    cli,
+		url:    url,
+	}
+}
+
+func (p *PlayConn) Start() error {
+	conn, _, err := websocket.DefaultDialer.DialContext(p.ctx, p.url, http.Header{
+		"Origin": {p.cli.Config().WebSocketOrigin()},
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("couldn't connect to play connection WebSocket: %w", err)
+		return fmt.Errorf("couldn't connect to play connection WebSocket: %w", err)
 	}
+	p.conn = conn
 
-	ctx, cancel := context.WithCancel(ctx)
-	ch := make(chan PlayConnMessage, 1024)
+	p.msgCh = make(chan PlayConnMessage, 1024)
+	p.errCh = make(chan error, 1)
 
 	go func() {
-		defer conn.Close()
-		defer close(ch)
-		defer cancel()
-
 		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				if err == io.EOF || websocket.IsCloseError(err, websocket.CloseNormalClosure) {
 					return
 				}
+				if websocket.IsUnexpectedCloseError(err) {
+					p.cli.PrintErr("Play connection WebSocket closed unexpectedly: %v", err)
+					p.errCh <- err
+					return
+				}
 
-				cli.PrintErr("Error reading play connection message: %v", err)
+				p.cli.PrintErr("Error reading play connection message: %v", err)
 				continue
 			}
 
 			var msg PlayConnMessage
 			if err := json.Unmarshal(message, &msg); err != nil {
-				cli.PrintErr("Error decoding play connection message: %v", err)
+				p.cli.PrintErr("Error decoding play connection message: %v", err)
 				continue
 			}
 
-			ch <- msg
+			p.msgCh <- msg
 		}
 	}()
 
-	return ctx, ch, nil
+	return nil
 }
 
-func waitChallengeReady(
-	ctx context.Context,
-	cli labcli.CLI,
-	chal *api.Challenge,
-	playConnCh chan PlayConnMessage,
-) error {
+func (p *PlayConn) Close() {
+	p.cancel()
+	p.conn.Close()
+	close(p.msgCh)
+	close(p.errCh)
+}
+
+func (p *PlayConn) WaitChallengeReady(chal *api.Challenge) error {
 	s := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
-	s.Writer = cli.AuxStream()
+	s.Writer = p.cli.AuxStream()
 	s.Prefix = fmt.Sprintf(
 		"Warming up playground... Init tasks completed: %d/%d ",
 		chal.CountCompletedInitTasks(), chal.CountInitTasks(),
 	)
 	s.Start()
 
-	ctx, cancel := context.WithTimeout(ctx, startChallengeTimeout)
+	ctx, cancel := context.WithTimeout(p.ctx, startChallengeTimeout)
 	defer cancel()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case msg := <-playConnCh:
+
+		case err := <-p.errCh:
+			return err
+
+		case msg := <-p.msgCh:
 			if msg.Kind == "task" {
 				chal.Tasks[msg.Task.Name] = msg.Task
 			}
@@ -323,16 +396,16 @@ func waitChallengeReady(
 	}
 }
 
-func waitChallengeDone(
-	ctx context.Context,
-	chal *api.Challenge,
-	playConnCh chan PlayConnMessage,
-) error {
+func (p *PlayConn) WaitChallengeDone(chal *api.Challenge) error {
 	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case msg := <-playConnCh:
+		case <-p.ctx.Done():
+			return p.ctx.Err()
+
+		case err := <-p.errCh:
+			return err
+
+		case msg := <-p.msgCh:
 			if msg.Kind == "task" {
 				chal.Tasks[msg.Task.Name] = msg.Task
 			}
