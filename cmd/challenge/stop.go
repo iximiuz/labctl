@@ -3,6 +3,7 @@ package challenge
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -19,13 +20,17 @@ func newStopCommand(cli labcli.CLI) *cobra.Command {
 	var opts stopOptions
 
 	cmd := &cobra.Command{
-		Use:   "stop [flags] <challenge-name>",
+		Use:   "stop [flags] <challenge-url|challenge-name>",
 		Short: `Stop the current solution attempt for a challenge`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 
 			opts.challenge = args[0]
+			if strings.HasPrefix(opts.challenge, "https://") {
+				parts := strings.Split(strings.Trim(opts.challenge, "/"), "/")
+				opts.challenge = parts[len(parts)-1]
+			}
 
 			return labcli.WrapStatusError(runStopChallenge(cmd.Context(), cli, &opts))
 		},
