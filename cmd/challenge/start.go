@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -39,7 +40,7 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	var opts startOptions
 
 	cmd := &cobra.Command{
-		Use:   "start [flags] <challenge-name>",
+		Use:   "start [flags] <challenge-url|challenge-name>",
 		Short: `Solve a challenge from the comfort of your local command line`,
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -50,6 +51,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 			}
 
 			opts.challenge = args[0]
+			if strings.HasPrefix(opts.challenge, "https://") {
+				parts := strings.Split(strings.Trim(opts.challenge, "/"), "/")
+				opts.challenge = parts[len(parts)-1]
+			}
 
 			return labcli.WrapStatusError(runStartChallenge(cmd.Context(), cli, &opts))
 		},
@@ -223,7 +228,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 						eventCh <- EventChallengeCompletable
 					}()
 				} else {
-					cli.PrintAux("\033c\r") // Reset terminal
+					// cli.PrintAux("\033c\r") // Reset terminal
 					cli.PrintAux("\r\n\r\n")
 					cli.PrintAux("**********************************\r\n")
 					cli.PrintAux("** Yay! Challenge completed! 🎉 **\r\n")
@@ -240,7 +245,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 
 			case EventChallengeCompleted, EventChallengeFailed:
 				if chal.IsFailed() {
-					cli.PrintAux("\033c\r") // Reset terminal
+					// cli.PrintAux("\033c\r") // Reset terminal
 					cli.PrintAux("\r\n\r\n")
 					cli.PrintAux("************************************************************************\r\n")
 					cli.PrintAux("** Oops... 🙈 The challenge playground has been irrecoverably broken. **\r\n")
