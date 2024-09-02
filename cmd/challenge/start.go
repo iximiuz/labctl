@@ -40,13 +40,14 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	var opts startOptions
 
 	cmd := &cobra.Command{
-		Use:   "start [flags] <challenge-url|challenge-name>",
-		Short: `Solve a challenge from the comfort of your local command line`,
-		Args:  cobra.MaximumNArgs(1),
+		Use:     "start [flags] <challenge-url|challenge-name>",
+		Short:   `Solve a challenge from the comfort of your local command line`,
+		Aliases: []string{"solve"},
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return labcli.NewStatusError(1,
-					"challenge name is required\n\nHint: Use `labctl challenge list` to see all available challenges",
+					"challenge name is required\n\nHint: Use `labctl challenge catalog` to see all available challenges",
 				)
 			}
 

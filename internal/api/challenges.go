@@ -111,8 +111,8 @@ type ListChallengesOptions struct {
 	Category string
 }
 
-func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions) ([]Challenge, error) {
-	var challenges []Challenge
+func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions) ([]*Challenge, error) {
+	var challenges []*Challenge
 	query := url.Values{}
 	if opts.Category != "" {
 		query.Set("category", opts.Category)
