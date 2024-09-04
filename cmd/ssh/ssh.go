@@ -148,7 +148,9 @@ func StartSSHSession(
 				return
 
 			case err := <-errCh:
-				slog.Debug("Tunnel borked", "error", err.Error())
+				if err != nil {
+					slog.Debug("Tunnel borked", "error", err.Error())
+				}
 			}
 		}
 	}()

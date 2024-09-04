@@ -190,7 +190,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				User:    opts.user,
 				IDE:     true,
 			}); err != nil {
-				cli.PrintErr("Error running IDE session: %v", err)
+				cli.PrintErr("Error running IDE session: %v\n", err)
 			}
 		}()
 	}
@@ -263,14 +263,14 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 					cli.PrintAux("\r\n\r\nStopping the playground...\r\n")
 
 					if chal, err := cli.Client().StopChallenge(ctx, chal.Name); err != nil {
-						cli.PrintErr("Error stopping the challenge: %v", err)
+						cli.PrintErr("Error stopping the challenge: %v\n", err)
 					} else if chal.Play == nil || !chal.Play.Active {
 						cli.PrintAux("Playground stopped.\r\n")
 					}
 				}
 
 			case EventWSConnFailed:
-				return fmt.Errorf("play connection WebSocket closed unexpectedly")
+				return fmt.Errorf("play connection failed")
 
 			case EventSSHConnEnded:
 				cli.PrintAux("\r\n")
@@ -334,18 +334,18 @@ func (p *PlayConn) Start() error {
 					return
 				}
 				if websocket.IsUnexpectedCloseError(err) {
-					p.cli.PrintErr("Play connection WebSocket closed unexpectedly: %v", err)
+					p.cli.PrintErr("Play connection WebSocket closed unexpectedly: %v\n", err)
 					p.errCh <- err
 					return
 				}
 
-				p.cli.PrintErr("Error reading play connection message: %v", err)
+				p.cli.PrintErr("Error reading play connection message: %v\n", err)
 				continue
 			}
 
 			var msg PlayConnMessage
 			if err := json.Unmarshal(message, &msg); err != nil {
-				p.cli.PrintErr("Error decoding play connection message: %v", err)
+				p.cli.PrintErr("Error decoding play connection message: %v\n", err)
 				continue
 			}
 
