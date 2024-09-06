@@ -6,18 +6,21 @@ type ContentKind string
 
 const (
 	KindChallenge ContentKind = "challenge"
-	KindTutorial  ContentKind = "tutorial"
 	KindCourse    ContentKind = "course"
+	KindSkillPath ContentKind = "skill-path"
+	KindTutorial  ContentKind = "tutorial"
 )
 
 func (k *ContentKind) Set(v string) error {
 	switch string(v) {
 	case string(KindChallenge):
 		*k = KindChallenge
-	case string(KindTutorial):
-		*k = KindTutorial
 	case string(KindCourse):
 		*k = KindCourse
+	case string(KindSkillPath):
+		*k = KindSkillPath
+	case string(KindTutorial):
+		*k = KindTutorial
 	default:
 		return fmt.Errorf("unknown content kind: %s", v)
 	}
@@ -37,6 +40,8 @@ func (k *ContentKind) Plural() string {
 		return "tutorials"
 	case KindCourse:
 		return "courses"
+	case KindSkillPath:
+		return "skill-paths"
 	default:
 		panic(fmt.Sprintf("unknown content kind: %s", k))
 	}

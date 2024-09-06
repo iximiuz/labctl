@@ -31,7 +31,8 @@ func (t *Tutorial) GetPageURL() string {
 }
 
 type CreateTutorialRequest struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Sample bool   `json:"sample"`
 }
 
 func (c *Client) CreateTutorial(ctx context.Context, req CreateTutorialRequest) (*Tutorial, error) {

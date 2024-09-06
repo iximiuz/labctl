@@ -22,14 +22,14 @@ type createOptions struct {
 
 	dirOptions
 
-	// noSample bool
+	noSample bool
 }
 
 func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	var opts createOptions
 
 	cmd := &cobra.Command{
-		Use:   "create [flags] <challenge|tutorial|course> <name>",
+		Use:   "create [flags] <challenge|tutorial|skill-path|course> <name>",
 		Short: "Create a new piece of content (visible only to the author)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -44,12 +44,12 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	// flags.BoolVar(
-	// 	&opts.noSample,
-	// 	"no-sample",
-	// 	false,
-	// 	`Don't create a sample piece of content`,
-	// )
+	flags.BoolVar(
+		&opts.noSample,
+		"no-sample",
+		false,
+		`Don't create a sample piece of content`,
+	)
 
 	opts.AddDirFlag(flags)
 
@@ -78,11 +78,14 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 	case content.KindChallenge:
 		cont, err = createChallenge(ctx, cli, opts)
 
+	case content.KindCourse:
+		cont, err = createCourse(ctx, cli, opts)
+
 	case content.KindTutorial:
 		cont, err = createTutorial(ctx, cli, opts)
 
-	case content.KindCourse:
-		cont, err = createCourse(ctx, cli, opts)
+	case content.KindSkillPath:
+		cont, err = createSkillPath(ctx, cli, opts)
 	}
 
 	if err != nil {
@@ -101,8 +104,8 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 	if _, err := os.Stat(dir); err == nil {
 		cli.PrintErr("WARNING: Directory %s already exists and not empty.\n", dir)
-		cli.PrintErr("Skipping pulling the sample content files to avoid\noverwriting existing local files\n.")
-		cli.PrintErr("Use `labctl pull %s %s --dir <some-other-dir>` to\npull the sample content files manually.\n")
+		cli.PrintErr("Skipping pulling sample content to avoid overwriting existing local files.\n")
+		cli.PrintErr("Use `labctl pull %s %s --dir <some-other-dir>`\nto pull the sample content files manually.\n", cont.GetKind(), cont.GetName())
 		return nil
 	}
 
@@ -137,7 +140,8 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	ch, err := cli.Client().CreateChallenge(ctx, api.CreateChallengeRequest{
-		Name: opts.name,
+		Name:   opts.name,
+		Sample: !opts.noSample,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create challenge: %w", err)
@@ -146,27 +150,41 @@ func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) (
 	return ch, nil
 }
 
-func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
-	t, err := cli.Client().CreateTutorial(ctx, api.CreateTutorialRequest{
-		Name: opts.name,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("couldn't create tutorial: %w", err)
-	}
-
-	return t, nil
-}
-
 func createCourse(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	c, err := cli.Client().CreateCourse(ctx, api.CreateCourseRequest{
 		Name:    opts.name,
 		Variant: api.CourseVariantModular,
+		Sample:  !opts.noSample,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create course: %w", err)
 	}
 
 	return c, nil
+}
+
+func createSkillPath(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	sp, err := cli.Client().CreateSkillPath(ctx, api.CreateSkillPathRequest{
+		Name:   opts.name,
+		Sample: !opts.noSample,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create skill path: %w", err)
+	}
+
+	return sp, nil
+}
+
+func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	t, err := cli.Client().CreateTutorial(ctx, api.CreateTutorialRequest{
+		Name:   opts.name,
+		Sample: !opts.noSample,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create tutorial: %w", err)
+	}
+
+	return t, nil
 }
 
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {

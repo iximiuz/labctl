@@ -20,7 +20,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	var opts listOptions
 
 	cmd := &cobra.Command{
-		Use:     "list [--kind challenge|tutorial|course]",
+		Use:     "list [--kind challenge|tutorial|skill-path|course]",
 		Aliases: []string{"ls"},
 		Short:   "List authored content, possibly filtered by kind.",
 		Args:    cobra.NoArgs,
@@ -34,7 +34,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	flags.Var(
 		&opts.kind,
 		"kind",
-		`Content kind to filter by - one of challenge, tutorial, course (an empty string means all)`,
+		`Content kind to filter by - one of challenge, tutorial, skill-path, course (an empty string means all)`,
 	)
 
 	return cmd
@@ -43,6 +43,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 type AuthoredContent struct {
 	Challenges []api.Challenge `json:"challenges" yaml:"challenges"`
 	Tutorials  []api.Tutorial  `json:"tutorials" yaml:"tutorials"`
+	SkillPaths []api.SkillPath `json:"skill-paths" yaml:"skill-paths"`
 	Courses    []api.Course    `json:"courses"    yaml:"courses"`
 }
 
@@ -65,6 +66,15 @@ func runListContent(ctx context.Context, cli labcli.CLI, opts *listOptions) erro
 		}
 
 		authored.Tutorials = tutorials
+	}
+
+	if opts.kind == "" || opts.kind == content.KindSkillPath {
+		skillPaths, err := cli.Client().ListAuthoredSkillPaths(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot list authored skill paths: %w", err)
+		}
+
+		authored.SkillPaths = skillPaths
 	}
 
 	if opts.kind == "" || opts.kind == content.KindCourse {

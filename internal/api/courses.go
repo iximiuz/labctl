@@ -40,6 +40,7 @@ const (
 type CreateCourseRequest struct {
 	Name    string        `json:"name"`
 	Variant CourseVariant `json:"variant"`
+	Sample  bool          `json:"sample"`
 }
 
 func (c *Client) CreateCourse(ctx context.Context, req CreateCourseRequest) (*Course, error) {

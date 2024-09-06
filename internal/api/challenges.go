@@ -89,7 +89,8 @@ func (ch *Challenge) CountCompletedInitTasks() int {
 }
 
 type CreateChallengeRequest struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Sample bool   `json:"sample"`
 }
 
 func (c *Client) CreateChallenge(ctx context.Context, req CreateChallengeRequest) (*Challenge, error) {
