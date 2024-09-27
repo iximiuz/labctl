@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"errors"
 
+	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
@@ -29,6 +31,11 @@ func runWhoAmI(ctx context.Context, cli labcli.CLI) error {
 
 	me, err := cli.Client().GetMe(ctx)
 	if err != nil {
+		if errors.Is(err, api.ErrAuthenticationRequired) {
+			cli.PrintErr("Authentication session expired. Please log in again: labctl auth login\n")
+			return nil
+		}
+
 		return err
 	}
 

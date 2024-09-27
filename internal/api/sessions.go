@@ -31,5 +31,6 @@ func (c *Client) DeleteSession(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+
 	return resp.Body.Close()
 }

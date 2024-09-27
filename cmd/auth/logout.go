@@ -2,10 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/ssh"
 )
@@ -28,9 +30,11 @@ func runLogout(ctx context.Context, cli labcli.CLI) error {
 		return nil
 	}
 
-	// TODO: Check HTTP 404 explicitly to handle the case when the session is already deleted.
 	if err := cli.Client().DeleteSession(ctx, cli.Config().SessionID); err != nil {
-		return err
+		if !errors.Is(err, api.ErrAuthenticationRequired) {
+			slog.Warn("Failed to delete session", "error", err.Error())
+			return err
+		}
 	}
 
 	if err := ssh.RemoveIdentity(cli.Config().SSHDir); err != nil {

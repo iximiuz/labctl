@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -67,9 +68,24 @@ func newLoginCommand(cli labcli.CLI) *cobra.Command {
 
 func runLogin(ctx context.Context, cli labcli.CLI, opts loginOptions) error {
 	if cli.Config().SessionID != "" && cli.Config().AccessToken != "" {
-		return labcli.NewStatusError(1,
-			"Already logged in. Use 'labctl auth logout' first if you want to log in as a different user.",
-		)
+		if _, err := cli.Client().GetMe(ctx); err == nil {
+			return labcli.NewStatusError(1,
+				"Already logged in. Use 'labctl auth logout' first if you want to log in as a different user.",
+			)
+		}
+
+		// Cleaning the expired session.
+		if err := ssh.RemoveIdentity(cli.Config().SSHDir); err != nil {
+			slog.Debug("Could not remove SSH identity file", "error", err.Error())
+		}
+
+		cli.Config().SessionID = ""
+		cli.Config().AccessToken = ""
+		if err := cli.Config().Dump(); err != nil {
+			return err
+		}
+
+		cli.Client().SetCredentials("", "")
 	}
 
 	if opts.sessionID != "" && opts.accessToken != "" {

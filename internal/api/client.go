@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,12 @@ import (
 	"os"
 	"strings"
 )
+
+var ErrAuthenticationRequired = errors.New("authentication required")
+
+func isAuthenticationRequiredResponse(resp *http.Response) bool {
+	return resp.StatusCode == http.StatusUnauthorized
+}
 
 type Client struct {
 	baseURL    string
@@ -345,6 +352,11 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+
+		if isAuthenticationRequiredResponse(resp) {
+			return nil, ErrAuthenticationRequired
+		}
+
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body)
 	}
 
