@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -20,7 +21,10 @@ type Options struct {
 	User    string
 	Address string
 
-	IDE bool
+	IDE   bool
+	Quiet bool
+
+	WithProxy func(ctx context.Context, info *SSHProxyInfo) error
 }
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
@@ -31,6 +35,8 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		Short: `Start SSH proxy to the playground's machine`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cli.SetQuiet(opts.Quiet)
+
 			opts.PlayID = args[0]
 
 			if opts.Address != "" && strings.Count(opts.Address, ":") != 1 {
@@ -68,8 +74,23 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Open the playground in the IDE (only VSCode is supported at the moment)`,
 	)
+	flags.BoolVarP(
+		&opts.Quiet,
+		"quiet",
+		"q",
+		false,
+		`Quiet mode (don't print any messages except errors)`,
+	)
 
 	return cmd
+}
+
+type SSHProxyInfo struct {
+	User         string
+	Machine      string
+	ProxyHost    string
+	ProxyPort    string
+	IdentityFile string
 }
 
 func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
@@ -140,28 +161,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}
 	}()
 
-	if !opts.IDE {
-		cli.PrintOut("SSH proxy is running on %s\n", localPort)
-		cli.PrintOut(
-			"\n# Connect from the terminal:\nssh -i %s/%s ssh://%s@%s:%s\n",
-			cli.Config().SSHDir, ssh.IdentityFile, opts.User, localHost, localPort,
-		)
-
-		cli.PrintOut("\n# Or add the following to your ~/.ssh/config:\n")
-		cli.PrintOut("Host %s\n", opts.PlayID+"-"+opts.Machine)
-		cli.PrintOut("  HostName %s\n", localHost)
-		cli.PrintOut("  Port %s\n", localPort)
-		cli.PrintOut("  User %s\n", opts.User)
-		cli.PrintOut("  IdentityFile %s/%s\n", cli.Config().SSHDir, ssh.IdentityFile)
-		cli.PrintOut("  StrictHostKeyChecking no\n")
-		cli.PrintOut("  UserKnownHostsFile /dev/null\n\n")
-
-		cli.PrintOut("# To access the playground in Visual Studio Code:\n")
-		cli.PrintOut("code --folder-uri vscode-remote://ssh-remote+%s@%s:%s%s\n\n",
-			opts.User, localHost, localPort, userHomeDir(opts.User))
-
-		cli.PrintOut("\nPress Ctrl+C to stop\n")
-	} else {
+	if opts.IDE {
 		cli.PrintAux("Opening the playground in the IDE...\n")
 
 		// Hack: SSH into the playground first - otherwise, VSCode will fail to connect for some reason.
@@ -184,8 +184,44 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}
 	}
 
-	// Wait for ctrl+c
-	<-ctx.Done()
+	if !opts.IDE && !opts.Quiet {
+		cli.PrintAux("SSH proxy is running on %s\n", localPort)
+		cli.PrintAux(
+			"\n# Connect from the terminal:\nssh -i %s/%s ssh://%s@%s:%s\n",
+			cli.Config().SSHDir, ssh.IdentityFile, opts.User, localHost, localPort,
+		)
+
+		cli.PrintAux("\n# Or add the following to your ~/.ssh/config:\n")
+		cli.PrintAux("Host %s\n", opts.PlayID+"-"+opts.Machine)
+		cli.PrintAux("  HostName %s\n", localHost)
+		cli.PrintAux("  Port %s\n", localPort)
+		cli.PrintAux("  User %s\n", opts.User)
+		cli.PrintAux("  IdentityFile %s/%s\n", cli.Config().SSHDir, ssh.IdentityFile)
+		cli.PrintAux("  StrictHostKeyChecking no\n")
+		cli.PrintAux("  UserKnownHostsFile /dev/null\n\n")
+
+		cli.PrintAux("# To access the playground in Visual Studio Code:\n")
+		cli.PrintAux("code --folder-uri vscode-remote://ssh-remote+%s@%s:%s%s\n\n",
+			opts.User, localHost, localPort, userHomeDir(opts.User))
+
+		cli.PrintAux("\nPress Ctrl+C to stop\n")
+	}
+
+	if opts.WithProxy != nil {
+		info := &SSHProxyInfo{
+			User:         opts.User,
+			Machine:      opts.Machine,
+			ProxyHost:    localHost,
+			ProxyPort:    localPort,
+			IdentityFile: filepath.Join(cli.Config().SSHDir, ssh.IdentityFile),
+		}
+		if err := opts.WithProxy(ctx, info); err != nil {
+			return fmt.Errorf("proxy callback failed: %w", err)
+		}
+	} else {
+		// Wait for ctrl+c
+		<-ctx.Done()
+	}
 
 	return nil
 }

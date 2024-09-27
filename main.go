@@ -11,6 +11,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/auth"
 	"github.com/iximiuz/labctl/cmd/challenge"
 	"github.com/iximiuz/labctl/cmd/content"
+	"github.com/iximiuz/labctl/cmd/cp"
 	"github.com/iximiuz/labctl/cmd/playground"
 	"github.com/iximiuz/labctl/cmd/portforward"
 	"github.com/iximiuz/labctl/cmd/ssh"
@@ -70,6 +71,7 @@ func main() {
 		auth.NewCommand(cli),
 		challenge.NewCommand(cli),
 		content.NewCommand(cli),
+		cp.NewCommand(cli),
 		playground.NewCommand(cli),
 		portforward.NewCommand(cli),
 		ssh.NewCommand(cli),
