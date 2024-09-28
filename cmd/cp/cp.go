@@ -12,17 +12,17 @@ import (
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
-const example = `  # Copy a file to the playground
-  labctl cp 65e78a64366c2b0cf9ddc34c:/home/laborant/some/file ./some/file
+const example = `  # Copy a file from local machine to playground
+  labctl cp ./some/file 65e78a64366c2b0cf9ddc34c:~/some/file
 
-  # Copy a file from the playground
-  labctl cp ./some/file 65e78a64366c2b0cf9ddc34c:/home/laborant/some/file
+  # Copy a directory from local machine to playground
+  labctl cp -r ./some/dir 65e78a64366c2b0cf9ddc34c:~/some/dir
 
-  # Copy a directory to the playground
-  labctl cp -r ./some/dir 65e78a64366c2b0cf9ddc34c:/home/laborant/some/dir
+  # Copy a file from the playground to local machine
+  labctl cp 65e78a64366c2b0cf9ddc34c:~/some/file ./some/file
 
-  # Copy a directory from the playground
-  labctl cp 65e78a64366c2b0cf9ddc34c:/home/laborant/some/dir ./some/dir
+  # Copy a directory from the playground to local machine
+  labctl cp 65e78a64366c2b0cf9ddc34c:~/some/dir ./some/dir
 `
 
 type Direction string
@@ -53,20 +53,24 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		Example: example,
 		Args:    cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.Count(args[0]+args[1], ":") != 1 {
+				return fmt.Errorf("exactly one argument must be a colon-separated <playground-id>:<path> pair")
+			}
+
 			if strings.Contains(args[0], ":") {
+				opts.direction = DirectionRemoteToLocal
+
 				parts := strings.Split(args[0], ":")
 				opts.playID = parts[0]
 				opts.remotePath = parts[1]
-
 				opts.localPath = args[1]
-				opts.direction = DirectionRemoteToLocal
 			} else {
+				opts.direction = DirectionLocalToRemote
+
 				parts := strings.Split(args[1], ":")
 				opts.playID = parts[0]
 				opts.remotePath = parts[1]
-
 				opts.localPath = args[0]
-				opts.direction = DirectionLocalToRemote
 			}
 
 			return labcli.WrapStatusError(runCopy(cmd.Context(), cli, &opts))
