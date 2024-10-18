@@ -110,6 +110,7 @@ func (c *Client) GetChallenge(ctx context.Context, name string) (*Challenge, err
 
 type ListChallengesOptions struct {
 	Category string
+	Status   string
 }
 
 func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions) ([]*Challenge, error) {
@@ -117,6 +118,9 @@ func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions
 	query := url.Values{}
 	if opts.Category != "" {
 		query.Set("category", opts.Category)
+	}
+	if opts.Status != "" {
+		query.Set("status", opts.Status)
 	}
 	return challenges, c.GetInto(ctx, "/challenges", query, nil, &challenges)
 }

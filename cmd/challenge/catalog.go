@@ -13,13 +13,14 @@ import (
 
 type catalogOptions struct {
 	category string
+	status   string
 }
 
 func newCatalogCommand(cli labcli.CLI) *cobra.Command {
 	var opts catalogOptions
 
 	cmd := &cobra.Command{
-		Use:     "catalog [--category <linux|containers|kubernetes|...>]",
+		Use:     "catalog [--category <linux|containers|kubernetes|...>] --status <todo|attempted|solved>",
 		Aliases: []string{"catalog"},
 		Short:   "List challenges from the catalog, optionally filtered by category",
 		Args:    cobra.NoArgs,
@@ -35,6 +36,13 @@ func newCatalogCommand(cli labcli.CLI) *cobra.Command {
 		"category",
 		"",
 		`Category to filter by - one of linux, containers, kubernetes, ... (an empty string means all)`,
+	)
+
+	flags.StringVar(
+		&opts.status,
+		"status",
+		"",
+		`status to filter by - one of todo, attempted, solved ... (empty means all))`,
 	)
 
 	return cmd
@@ -54,6 +62,7 @@ type catalogItem struct {
 func runCatalogChallenges(ctx context.Context, cli labcli.CLI, opts *catalogOptions) error {
 	challenges, err := cli.Client().ListChallenges(ctx, &api.ListChallengesOptions{
 		Category: opts.category,
+		Status:   opts.status,
 	})
 	if err != nil {
 		return fmt.Errorf("cannot list challenges: %w", err)
