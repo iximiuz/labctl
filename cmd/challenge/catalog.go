@@ -35,14 +35,14 @@ func newCatalogCommand(cli labcli.CLI) *cobra.Command {
 		&opts.category,
 		"category",
 		[]string{},
-		`Category to filter by - one or multiple categories like linux, containers, kubernetes, ... (an empty string means all)`,
+		`Category to filter by - one or multiple categories like linux, containers, kubernetes`,
 	)
 
 	flags.StringSliceVar(
 		&opts.status,
 		"status",
 		[]string{},
-		`status to filter by - one or multiple status like todo, attempted, solved ... (empty means all))`,
+		`status to filter by - one or multiple status like todo, attempted, solved)`,
 	)
 
 	return cmd

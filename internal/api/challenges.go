@@ -116,15 +116,13 @@ type ListChallengesOptions struct {
 func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions) ([]*Challenge, error) {
 	var challenges []*Challenge
 	query := url.Values{}
-	if opts.Category != nil {
-		for _, category := range opts.Category {
-			query.Add("category",category)
-		}
+	
+	for _, category := range opts.Category {
+		query.Add("category", category)
 	}
-	if opts.Status != nil {
-		for _, status := range opts.Status {
-			query.Add("status",status)
-		}
+
+	for _, status := range opts.Status {
+		query.Add("status", status)
 	}
 
 	return challenges, c.GetInto(ctx, "/challenges", query, nil, &challenges)
