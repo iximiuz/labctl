@@ -20,9 +20,9 @@ func newCatalogCommand(cli labcli.CLI) *cobra.Command {
 	var opts catalogOptions
 
 	cmd := &cobra.Command{
-		Use:     "catalog [--category <linux|containers|kubernetes|...>] --status <todo|attempted|solved|...>",
+		Use:     "catalog",
 		Aliases: []string{"catalog"},
-		Short:   "List challenges from the catalog, optionally filtered by category",
+		Short:   "List challenges from the catalog, optionally filtered by category and/or status",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return labcli.WrapStatusError(runCatalogChallenges(cmd.Context(), cli, &opts))
@@ -35,14 +35,14 @@ func newCatalogCommand(cli labcli.CLI) *cobra.Command {
 		&opts.category,
 		"category",
 		[]string{},
-		`Category to filter by - one or multiple categories like linux, containers, kubernetes`,
+		`Category to filter by; multiple --category flags can be used. Valid categories: linux, containers, kubernetes, networking, programming, observability, security, ci-cd`,
 	)
 
 	flags.StringSliceVar(
 		&opts.status,
 		"status",
 		[]string{},
-		`status to filter by - one or multiple status like todo, attempted, solved)`,
+		`Status to filter by; multiple --status flags can be used. Valid statuses: todo, attempted, solved`,
 	)
 
 	return cmd
