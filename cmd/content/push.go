@@ -336,10 +336,15 @@ func listDirs(dir string) ([]string, error) {
 
 	var result []string
 	for _, file := range files {
-		if file.IsDir() {
-			result = append(result, filepath.Join(dir, file.Name()))
+		fullPath := filepath.Join(dir, file.Name())
+		if strings.Contains(fullPath, ".git") {
+			continue
+		}
 
-			children, err := listDirs(filepath.Join(dir, file.Name()))
+		if file.IsDir() {
+			result = append(result, fullPath)
+
+			children, err := listDirs(fullPath)
 			if err != nil {
 				return nil, err
 			}
