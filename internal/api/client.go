@@ -14,10 +14,17 @@ import (
 	"strings"
 )
 
-var ErrAuthenticationRequired = errors.New("authentication required")
+var (
+	ErrAuthenticationRequired = errors.New("authentication required")
+	ErrGatewayTimeout         = errors.New("gateway timeout")
+)
 
 func isAuthenticationRequiredResponse(resp *http.Response) bool {
 	return resp.StatusCode == http.StatusUnauthorized
+}
+
+func isGatewayTimeoutResponse(resp *http.Response) bool {
+	return resp.StatusCode == http.StatusGatewayTimeout
 }
 
 type Client struct {
@@ -355,6 +362,9 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 
 		if isAuthenticationRequiredResponse(resp) {
 			return nil, ErrAuthenticationRequired
+		}
+		if isGatewayTimeoutResponse(resp) {
+			return nil, ErrGatewayTimeout
 		}
 
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body)

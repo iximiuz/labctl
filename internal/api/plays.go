@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
 )
 
 type Play struct {
@@ -169,6 +172,30 @@ func (c *Client) StartTunnel(ctx context.Context, id string, req StartTunnelRequ
 		return nil, err
 	}
 
-	var resp StartTunnelResponse
-	return &resp, c.PostInto(ctx, "/plays/"+id+"/tunnels", nil, nil, body, &resp)
+	// A hacky workaround for the fact that the CLI currently
+	// doesn't check for playground readiness before establishing
+	// a tunnel.
+	backoff := 200 * time.Millisecond
+	for attempt := 0; attempt < 5; attempt++ {
+		var resp StartTunnelResponse
+		err := c.PostInto(ctx, "/plays/"+id+"/tunnels", nil, nil, body, &resp)
+		if err == nil {
+			return &resp, nil
+		}
+		if !errors.Is(err, ErrGatewayTimeout) {
+			return nil, err
+		}
+		if attempt == 2 {
+			return nil, fmt.Errorf("max retries exceeded: %w", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+	}
+
+	return nil, ctx.Err()
 }
