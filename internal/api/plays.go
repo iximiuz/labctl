@@ -167,18 +167,18 @@ type StartTunnelResponse struct {
 }
 
 func (c *Client) StartTunnel(ctx context.Context, id string, req StartTunnelRequest) (*StartTunnelResponse, error) {
-	body, err := toJSONBody(req)
-	if err != nil {
-		return nil, err
-	}
-
 	// A hacky workaround for the fact that the CLI currently
 	// doesn't check for playground readiness before establishing
 	// a tunnel.
 	backoff := 200 * time.Millisecond
 	for attempt := 0; attempt < 5; attempt++ {
+		body, err := toJSONBody(req)
+		if err != nil {
+			return nil, err
+		}
+
 		var resp StartTunnelResponse
-		err := c.PostInto(ctx, "/plays/"+id+"/tunnels", nil, nil, body, &resp)
+		err = c.PostInto(ctx, "/plays/"+id+"/tunnels", nil, nil, body, &resp)
 		if err == nil {
 			return &resp, nil
 		}
