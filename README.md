@@ -60,7 +60,7 @@ labctl playground start k3s --open
 ...or **SSH into the playground's machine** with:
 
 ```sh
-labctl playground start ubuntu --ssh
+labctl playground start ubuntu-24-04 --ssh
 ```
 
 ### SSH into a playground
