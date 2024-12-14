@@ -190,7 +190,7 @@ func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) (c
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {
 	me, err := cli.Client().GetMe(ctx)
 	if err != nil {
-		return false, fmt.Errorf("couldn't get the current user: %w", err)
+		return false, fmt.Errorf("couldn't get the current user info: %w", err)
 	}
 
 	authors, err := cli.Client().ListAuthors(ctx, api.ListAuthorsFilter{

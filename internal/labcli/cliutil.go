@@ -156,7 +156,10 @@ type StatusError struct {
 var _ error = StatusError{}
 
 func NewStatusError(code int, format string, a ...any) StatusError {
-	status := strings.TrimSuffix(fmt.Sprintf(format, a...), ".") + "."
+	status := fmt.Sprintf(format, a...)
+	if !strings.HasSuffix(status, ".") && !strings.HasSuffix(status, "!") {
+		status += "."
+	}
 	return StatusError{
 		code:   code,
 		status: strings.ToUpper(status[:1]) + status[1:],

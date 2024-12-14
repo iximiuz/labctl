@@ -17,6 +17,8 @@ type Challenge struct {
 	Categories  []string `json:"categories" yaml:"categories"`
 	Tags        []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 
+	Authors []Author `json:"authors" yaml:"authors"`
+
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
 
 	AttemptCount    int `json:"attemptCount" yaml:"attemptCount"`
@@ -39,6 +41,24 @@ func (ch *Challenge) GetName() string {
 
 func (ch *Challenge) GetPageURL() string {
 	return ch.PageURL
+}
+
+func (ch *Challenge) IsOfficial() bool {
+	for _, author := range ch.Authors {
+		if !author.Official {
+			return false
+		}
+	}
+	return len(ch.Authors) > 0
+}
+
+func (ch *Challenge) IsAuthoredBy(userID string) bool {
+	for _, a := range ch.Authors {
+		if a.UserID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 type CreateChallengeRequest struct {
@@ -86,8 +106,21 @@ func (c *Client) ListAuthoredChallenges(ctx context.Context) ([]Challenge, error
 	return challenges, c.GetInto(ctx, "/challenges/authored", nil, nil, &challenges)
 }
 
-func (c *Client) StartChallenge(ctx context.Context, name string) (*Challenge, error) {
-	body, err := toJSONBody(map[string]any{"started": true})
+type StartChallengeOptions struct {
+	SafetyDisclaimerConsent bool
+}
+
+func (c *Client) StartChallenge(ctx context.Context, name string, opts StartChallengeOptions) (*Challenge, error) {
+	type startChallengeRequest struct {
+		Started                 bool `json:"started"`
+		SafetyDisclaimerConsent bool `json:"safetyDisclaimerConsent,omitempty"`
+	}
+	req := startChallengeRequest{
+		Started:                 true,
+		SafetyDisclaimerConsent: opts.SafetyDisclaimerConsent,
+	}
+
+	body, err := toJSONBody(req)
 	if err != nil {
 		return nil, err
 	}

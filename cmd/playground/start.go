@@ -15,6 +15,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
+	"github.com/iximiuz/labctl/internal/safety"
 )
 
 const startPlaygroundTimeout = 10 * time.Minute
@@ -29,6 +30,8 @@ type startOptions struct {
 	ssh bool
 
 	ide bool
+
+	safetyDisclaimerConsent bool
 
 	skipWaitInit bool
 
@@ -96,6 +99,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		`Open the playground in the IDE (only VSCode is supported at the moment)`,
 	)
 	flags.BoolVar(
+		&opts.safetyDisclaimerConsent,
+		"safety-disclaimer-consent",
+		false,
+		`Acknowledge the safety disclaimer`,
+	)
+	flags.BoolVar(
 		&opts.skipWaitInit,
 		"skip-wait-init",
 		false,
@@ -113,8 +122,15 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions) error {
+	var err error
+	opts.safetyDisclaimerConsent, err = showSafetyDisclaimerIfNeeded(ctx, opts.playground, cli, opts.safetyDisclaimerConsent)
+	if err != nil {
+		return err
+	}
+
 	play, err := cli.Client().CreatePlay(ctx, api.CreatePlayRequest{
-		Playground: opts.playground,
+		Playground:              opts.playground,
+		SafetyDisclaimerConsent: opts.safetyDisclaimerConsent,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't create a new playground: %w", err)
@@ -204,4 +220,30 @@ func listKnownPlaygrounds(ctx context.Context, cli labcli.CLI) string {
 	}
 
 	return strings.Join(res, "\n")
+}
+
+func showSafetyDisclaimerIfNeeded(ctx context.Context, playgroundName string, cli labcli.CLI, consent bool) (bool, error) {
+	if consent {
+		return true, nil
+	}
+
+	playground, err := cli.Client().GetPlayground(ctx, playgroundName)
+	if err != nil {
+		return false, fmt.Errorf("couldn't get the playground: %w", err)
+	}
+
+	if playground.Owner == "" { // official playgrounds don't need consent
+		return true, nil
+	}
+
+	me, err := cli.Client().GetMe(ctx)
+	if err != nil {
+		return false, fmt.Errorf("couldn't get the current user info: %w", err)
+	}
+
+	if me.ID == playground.Owner {
+		return true, nil
+	}
+
+	return safety.ShowSafetyDisclaimer(cli)
 }

@@ -6,8 +6,12 @@ import (
 )
 
 type Author struct {
+	UserID string `json:"userId"`
+
 	DisplayName        string `json:"displayName"`
 	ExternalProfileURL string `json:"externalProfileUrl"`
+
+	Official bool `json:"official,omitempty"`
 }
 
 type CreateAuthorRequest struct {

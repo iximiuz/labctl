@@ -152,7 +152,8 @@ func (m *Machine) HasUser(name string) bool {
 }
 
 type CreatePlayRequest struct {
-	Playground string `json:"playground"`
+	Playground              string `json:"playground"`
+	SafetyDisclaimerConsent bool   `json:"safetyDisclaimerConsent"`
 }
 
 func (c *Client) CreatePlay(ctx context.Context, req CreatePlayRequest) (*Play, error) {

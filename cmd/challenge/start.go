@@ -15,6 +15,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
+	"github.com/iximiuz/labctl/internal/safety"
 	issh "github.com/iximiuz/labctl/internal/ssh"
 )
 
@@ -30,6 +31,8 @@ type startOptions struct {
 	keepAlive bool
 
 	ide bool
+
+	safetyDisclaimerConsent bool
 }
 
 func newStartCommand(cli labcli.CLI) *cobra.Command {
@@ -97,6 +100,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Open the challenge playground in the IDE (only VSCode is supported at the moment)`,
 	)
+	flags.BoolVar(
+		&opts.safetyDisclaimerConsent,
+		"safety-disclaimer-consent",
+		false,
+		`Acknowledge the safety disclaimer`,
+	)
 
 	return cmd
 }
@@ -113,7 +122,15 @@ const (
 )
 
 func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) error {
-	chal, err := cli.Client().StartChallenge(ctx, opts.challenge)
+	var err error
+	opts.safetyDisclaimerConsent, err = showSafetyDisclaimerIfNeeded(ctx, opts.challenge, cli, opts.safetyDisclaimerConsent)
+	if err != nil {
+		return err
+	}
+
+	chal, err := cli.Client().StartChallenge(ctx, opts.challenge, api.StartChallengeOptions{
+		SafetyDisclaimerConsent: opts.safetyDisclaimerConsent,
+	})
 	if err != nil {
 		return fmt.Errorf("couldn't start solving the challenge: %w", err)
 	}
@@ -271,4 +288,35 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 			}
 		}
 	}
+}
+
+func showSafetyDisclaimerIfNeeded(
+	ctx context.Context,
+	chalName string,
+	cli labcli.CLI,
+	consent bool,
+) (bool, error) {
+	if consent {
+		return true, nil
+	}
+
+	ch, err := cli.Client().GetChallenge(ctx, chalName)
+	if err != nil {
+		return false, fmt.Errorf("couldn't get challenge %q: %w", chalName, err)
+	}
+
+	if ch.IsOfficial() {
+		return true, nil
+	}
+
+	me, err := cli.Client().GetMe(ctx)
+	if err != nil {
+		return false, fmt.Errorf("couldn't get the current user info: %w", err)
+	}
+
+	if ch.IsAuthoredBy(me.ID) {
+		return true, nil
+	}
+
+	return safety.ShowSafetyDisclaimer(cli)
 }

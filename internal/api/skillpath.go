@@ -14,6 +14,8 @@ type SkillPath struct {
 	Title string `json:"title" yaml:"title"`
 
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
+
+	Authors []Author `json:"authors" yaml:"authors"`
 }
 
 var _ content.Content = (*SkillPath)(nil)
@@ -28,6 +30,24 @@ func (t *SkillPath) GetName() string {
 
 func (t *SkillPath) GetPageURL() string {
 	return t.PageURL
+}
+
+func (t *SkillPath) IsOfficial() bool {
+	for _, author := range t.Authors {
+		if !author.Official {
+			return false
+		}
+	}
+	return len(t.Authors) > 0
+}
+
+func (t *SkillPath) IsAuthoredBy(userID string) bool {
+	for _, a := range t.Authors {
+		if a.UserID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 type CreateSkillPathRequest struct {

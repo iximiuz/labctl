@@ -14,6 +14,8 @@ type Course struct {
 	Title string `json:"title" yaml:"title"`
 
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
+
+	Authors []Author `json:"authors" yaml:"authors"`
 }
 
 var _ content.Content = (*Course)(nil)
@@ -28,6 +30,24 @@ func (c *Course) GetName() string {
 
 func (c *Course) GetPageURL() string {
 	return c.PageURL
+}
+
+func (c *Course) IsOfficial() bool {
+	for _, author := range c.Authors {
+		if !author.Official {
+			return false
+		}
+	}
+	return len(c.Authors) > 0
+}
+
+func (c *Course) IsAuthoredBy(userID string) bool {
+	for _, a := range c.Authors {
+		if a.UserID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 type CourseVariant string
