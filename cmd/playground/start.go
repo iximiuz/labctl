@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
@@ -14,6 +16,8 @@ import (
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
+
+const startPlaygroundTimeout = 10 * time.Minute
 
 type startOptions struct {
 	playground string
@@ -25,6 +29,8 @@ type startOptions struct {
 	ssh bool
 
 	ide bool
+
+	skipWaitInit bool
 
 	quiet bool
 }
@@ -89,6 +95,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Open the playground in the IDE (only VSCode is supported at the moment)`,
 	)
+	flags.BoolVar(
+		&opts.skipWaitInit,
+		"skip-wait-init",
+		false,
+		`Skip waiting for the playground initialization (useful for debugging)`,
+	)
 	flags.BoolVarP(
 		&opts.quiet,
 		"quiet",
@@ -144,6 +156,21 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 			User:    opts.user,
 			IDE:     true,
 		})
+	}
+
+	if opts.skipWaitInit {
+		cli.PrintAux("WARNING: Not waiting for the playground initialization tasks to complete...\n")
+	} else if len(play.Tasks) > 0 {
+		playConn := api.NewPlayConn(ctx, play, cli.Client(), cli.Config().WebSocketOrigin())
+		if err := playConn.Start(); err != nil {
+			return fmt.Errorf("couldn't start play connection: %w", err)
+		}
+
+		spin := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
+		spin.Writer = cli.AuxStream()
+		if err := playConn.WaitPlayReady(startPlaygroundTimeout, spin); err != nil {
+			return fmt.Errorf("playground initialization failed: %w", err)
+		}
 	}
 
 	if opts.ssh {

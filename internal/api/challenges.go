@@ -41,53 +41,6 @@ func (ch *Challenge) GetPageURL() string {
 	return ch.PageURL
 }
 
-func (ch *Challenge) IsInitialized() bool {
-	for _, task := range ch.Tasks {
-		if task.Init && task.Status != PlayTaskStatusCompleted {
-			return false
-		}
-	}
-	return true
-}
-
-func (ch *Challenge) IsCompletable() bool {
-	for _, task := range ch.Tasks {
-		if !task.Init && !task.Helper && task.Status != PlayTaskStatusCompleted {
-			return false
-		}
-	}
-	return true
-}
-
-func (ch *Challenge) IsFailed() bool {
-	for _, task := range ch.Tasks {
-		if task.Status == PlayTaskStatusFailed {
-			return true
-		}
-	}
-	return false
-}
-
-func (ch *Challenge) CountInitTasks() int {
-	count := 0
-	for _, task := range ch.Tasks {
-		if task.Init {
-			count++
-		}
-	}
-	return count
-}
-
-func (ch *Challenge) CountCompletedInitTasks() int {
-	count := 0
-	for _, task := range ch.Tasks {
-		if task.Init && task.Status == PlayTaskStatusCompleted {
-			count++
-		}
-	}
-	return count
-}
-
 type CreateChallengeRequest struct {
 	Name   string `json:"name"`
 	Sample bool   `json:"sample"`
@@ -116,7 +69,7 @@ type ListChallengesOptions struct {
 func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions) ([]*Challenge, error) {
 	var challenges []*Challenge
 	query := url.Values{}
-	
+
 	for _, category := range opts.Category {
 		query.Add("category", category)
 	}

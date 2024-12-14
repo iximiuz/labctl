@@ -2,16 +2,12 @@ package challenge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
-	"github.com/gorilla/websocket"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
@@ -149,31 +145,28 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 		}
 	}
 
-	hconn, err := cli.Client().RequestPlayConn(ctx, chal.Play.ID)
-	if err != nil {
-		return fmt.Errorf("couldn't create a connection to the challenge playground: %w", err)
-	}
-
-	playConn := newPlayConn(ctx, cli, hconn.URL)
+	playConn := api.NewPlayConn(ctx, chal.Play, cli.Client(), cli.Config().WebSocketOrigin())
 	if err := playConn.Start(); err != nil {
 		return fmt.Errorf("couldn't start play connection: %w", err)
 	}
 
 	eventCh := make(chan challengeEvent, 100)
+	spin := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
+	spin.Writer = cli.AuxStream()
 
 	go func() {
-		if err := playConn.WaitChallengeReady(chal); err != nil {
+		if err := playConn.WaitPlayReady(startChallengeTimeout, spin); err != nil {
 			eventCh <- EventWSConnFailed
 			return
 		}
 		eventCh <- EventChallengeReady
 
-		if err := playConn.WaitChallengeDone(chal); err != nil {
+		if err := playConn.WaitDone(); err != nil {
 			eventCh <- EventWSConnFailed
 			return
 		}
 
-		if chal.IsCompletable() {
+		if chal.Play.IsCompletable() {
 			eventCh <- EventChallengeCompletable
 		} else {
 			eventCh <- EventChallengeFailed
@@ -245,7 +238,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				}
 
 			case EventChallengeCompleted, EventChallengeFailed:
-				if chal.IsFailed() {
+				if chal.Play.IsFailed() {
 					// cli.PrintAux("\033c\r") // Reset terminal
 					cli.PrintAux("\r\n\r\n")
 					cli.PrintAux("************************************************************************\r\n")
@@ -276,149 +269,6 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				cli.PrintAux("\r\n")
 				return nil
 			}
-		}
-	}
-}
-
-type PlayConnMessage struct {
-	Kind    string       `json:"kind"`
-	Machine string       `json:"machine,omitempty"`
-	Task    api.PlayTask `json:"task,omitempty"`
-}
-
-type PlayConn struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	cli labcli.CLI
-
-	url  string
-	conn *websocket.Conn
-
-	msgCh chan PlayConnMessage
-	errCh chan error
-}
-
-func newPlayConn(
-	ctx context.Context,
-	cli labcli.CLI,
-	url string,
-) *PlayConn {
-	ctx, cancel := context.WithCancel(ctx)
-
-	return &PlayConn{
-		ctx:    ctx,
-		cancel: cancel,
-		cli:    cli,
-		url:    url,
-	}
-}
-
-func (p *PlayConn) Start() error {
-	conn, _, err := websocket.DefaultDialer.DialContext(p.ctx, p.url, http.Header{
-		"Origin": {p.cli.Config().WebSocketOrigin()},
-	})
-	if err != nil {
-		return fmt.Errorf("couldn't connect to play connection WebSocket: %w", err)
-	}
-	p.conn = conn
-
-	p.msgCh = make(chan PlayConnMessage, 1024)
-	p.errCh = make(chan error, 1)
-
-	go func() {
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				if err == io.EOF || websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-					return
-				}
-				if websocket.IsUnexpectedCloseError(err) {
-					p.cli.PrintErr("Play connection WebSocket closed unexpectedly: %v\n", err)
-					p.errCh <- err
-					return
-				}
-
-				p.cli.PrintErr("Error reading play connection message: %v\n", err)
-				continue
-			}
-
-			var msg PlayConnMessage
-			if err := json.Unmarshal(message, &msg); err != nil {
-				p.cli.PrintErr("Error decoding play connection message: %v\n", err)
-				continue
-			}
-
-			p.msgCh <- msg
-		}
-	}()
-
-	return nil
-}
-
-func (p *PlayConn) Close() {
-	p.cancel()
-	p.conn.Close()
-	close(p.msgCh)
-	close(p.errCh)
-}
-
-func (p *PlayConn) WaitChallengeReady(chal *api.Challenge) error {
-	s := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
-	s.Writer = p.cli.AuxStream()
-	s.Prefix = fmt.Sprintf(
-		"Warming up playground... Init tasks completed: %d/%d ",
-		chal.CountCompletedInitTasks(), chal.CountInitTasks(),
-	)
-	s.Start()
-
-	ctx, cancel := context.WithTimeout(p.ctx, startChallengeTimeout)
-	defer cancel()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-
-		case err := <-p.errCh:
-			return err
-
-		case msg := <-p.msgCh:
-			if msg.Kind == "task" {
-				chal.Tasks[msg.Task.Name] = msg.Task
-			}
-		}
-
-		s.Prefix = fmt.Sprintf(
-			"Warming up playground... Init tasks completed: %d/%d ",
-			chal.CountCompletedInitTasks(), chal.CountInitTasks(),
-		)
-
-		if chal.IsInitialized() {
-			s.FinalMSG = "Warming up playground... Done.\n"
-			s.Stop()
-			return nil
-		}
-	}
-}
-
-func (p *PlayConn) WaitChallengeDone(chal *api.Challenge) error {
-	for {
-		select {
-		case <-p.ctx.Done():
-			return p.ctx.Err()
-
-		case err := <-p.errCh:
-			return err
-
-		case msg := <-p.msgCh:
-			if msg.Kind == "task" {
-				chal.Tasks[msg.Task.Name] = msg.Task
-			}
-		}
-
-		if chal.IsCompletable() || chal.IsFailed() {
-			return nil
 		}
 	}
 }

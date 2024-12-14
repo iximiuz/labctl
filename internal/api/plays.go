@@ -54,6 +54,8 @@ type Play struct {
 	Failed    bool `json:"failed" yaml:"failed"`
 
 	Machines []Machine `json:"machines" yaml:"machines"`
+
+	Tasks map[string]PlayTask `json:"tasks,omitempty" yaml:"tasks,omitempty"`
 }
 
 func (p *Play) GetMachine(name string) *Machine {
@@ -63,6 +65,53 @@ func (p *Play) GetMachine(name string) *Machine {
 		}
 	}
 	return nil
+}
+
+func (p *Play) IsInitialized() bool {
+	for _, task := range p.Tasks {
+		if task.Init && task.Status != PlayTaskStatusCompleted {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *Play) IsFailed() bool {
+	for _, task := range p.Tasks {
+		if task.Status == PlayTaskStatusFailed {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Play) CountInitTasks() int {
+	count := 0
+	for _, task := range p.Tasks {
+		if task.Init {
+			count++
+		}
+	}
+	return count
+}
+
+func (p *Play) CountCompletedInitTasks() int {
+	count := 0
+	for _, task := range p.Tasks {
+		if task.Init && task.Status == PlayTaskStatusCompleted {
+			count++
+		}
+	}
+	return count
+}
+
+func (p *Play) IsCompletable() bool {
+	for _, task := range p.Tasks {
+		if task.Status != PlayTaskStatusCompleted {
+			return false
+		}
+	}
+	return true
 }
 
 type MachineUser struct {
