@@ -114,11 +114,6 @@ func (p *Play) IsCompletable() bool {
 	return true
 }
 
-type MachineUser struct {
-	Name    string `json:"name"`
-	Default bool   `json:"default"`
-}
-
 type Machine struct {
 	Name        string        `json:"name"`
 	Users       []MachineUser `json:"users"`

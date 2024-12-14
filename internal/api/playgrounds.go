@@ -5,11 +5,20 @@ import (
 )
 
 type Playground struct {
-	Owner       string   `json:"owner"`
-	Name        string   `json:"name"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Categories  []string `json:"categories"`
+	ID             string              `yaml:"id" json:"id"`
+	Owner          string              `yaml:"owner" json:"owner"`
+	Name           string              `yaml:"name" json:"name"`
+	Base           string              `yaml:"base" json:"base"`
+	Title          string              `yaml:"title" json:"title"`
+	Description    string              `yaml:"description" json:"description"`
+	Categories     []string            `yaml:"categories" json:"categories"`
+	Cover          string              `yaml:"cover,omitempty" json:"cover,omitempty"`
+	PageURL        string              `yaml:"pageUrl" json:"pageUrl"`
+	Access         PlaygroundAccess    `yaml:"access" json:"access"`
+	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
+	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
+	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
+	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
 }
 
 func (c *Client) GetPlayground(ctx context.Context, name string) (*Playground, error) {
@@ -20,4 +29,123 @@ func (c *Client) GetPlayground(ctx context.Context, name string) (*Playground, e
 func (c *Client) ListPlaygrounds(ctx context.Context) ([]Playground, error) {
 	var plays []Playground
 	return plays, c.GetInto(ctx, "/playgrounds", nil, nil, &plays)
+}
+
+type MachineUser struct {
+	Name    string `yaml:"name" json:"name"`
+	Default bool   `yaml:"default,omitempty" json:"default,omitempty"`
+}
+
+type PlaygroundMachine struct {
+	Name        string        `yaml:"name" json:"name"`
+	Users       []MachineUser `yaml:"users" json:"users"`
+	CPUCount    int           `yaml:"cpuCount" json:"cpuCount"`
+	CPUCountMax int           `yaml:"cpuCountMax" json:"cpuCountMax"`
+	RAMSize     string        `yaml:"ramSize" json:"ramSize"`
+	RAMSizeMax  string        `yaml:"ramSizeMax" json:"ramSizeMax"`
+	DrivePerf   string        `yaml:"drivePerf" json:"drivePerf"`
+	NetworkPerf string        `yaml:"networkPerf" json:"networkPerf"`
+}
+
+type PlaygroundTab struct {
+	ID      string `yaml:"id" json:"id"`
+	Kind    string `yaml:"kind" json:"kind"`
+	Name    string `yaml:"name" json:"name"`
+	Machine string `yaml:"machine" json:"machine"`
+	Number  int    `yaml:"number,omitempty" json:"number,omitempty"`
+}
+
+type InitCondition struct {
+	Key   string `yaml:"key" json:"key"`
+	Value string `yaml:"value" json:"value"`
+}
+
+type InitTask struct {
+	Name           string          `yaml:"name" json:"name"`
+	Machine        string          `yaml:"machine" json:"machine"`
+	Init           bool            `yaml:"init" json:"init"`
+	User           string          `yaml:"user" json:"user"`
+	TimeoutSeconds int             `yaml:"timeout_seconds" json:"timeout_seconds"`
+	Needs          []string        `yaml:"needs,omitempty" json:"needs,omitempty"`
+	Run            string          `yaml:"run" json:"run"`
+	Status         int             `yaml:"status,omitempty" json:"status,omitempty"`
+	Conditions     []InitCondition `yaml:"conditions,omitempty" json:"conditions,omitempty"`
+}
+
+type InitConditionValue struct {
+	Key      string   `yaml:"key" json:"key"`
+	Default  string   `yaml:"default,omitempty" json:"default,omitempty"`
+	Nullable bool     `yaml:"nullable,omitempty" json:"nullable,omitempty"`
+	Options  []string `yaml:"options" json:"options"`
+}
+
+type InitConditions struct {
+	Values []InitConditionValue `yaml:"values,omitempty" json:"values,omitempty"`
+}
+
+type PlaygroundAccess struct {
+	Mode string `yaml:"mode" json:"mode"`
+}
+
+type PlaygroundSpec struct {
+	Name           string              `yaml:"name" json:"name"`
+	Title          string              `yaml:"title" json:"title"`
+	Description    string              `yaml:"description" json:"description"`
+	Categories     []string            `yaml:"categories" json:"categories"`
+	Access         PlaygroundAccess    `yaml:"access" json:"access"`
+	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
+	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
+	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
+	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
+	RegistryAuth   string              `yaml:"registryAuth,omitempty" json:"registryAuth,omitempty"`
+}
+
+type PlaygroundManifest struct {
+	Kind       string         `yaml:"kind" json:"kind"`
+	Playground PlaygroundSpec `yaml:"playground" json:"playground"`
+}
+
+type CreatePlaygroundRequest struct {
+	Base           string              `yaml:"base" json:"base"`
+	Title          string              `yaml:"title" json:"title"`
+	Description    string              `yaml:"description" json:"description"`
+	Categories     []string            `yaml:"categories" json:"categories"`
+	Access         PlaygroundAccess    `yaml:"access" json:"access"`
+	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
+	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
+	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
+	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
+	RegistryAuth   string              `yaml:"registryAuth" json:"registryAuth"`
+}
+
+func (c *Client) CreatePlayground(ctx context.Context, req CreatePlaygroundRequest) (*Playground, error) {
+	body, err := toJSONBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var p Playground
+	return &p, c.PostInto(ctx, "/playgrounds", nil, nil, body, &p)
+}
+
+type UpdatePlaygroundRequest struct {
+	Title          string              `yaml:"title" json:"title"`
+	Description    string              `yaml:"description" json:"description"`
+	Categories     []string            `yaml:"categories" json:"categories"`
+	Access         PlaygroundAccess    `yaml:"access" json:"access"`
+	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
+	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
+	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
+	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
+	RegistryAuth   string              `yaml:"registryAuth" json:"registryAuth"`
+}
+
+func (c *Client) UpdatePlayground(ctx context.Context, name string, req UpdatePlaygroundRequest) (*Playground, error) {
+	body, err := toJSONBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var p Playground
+	return &p, c.PutInto(ctx, "/playgrounds/"+name, nil, nil, body, &p)
 }
