@@ -107,7 +107,7 @@ func (p *Play) CountCompletedInitTasks() int {
 
 func (p *Play) IsCompletable() bool {
 	for _, task := range p.Tasks {
-		if task.Status != PlayTaskStatusCompleted {
+		if !task.Helper && task.Status != PlayTaskStatusCompleted {
 			return false
 		}
 	}

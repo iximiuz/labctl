@@ -19,6 +19,7 @@ type Playground struct {
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
 	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
+	RegistryAuth   string              `yaml:"registryAuth,omitempty" json:"registryAuth,omitempty"`
 }
 
 func (c *Client) GetPlayground(ctx context.Context, name string) (*Playground, error) {
