@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"net/url"
 )
 
 type Playground struct {
@@ -27,9 +28,14 @@ func (c *Client) GetPlayground(ctx context.Context, name string) (*Playground, e
 	return &p, c.GetInto(ctx, "/playgrounds/"+name, nil, nil, &p)
 }
 
-func (c *Client) ListPlaygrounds(ctx context.Context) ([]Playground, error) {
+func (c *Client) ListPlaygrounds(ctx context.Context, filter string) ([]Playground, error) {
 	var plays []Playground
-	return plays, c.GetInto(ctx, "/playgrounds", nil, nil, &plays)
+
+	q := url.Values{}
+	if filter != "" {
+		q.Add("filter", filter)
+	}
+	return plays, c.GetInto(ctx, "/playgrounds", q, nil, &plays)
 }
 
 type MachineUser struct {
