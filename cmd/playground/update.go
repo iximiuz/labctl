@@ -48,7 +48,7 @@ func newUpdateCommand(cli labcli.CLI) *cobra.Command {
 		"file",
 		"f",
 		"",
-		"Path to playground manifest file",
+		`Path to playground manifest file`,
 	)
 
 	return cmd
@@ -76,9 +76,9 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 	}
 
 	req := api.UpdatePlaygroundRequest{
-		Title:          manifest.Playground.Title,
-		Description:    manifest.Playground.Description,
-		Categories:     manifest.Playground.Categories,
+		Title:          manifest.Title,
+		Description:    manifest.Description,
+		Categories:     manifest.Categories,
 		Access:         manifest.Playground.Access,
 		Machines:       manifest.Playground.Machines,
 		Tabs:           manifest.Playground.Tabs,

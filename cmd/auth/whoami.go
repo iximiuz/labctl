@@ -7,7 +7,7 @@ import (
 	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func newWhoAmICommand(cli labcli.CLI) *cobra.Command {

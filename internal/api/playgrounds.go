@@ -43,15 +43,15 @@ type MachineUser struct {
 	Default bool   `yaml:"default,omitempty" json:"default,omitempty"`
 }
 
+type MachineResources struct {
+	CPUCount int    `yaml:"cpuCount" json:"cpuCount"`
+	RAMSize  string `yaml:"ramSize" json:"ramSize"`
+}
+
 type PlaygroundMachine struct {
-	Name        string        `yaml:"name" json:"name"`
-	Users       []MachineUser `yaml:"users" json:"users"`
-	CPUCount    int           `yaml:"cpuCount" json:"cpuCount"`
-	CPUCountMax int           `yaml:"cpuCountMax" json:"cpuCountMax"`
-	RAMSize     string        `yaml:"ramSize" json:"ramSize"`
-	RAMSizeMax  string        `yaml:"ramSizeMax" json:"ramSizeMax"`
-	DrivePerf   string        `yaml:"drivePerf" json:"drivePerf"`
-	NetworkPerf string        `yaml:"networkPerf" json:"networkPerf"`
+	Name      string           `yaml:"name" json:"name"`
+	Users     []MachineUser    `yaml:"users" json:"users"`
+	Resources MachineResources `yaml:"resources" json:"resources"`
 }
 
 type PlaygroundTab struct {
@@ -69,7 +69,7 @@ type InitCondition struct {
 
 type InitTask struct {
 	Name           string          `yaml:"name" json:"name"`
-	Machine        string          `yaml:"machine" json:"machine"`
+	Machine        string          `yaml:"machine,omitempty" json:"machine,omitempty"`
 	Init           bool            `yaml:"init" json:"init"`
 	User           string          `yaml:"user" json:"user"`
 	TimeoutSeconds int             `yaml:"timeout_seconds" json:"timeout_seconds"`
@@ -91,14 +91,11 @@ type InitConditions struct {
 }
 
 type PlaygroundAccess struct {
-	Mode string `yaml:"mode" json:"mode"`
+	Mode  string   `yaml:"mode" json:"mode"`
+	Users []string `yaml:"users,omitempty" json:"users,omitempty"`
 }
 
 type PlaygroundSpec struct {
-	Name           string              `yaml:"name" json:"name"`
-	Title          string              `yaml:"title" json:"title"`
-	Description    string              `yaml:"description" json:"description"`
-	Categories     []string            `yaml:"categories" json:"categories"`
 	Access         PlaygroundAccess    `yaml:"access" json:"access"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
@@ -108,8 +105,11 @@ type PlaygroundSpec struct {
 }
 
 type PlaygroundManifest struct {
-	Kind       string         `yaml:"kind" json:"kind"`
-	Playground PlaygroundSpec `yaml:"playground" json:"playground"`
+	Kind        string         `yaml:"kind" json:"kind"`
+	Title       string         `yaml:"title" json:"title"`
+	Description string         `yaml:"description" json:"description"`
+	Categories  []string       `yaml:"categories" json:"categories"`
+	Playground  PlaygroundSpec `yaml:"playground" json:"playground"`
 }
 
 type CreatePlaygroundRequest struct {

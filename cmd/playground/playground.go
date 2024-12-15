@@ -20,7 +20,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newStopCommand(cli),
 		newMachinesCommand(cli),
 		newCreateCommand(cli),
-		newViewCommand(cli),
+		newManifestCommand(cli),
 		newUpdateCommand(cli),
 	)
 

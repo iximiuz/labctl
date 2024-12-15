@@ -26,7 +26,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list [flags]",
 		Aliases: []string{"ls"},
-		Short:   `List recent playgrounds (up to 50)`,
+		Short:   `List current or recently run playgrounds (up to 50)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return labcli.WrapStatusError(runListPlays(cmd.Context(), cli, &opts))
 		},

@@ -11,44 +11,44 @@ import (
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
-type viewOptions struct {
+type manifestOptions struct {
 	name string
 }
 
-func newViewCommand(cli labcli.CLI) *cobra.Command {
-	var opts viewOptions
+func newManifestCommand(cli labcli.CLI) *cobra.Command {
+	var opts manifestOptions
 
 	cmd := &cobra.Command{
-		Use:   "view <playground-name>",
+		Use:   "manifest <playground-name>",
 		Short: "View playground manifest",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.name = args[0]
-			return labcli.WrapStatusError(runView(cmd.Context(), cli, &opts))
+			return labcli.WrapStatusError(runManifest(cmd.Context(), cli, &opts))
 		},
 	}
 
 	return cmd
 }
 
-func runView(ctx context.Context, cli labcli.CLI, opts *viewOptions) error {
+func runManifest(ctx context.Context, cli labcli.CLI, opts *manifestOptions) error {
 	playground, err := cli.Client().GetPlayground(ctx, opts.name)
 	if err != nil {
 		return fmt.Errorf("couldn't get playground: %w", err)
 	}
 
 	manifest := api.PlaygroundManifest{
-		Kind: "playground",
+		Kind:        "playground",
+		Title:       playground.Title,
+		Description: playground.Description,
+		Categories:  playground.Categories,
 		Playground: api.PlaygroundSpec{
-			Name:           playground.Name,
-			Title:          playground.Title,
-			Description:    playground.Description,
-			Categories:     playground.Categories,
 			Access:         playground.Access,
-			Tabs:           playground.Tabs,
 			Machines:       playground.Machines,
+			Tabs:           playground.Tabs,
 			InitTasks:      playground.InitTasks,
 			InitConditions: playground.InitConditions,
+			RegistryAuth:   playground.RegistryAuth,
 		},
 	}
 

@@ -115,12 +115,9 @@ func (p *Play) IsCompletable() bool {
 }
 
 type Machine struct {
-	Name        string        `json:"name"`
-	Users       []MachineUser `json:"users"`
-	CPUCount    int           `json:"cpuCount"`
-	RAMSize     string        `json:"ramSize"`
-	DrivePerf   string        `json:"drivePerf"`
-	NetworkPerf string        `json:"networkPerf"`
+	Name      string           `json:"name"`
+	Users     []MachineUser    `json:"users"`
+	Resources MachineResources `json:"resources"`
 }
 
 func (m *Machine) DefaultUser() *MachineUser {

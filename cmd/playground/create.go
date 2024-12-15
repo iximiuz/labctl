@@ -30,10 +30,10 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 			cli.SetQuiet(opts.quiet)
 
 			if opts.base == "" {
-				return labcli.NewStatusError(1, "--base flag is required")
+				return labcli.NewStatusError(1, "--base <base-playground-name> flag is required\n\nHint: List all possible base playgrounds with `labctl playgrounds catalog --filter base`.")
 			}
 			if opts.file == "" {
-				return labcli.NewStatusError(1, "--file flag is required")
+				return labcli.NewStatusError(1, "--file <path/to/manifest.yaml> flag is required\n\nHint: You can get some inspiration from `labctl playgrounds manifest k8s-omni` output.")
 			}
 			return labcli.WrapStatusError(runCreate(cmd.Context(), cli, &opts))
 		},
@@ -52,14 +52,14 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 		"base",
 		"b",
 		"",
-		"Base playground to use for the new playground",
+		`Base playground to use for the new playground`,
 	)
 	flags.StringVarP(
 		&opts.file,
 		"file",
 		"f",
 		"",
-		"Path to playground manifest file",
+		`Path to playground manifest file`,
 	)
 
 	return cmd
@@ -88,9 +88,9 @@ func runCreate(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
 
 	req := api.CreatePlaygroundRequest{
 		Base:           opts.base,
-		Title:          manifest.Playground.Title,
-		Description:    manifest.Playground.Description,
-		Categories:     manifest.Playground.Categories,
+		Title:          manifest.Title,
+		Description:    manifest.Description,
+		Categories:     manifest.Categories,
 		Access:         manifest.Playground.Access,
 		Machines:       manifest.Playground.Machines,
 		Tabs:           manifest.Playground.Tabs,
