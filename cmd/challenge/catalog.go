@@ -21,7 +21,7 @@ func newCatalogCommand(cli labcli.CLI) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "catalog",
-		Aliases: []string{"catalog"},
+		Aliases: []string{"cat", "catalog"},
 		Short:   "List challenges from the catalog, optionally filtered by category and/or status",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

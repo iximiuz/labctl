@@ -208,7 +208,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 }
 
 func listKnownPlaygrounds(ctx context.Context, cli labcli.CLI) string {
-	playgrounds, err := cli.Client().ListPlaygrounds(ctx, "")
+	playgrounds, err := cli.Client().ListPlaygrounds(ctx, nil)
 	if err != nil {
 		cli.PrintErr("Couldn't list known playgrounds: %v\n", err)
 		return ""

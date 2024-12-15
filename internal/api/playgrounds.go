@@ -28,13 +28,18 @@ func (c *Client) GetPlayground(ctx context.Context, name string) (*Playground, e
 	return &p, c.GetInto(ctx, "/playgrounds/"+name, nil, nil, &p)
 }
 
-func (c *Client) ListPlaygrounds(ctx context.Context, filter string) ([]Playground, error) {
+type ListPlaygroundsOptions struct {
+	Filter string
+}
+
+func (c *Client) ListPlaygrounds(ctx context.Context, opts *ListPlaygroundsOptions) ([]Playground, error) {
 	var plays []Playground
 
 	q := url.Values{}
-	if filter != "" {
-		q.Add("filter", filter)
+	if opts != nil && opts.Filter != "" {
+		q.Add("filter", opts.Filter)
 	}
+
 	return plays, c.GetInto(ctx, "/playgrounds", q, nil, &plays)
 }
 
