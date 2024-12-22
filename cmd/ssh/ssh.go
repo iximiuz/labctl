@@ -163,7 +163,7 @@ func StartSSHSession(
 	if err := retry.UntilSuccess(ctx, func() error {
 		conn, err = dial.DialContext(ctx, "tcp", addr)
 		return err
-	}, 10, 1*time.Second); err != nil {
+	}, 60, 1*time.Second); err != nil {
 		cancel()
 		return nil, fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
 	}
