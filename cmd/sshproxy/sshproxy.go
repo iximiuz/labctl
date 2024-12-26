@@ -146,7 +146,6 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}, errCh); err != nil {
 			errCh <- err
 		}
-		close(errCh)
 	}()
 
 	go func() {

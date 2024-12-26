@@ -138,7 +138,6 @@ func StartSSHSession(
 		}, errCh); err != nil {
 			errCh <- err
 		}
-		close(errCh)
 	}()
 
 	go func() {
