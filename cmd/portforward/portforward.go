@@ -127,8 +127,6 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 		g     errgroup.Group
 		errCh = make(chan error, 100)
 	)
-	defer close(errCh)
-
 	for _, spec := range opts.localsParsed {
 		spec := spec
 

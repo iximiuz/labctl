@@ -128,7 +128,6 @@ func StartSSHSession(
 		localPort = portforward.RandomLocalPort()
 		errCh     = make(chan error, 100)
 	)
-	defer close(errCh)
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -139,6 +138,7 @@ func StartSSHSession(
 		}, errCh); err != nil {
 			errCh <- err
 		}
+		close(errCh)
 	}()
 
 	go func() {

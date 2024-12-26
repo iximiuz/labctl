@@ -134,7 +134,6 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		localHost = hostStr(opts.Address)
 		errCh     = make(chan error, 100)
 	)
-	defer close(errCh)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -147,6 +146,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}, errCh); err != nil {
 			errCh <- err
 		}
+		close(errCh)
 	}()
 
 	go func() {
