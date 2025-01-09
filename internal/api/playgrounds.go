@@ -161,3 +161,12 @@ func (c *Client) UpdatePlayground(ctx context.Context, name string, req UpdatePl
 	var p Playground
 	return &p, c.PutInto(ctx, "/playgrounds/"+name, nil, nil, body, &p)
 }
+
+func (c *Client) DeletePlayground(ctx context.Context, name string) error {
+	resp, err := c.Delete(ctx, "/playgrounds/"+name, nil, nil)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
