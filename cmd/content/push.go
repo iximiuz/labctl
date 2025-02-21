@@ -127,6 +127,12 @@ func runPushOnce(ctx context.Context, cli labcli.CLI, dir string, opts *pushOpti
 		err   error
 	)
 
+	cont, err := getContent(ctx, cli, opts.kind, opts.name)
+	if err != nil {
+		return fmt.Errorf("couldn't get content: %w", err)
+	}
+	cli.PrintAux("Found %s at %s\n", opts.kind, cont.GetPageURL())
+
 	state.remoteFiles, err = listContentFilesRemote(ctx, cli.Client(), opts.kind, opts.name)
 	if err != nil {
 		return fmt.Errorf("couldn't list remote content files: %w", err)

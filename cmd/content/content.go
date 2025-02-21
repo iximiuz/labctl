@@ -1,6 +1,7 @@
 package content
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -49,5 +50,29 @@ func (o *dirOptions) ContentDir(name string) (string, error) {
 		return "", fmt.Errorf("couldn't get the absolute path of %s: %w", dir, err)
 	} else {
 		return abs, nil
+	}
+}
+
+func getContent(
+	ctx context.Context,
+	cli labcli.CLI,
+	kind content.ContentKind,
+	name string,
+) (content.Content, error) {
+	switch kind {
+	case content.KindChallenge:
+		return cli.Client().GetChallenge(ctx, name)
+
+	case content.KindCourse:
+		return cli.Client().GetCourse(ctx, name)
+
+	case content.KindTutorial:
+		return cli.Client().GetTutorial(ctx, name)
+
+	case content.KindSkillPath:
+		return cli.Client().GetSkillPath(ctx, name)
+
+	default:
+		return nil, fmt.Errorf("unknown content kind %q", kind)
 	}
 }
