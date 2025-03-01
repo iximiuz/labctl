@@ -10,7 +10,7 @@ Some popular playgrounds:
 - [k3s](https://labs.iximiuz.com/playgrounds/k3s) - A multi-node K3s cluster with a load balancer, Helm, and more.
 - [docker](https://labs.iximiuz.com/playgrounds/docker) - A Linux server with Docker engine pre-installed.
 - [podman](https://labs.iximiuz.com/playgrounds/podman) - A Linux server with Podman, a daemonless Docker alternative.
-- [mini-lan-ubuntu](https://labs.iximiuz.com/playgrounds/mini-lan-ubuntu) - Three refined Ubuntu VMs connected into a single network.
+- [mini-lan-ubuntu](https://labs.iximiuz.com/playgrounds/mini-lan-ubuntu) - Four refined Ubuntu VMs connected into a single network.
 - [k8s-client-go](https://labs.iximiuz.com/playgrounds/k8s-client-go) - Mini-programs demonstrating Kubernetes client-go usage.
 - [golang](https://labs.iximiuz.com/playgrounds/golang) - A fresh Go version and a loaded VS Code (or Vim) is all you need.
 
