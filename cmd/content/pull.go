@@ -54,16 +54,16 @@ func newPullCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runPullContent(ctx context.Context, cli labcli.CLI, opts *pullOptions) error {
-	dir, err := opts.ContentDir(opts.name)
-	if err != nil {
-		return err
-	}
-
 	cont, err := getContent(ctx, cli, opts.kind, opts.name)
 	if err != nil {
 		return fmt.Errorf("couldn't get content: %w", err)
 	}
 	cli.PrintAux("Found %s at %s\n", opts.kind, cont.GetPageURL())
+
+	dir, err := opts.ContentDir(opts.name)
+	if err != nil {
+		return err
+	}
 
 	cli.PrintAux("Pulling content files to %s...\n", dir)
 	if err := os.MkdirAll(dir, 0755); err != nil {

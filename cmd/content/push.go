@@ -84,6 +84,12 @@ func runPushContent(ctx context.Context, cli labcli.CLI, opts *pushOptions) erro
 		return fmt.Errorf("push failed: directory %s doesn't exist or is not accessible", dir)
 	}
 
+	cont, err := getContent(ctx, cli, opts.kind, opts.name)
+	if err != nil {
+		return fmt.Errorf("couldn't get content: %w", err)
+	}
+	cli.PrintAux("Found %s at %s\n", opts.kind, cont.GetPageURL())
+
 	if opts.watch {
 		return runPushWatch(ctx, cli, dir, opts)
 	} else {
@@ -126,12 +132,6 @@ func runPushOnce(ctx context.Context, cli labcli.CLI, dir string, opts *pushOpti
 		state pushState = pushState{dir: dir}
 		err   error
 	)
-
-	cont, err := getContent(ctx, cli, opts.kind, opts.name)
-	if err != nil {
-		return fmt.Errorf("couldn't get content: %w", err)
-	}
-	cli.PrintAux("Found %s at %s\n", opts.kind, cont.GetPageURL())
 
 	state.remoteFiles, err = listContentFilesRemote(ctx, cli.Client(), opts.kind, opts.name)
 	if err != nil {
