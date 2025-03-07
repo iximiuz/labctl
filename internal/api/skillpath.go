@@ -77,7 +77,7 @@ func (c *Client) ListSkillPaths(ctx context.Context) ([]SkillPath, error) {
 
 func (c *Client) ListAuthoredSkillPaths(ctx context.Context) ([]SkillPath, error) {
 	var skillPaths []SkillPath
-	return skillPaths, c.GetInto(ctx, "/skill-paths/authored", nil, nil, &skillPaths)
+	return skillPaths, c.GetInto(ctx, "/author/skill-paths", nil, nil, &skillPaths)
 }
 
 func (c *Client) DeleteSkillPath(ctx context.Context, name string) error {

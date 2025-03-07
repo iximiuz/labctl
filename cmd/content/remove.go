@@ -70,6 +70,9 @@ func runRemoveContent(ctx context.Context, cli labcli.CLI, opts *removeOptions) 
 	case content.KindTutorial:
 		return cli.Client().DeleteTutorial(ctx, opts.name)
 
+	case content.KindRoadmap:
+		return cli.Client().DeleteRoadmap(ctx, opts.name)
+
 	case content.KindSkillPath:
 		return cli.Client().DeleteSkillPath(ctx, opts.name)
 

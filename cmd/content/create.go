@@ -84,6 +84,9 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 	case content.KindTutorial:
 		cont, err = createTutorial(ctx, cli, opts)
 
+	case content.KindRoadmap:
+		cont, err = createRoadmap(ctx, cli, opts)
+
 	case content.KindSkillPath:
 		cont, err = createSkillPath(ctx, cli, opts)
 	}
@@ -161,6 +164,18 @@ func createCourse(ctx context.Context, cli labcli.CLI, opts *createOptions) (con
 	}
 
 	return c, nil
+}
+
+func createRoadmap(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	r, err := cli.Client().CreateRoadmap(ctx, api.CreateRoadmapRequest{
+		Name:   opts.name,
+		Sample: !opts.noSample,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create roadmap: %w", err)
+	}
+
+	return r, nil
 }
 
 func createSkillPath(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {

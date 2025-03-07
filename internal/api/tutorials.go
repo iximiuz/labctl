@@ -77,7 +77,7 @@ func (c *Client) ListTutorials(ctx context.Context) ([]Tutorial, error) {
 
 func (c *Client) ListAuthoredTutorials(ctx context.Context) ([]Tutorial, error) {
 	var tutorials []Tutorial
-	return tutorials, c.GetInto(ctx, "/tutorials/authored", nil, nil, &tutorials)
+	return tutorials, c.GetInto(ctx, "/author/tutorials", nil, nil, &tutorials)
 }
 
 func (c *Client) DeleteTutorial(ctx context.Context, name string) error {

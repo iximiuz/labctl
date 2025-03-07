@@ -43,6 +43,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 type AuthoredContent struct {
 	Challenges []api.Challenge `json:"challenges" yaml:"challenges"`
 	Tutorials  []api.Tutorial  `json:"tutorials" yaml:"tutorials"`
+	Roadmaps   []api.Roadmap   `json:"roadmaps" yaml:"roadmaps"`
 	SkillPaths []api.SkillPath `json:"skill-paths" yaml:"skill-paths"`
 	Courses    []api.Course    `json:"courses"    yaml:"courses"`
 }
@@ -66,6 +67,15 @@ func runListContent(ctx context.Context, cli labcli.CLI, opts *listOptions) erro
 		}
 
 		authored.Tutorials = tutorials
+	}
+
+	if opts.kind == "" || opts.kind == content.KindRoadmap {
+		roadmaps, err := cli.Client().ListAuthoredRoadmaps(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot list authored roadmaps: %w", err)
+		}
+
+		authored.Roadmaps = roadmaps
 	}
 
 	if opts.kind == "" || opts.kind == content.KindSkillPath {

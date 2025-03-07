@@ -85,7 +85,7 @@ func (c *Client) ListCourses(ctx context.Context) ([]Course, error) {
 
 func (c *Client) ListAuthoredCourses(ctx context.Context) ([]Course, error) {
 	var courses []Course
-	return courses, c.GetInto(ctx, "/courses/authored", nil, nil, &courses)
+	return courses, c.GetInto(ctx, "/author/courses", nil, nil, &courses)
 }
 
 func (c *Client) DeleteCourse(ctx context.Context, name string) error {

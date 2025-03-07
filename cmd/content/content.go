@@ -69,6 +69,9 @@ func getContent(
 	case content.KindTutorial:
 		return cli.Client().GetTutorial(ctx, name)
 
+	case content.KindRoadmap:
+		return cli.Client().GetRoadmap(ctx, name)
+
 	case content.KindSkillPath:
 		return cli.Client().GetSkillPath(ctx, name)
 

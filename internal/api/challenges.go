@@ -103,7 +103,7 @@ func (c *Client) ListChallenges(ctx context.Context, opts *ListChallengesOptions
 
 func (c *Client) ListAuthoredChallenges(ctx context.Context) ([]Challenge, error) {
 	var challenges []Challenge
-	return challenges, c.GetInto(ctx, "/challenges/authored", nil, nil, &challenges)
+	return challenges, c.GetInto(ctx, "/author/challenges", nil, nil, &challenges)
 }
 
 type StartChallengeOptions struct {

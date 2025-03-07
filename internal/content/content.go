@@ -7,6 +7,7 @@ type ContentKind string
 const (
 	KindChallenge ContentKind = "challenge"
 	KindCourse    ContentKind = "course"
+	KindRoadmap   ContentKind = "roadmap"
 	KindSkillPath ContentKind = "skill-path"
 	KindTutorial  ContentKind = "tutorial"
 )
@@ -17,6 +18,8 @@ func (k *ContentKind) Set(v string) error {
 		*k = KindChallenge
 	case string(KindCourse):
 		*k = KindCourse
+	case string(KindRoadmap):
+		*k = KindRoadmap
 	case string(KindSkillPath):
 		*k = KindSkillPath
 	case string(KindTutorial):
@@ -40,6 +43,8 @@ func (k *ContentKind) Plural() string {
 		return "tutorials"
 	case KindCourse:
 		return "courses"
+	case KindRoadmap:
+		return "roadmaps"
 	case KindSkillPath:
 		return "skill-paths"
 	default:
