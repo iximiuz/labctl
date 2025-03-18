@@ -14,6 +14,7 @@ import (
 )
 
 type createOptions struct {
+	name string
 	base string
 	file string
 
@@ -24,10 +25,19 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	var opts createOptions
 
 	cmd := &cobra.Command{
-		Use:   "create [flags]",
+		Use:   "create [flags] <playground-name>",
 		Short: "Create a new playground from a base and a manifest file",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
+
+			if len(args) == 0 {
+				return labcli.NewStatusError(1,
+					"playground name is required\n\nAvailable playgrounds:\n%s",
+					listKnownPlaygrounds(cmd.Context(), cli))
+			}
+
+			opts.name = args[0]
 
 			if opts.base == "" {
 				return labcli.NewStatusError(1, "--base <base-playground-name> flag is required\n\nHint: List all possible base playgrounds with `labctl playgrounds catalog --filter base`.")
@@ -85,18 +95,23 @@ func runCreate(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
 	if manifest.Kind != "playground" {
 		return fmt.Errorf("invalid manifest kind: %s", manifest.Kind)
 	}
+	if manifest.Name != "" && manifest.Name != opts.name {
+		return fmt.Errorf("name in manifest (%s) does not match playground name argument (%s)", manifest.Name, opts.name)
+	}
 
 	req := api.CreatePlaygroundRequest{
+		Name:           opts.name,
 		Base:           opts.base,
 		Title:          manifest.Title,
 		Description:    manifest.Description,
 		Categories:     manifest.Categories,
-		Access:         manifest.Playground.Access,
+		Markdown:       manifest.Markdown,
 		Machines:       manifest.Playground.Machines,
 		Tabs:           manifest.Playground.Tabs,
 		InitTasks:      manifest.Playground.InitTasks,
 		InitConditions: manifest.Playground.InitConditions,
 		RegistryAuth:   manifest.Playground.RegistryAuth,
+		AccessControl:  manifest.Playground.AccessControl,
 	}
 
 	playground, err := cli.Client().CreatePlayground(ctx, req)

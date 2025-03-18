@@ -14,18 +14,32 @@ type Playground struct {
 	Description    string              `yaml:"description" json:"description"`
 	Categories     []string            `yaml:"categories" json:"categories"`
 	Cover          string              `yaml:"cover,omitempty" json:"cover,omitempty"`
+	Markdown       string              `yaml:"markdown,omitempty" json:"markdown,omitempty"`
+	Published      bool                `yaml:"published" json:"published"`
 	PageURL        string              `yaml:"pageUrl" json:"pageUrl"`
-	Access         PlaygroundAccess    `yaml:"access" json:"access"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
-	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
-	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
+	InitTasks      map[string]InitTask `yaml:"initTasks,omitempty" json:"initTasks,omitempty"`
+	InitConditions InitConditions      `yaml:"initConditions,omitempty" json:"initConditions,omitempty"`
 	RegistryAuth   string              `yaml:"registryAuth,omitempty" json:"registryAuth,omitempty"`
+
+	AccessControl PlaygroundAccessControl `yaml:"accessControl" json:"accessControl"`
+	UserAccess    PlaygroundUserAccess    `yaml:"userAccess,omitempty" json:"userAccess,omitempty"`
 }
 
-func (c *Client) GetPlayground(ctx context.Context, name string) (*Playground, error) {
+type GetPlaygroundOptions struct {
+	Format string // <none> | extended
+}
+
+func (c *Client) GetPlayground(ctx context.Context, name string, opts *GetPlaygroundOptions) (*Playground, error) {
 	var p Playground
-	return &p, c.GetInto(ctx, "/playgrounds/"+name, nil, nil, &p)
+	q := url.Values{}
+
+	if opts != nil && opts.Format != "" {
+		q.Add("format", opts.Format)
+	}
+
+	return &p, c.GetInto(ctx, "/playgrounds/"+name, q, nil, &p)
 }
 
 type ListPlaygroundsOptions struct {
@@ -95,39 +109,69 @@ type InitConditions struct {
 	Values []InitConditionValue `yaml:"values,omitempty" json:"values,omitempty"`
 }
 
+// Deprecated: Use PlaygroundAccessControl instead
 type PlaygroundAccess struct {
 	Mode  string   `yaml:"mode" json:"mode"`
 	Users []string `yaml:"users,omitempty" json:"users,omitempty"`
 }
 
+type PlaygroundAccessControl struct {
+	CanList  []string `yaml:"canList,omitempty" json:"canList,omitempty"`
+	CanRead  []string `yaml:"canRead,omitempty" json:"canRead,omitempty"`
+	CanStart []string `yaml:"canStart,omitempty" json:"canStart,omitempty"`
+}
+
+type PlaygroundUserAccess struct {
+	CanList  bool `yaml:"canList" json:"canList"`
+	CanRead  bool `yaml:"canRead" json:"canRead"`
+	CanStart bool `yaml:"canStart" json:"canStart"`
+}
+
 type PlaygroundSpec struct {
-	Access         PlaygroundAccess    `yaml:"access" json:"access"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
 	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
 	RegistryAuth   string              `yaml:"registryAuth,omitempty" json:"registryAuth,omitempty"`
+
+	// Deprecated: Use PlaygroundAccessControl instead
+	Access *PlaygroundAccess `yaml:"access,omitempty" json:"access,omitempty"`
+
+	AccessControl PlaygroundAccessControl `yaml:"accessControl" json:"accessControl"`
+}
+
+func (s *PlaygroundSpec) HasAccessControl() bool {
+	return len(s.AccessControl.CanList) > 0 ||
+		len(s.AccessControl.CanRead) > 0 ||
+		len(s.AccessControl.CanStart) > 0
 }
 
 type PlaygroundManifest struct {
 	Kind        string         `yaml:"kind" json:"kind"`
+	Name        string         `yaml:"name" json:"name"`
+	Base        string         `yaml:"base" json:"base"`
 	Title       string         `yaml:"title" json:"title"`
 	Description string         `yaml:"description" json:"description"`
+	Cover       string         `yaml:"cover" json:"cover"`
 	Categories  []string       `yaml:"categories" json:"categories"`
+	Markdown    string         `yaml:"markdown" json:"markdown"`
 	Playground  PlaygroundSpec `yaml:"playground" json:"playground"`
 }
 
 type CreatePlaygroundRequest struct {
+	Name           string              `yaml:"name" json:"name"`
 	Base           string              `yaml:"base" json:"base"`
 	Title          string              `yaml:"title" json:"title"`
 	Description    string              `yaml:"description" json:"description"`
 	Categories     []string            `yaml:"categories" json:"categories"`
-	Access         PlaygroundAccess    `yaml:"access" json:"access"`
+	Markdown       string              `yaml:"markdown" json:"markdown"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
 	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
 	RegistryAuth   string              `yaml:"registryAuth" json:"registryAuth"`
+
+	AccessControl PlaygroundAccessControl `yaml:"accessControl" json:"accessControl"`
 }
 
 func (c *Client) CreatePlayground(ctx context.Context, req CreatePlaygroundRequest) (*Playground, error) {
@@ -144,12 +188,15 @@ type UpdatePlaygroundRequest struct {
 	Title          string              `yaml:"title" json:"title"`
 	Description    string              `yaml:"description" json:"description"`
 	Categories     []string            `yaml:"categories" json:"categories"`
-	Access         PlaygroundAccess    `yaml:"access" json:"access"`
+	Cover          string              `yaml:"cover,omitempty" json:"cover,omitempty"`
+	Markdown       string              `yaml:"markdown,omitempty" json:"markdown,omitempty"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
 	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
 	RegistryAuth   string              `yaml:"registryAuth" json:"registryAuth"`
+
+	AccessControl PlaygroundAccessControl `yaml:"accessControl" json:"accessControl"`
 }
 
 func (c *Client) UpdatePlayground(ctx context.Context, name string, req UpdatePlaygroundRequest) (*Playground, error) {

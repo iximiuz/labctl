@@ -71,6 +71,27 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 		return fmt.Errorf("failed to parse manifest file: %w", err)
 	}
 
+	if !manifest.Playground.HasAccessControl() && manifest.Playground.Access.Mode != "" {
+		switch manifest.Playground.Access.Mode {
+		case "private":
+			// For backward compatibility
+			manifest.Playground.AccessControl = api.PlaygroundAccessControl{
+				CanList:  []string{"owner"},
+				CanRead:  []string{"owner"},
+				CanStart: []string{"owner"},
+			}
+		case "public":
+			// For backward compatibility
+			manifest.Playground.AccessControl = api.PlaygroundAccessControl{
+				CanList:  []string{"anyone"},
+				CanRead:  []string{"anyone"},
+				CanStart: []string{"anyone"},
+			}
+		default:
+			return fmt.Errorf("unsupported access mode: %s (only 'private' and 'public' are supported)", manifest.Playground.Access.Mode)
+		}
+	}
+
 	if manifest.Kind != "playground" {
 		return fmt.Errorf("invalid manifest kind: %s", manifest.Kind)
 	}
@@ -78,13 +99,15 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 	req := api.UpdatePlaygroundRequest{
 		Title:          manifest.Title,
 		Description:    manifest.Description,
+		Cover:          manifest.Cover,
+		Markdown:       manifest.Markdown,
 		Categories:     manifest.Categories,
-		Access:         manifest.Playground.Access,
 		Machines:       manifest.Playground.Machines,
 		Tabs:           manifest.Playground.Tabs,
 		InitTasks:      manifest.Playground.InitTasks,
 		InitConditions: manifest.Playground.InitConditions,
 		RegistryAuth:   manifest.Playground.RegistryAuth,
+		AccessControl:  manifest.Playground.AccessControl,
 	}
 
 	playground, err := cli.Client().UpdatePlayground(ctx, name, req)

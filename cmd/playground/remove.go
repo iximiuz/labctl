@@ -45,7 +45,7 @@ func runRemovePlayground(ctx context.Context, cli labcli.CLI, opts *removeOption
 	if !opts.force {
 		cli.PrintAux("Removing %s ...\n", opts.name)
 
-		_, err := cli.Client().GetPlayground(ctx, opts.name)
+		_, err := cli.Client().GetPlayground(ctx, opts.name, nil)
 		if err != nil {
 			return fmt.Errorf("playground doesn't exist: %s", opts.name)
 		}

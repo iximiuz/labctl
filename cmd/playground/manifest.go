@@ -32,23 +32,29 @@ func newManifestCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runManifest(ctx context.Context, cli labcli.CLI, opts *manifestOptions) error {
-	playground, err := cli.Client().GetPlayground(ctx, opts.name)
+	playground, err := cli.Client().GetPlayground(ctx, opts.name, &api.GetPlaygroundOptions{
+		Format: "extended",
+	})
 	if err != nil {
 		return fmt.Errorf("couldn't get playground: %w", err)
 	}
 
 	manifest := api.PlaygroundManifest{
 		Kind:        "playground",
+		Name:        playground.Name,
+		Base:        playground.Base,
 		Title:       playground.Title,
 		Description: playground.Description,
+		Cover:       playground.Cover,
 		Categories:  playground.Categories,
+		Markdown:    playground.Markdown,
 		Playground: api.PlaygroundSpec{
-			Access:         playground.Access,
 			Machines:       playground.Machines,
 			Tabs:           playground.Tabs,
 			InitTasks:      playground.InitTasks,
 			InitConditions: playground.InitConditions,
 			RegistryAuth:   playground.RegistryAuth,
+			AccessControl:  playground.AccessControl,
 		},
 	}
 

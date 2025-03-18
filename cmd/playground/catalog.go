@@ -42,7 +42,7 @@ func newCatalogCommand(cli labcli.CLI) *cobra.Command {
 		"filter",
 		"f",
 		"",
-		`Filter to use for catalog list. ("recent" | "popular" | "my-custom") (default no filter, meaning all)`,
+		`Filter to use for catalog list. ("my-custom", "recent", "popular", "community") (default no filter, meaning only the official playgrounds)`,
 	)
 	return cmd
 }

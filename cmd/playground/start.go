@@ -227,7 +227,7 @@ func showSafetyDisclaimerIfNeeded(ctx context.Context, playgroundName string, cl
 		return true, nil
 	}
 
-	playground, err := cli.Client().GetPlayground(ctx, playgroundName)
+	playground, err := cli.Client().GetPlayground(ctx, playgroundName, nil)
 	if err != nil {
 		return false, fmt.Errorf("couldn't get the playground: %w", err)
 	}
