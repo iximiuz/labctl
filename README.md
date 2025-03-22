@@ -119,6 +119,38 @@ After adding the above piece to your SSH config,
 you'll be able to develop right on the playground machine using the [Visual Studio Code Remote - SSH extension](https://code.visualstudio.com/docs/remote/ssh) or its JetBrains counterpart.
 Check out this [short recording on YouTube](https://youtu.be/wah_yLoYk0M) demonstrating the use case.
 
+### Sharing the playground access with a web terminal
+
+You can share the playground access with others by sending them a URL to an exposed web terminal session:
+
+```sh
+labctl expose shell <playground-id> --public
+```
+
+### Exposing HTTP(s) services running in the playground
+
+You can expose HTTP(s) services running in the playground to the public internet with:
+
+```sh
+labctl expose port <playground-id> <port>
+```
+
+Example:
+
+```sh
+# Start a new Docker playground
+PLAYGROUND_ID=$(labctl playground start -q docker)
+
+# Run a container that listens on port 8080
+labctl ssh $PLAYGROUND_ID -- docker run -p 8080:80 -d nginx:alpine
+
+# Expose port 8080 to the internet
+labctl expose port $PLAYGROUND_ID 8080 --open
+```
+
+The `labctl expose port` command supports a number of options to enable/disable HTTPS,
+set the Host header and path overrides, and control the URL access.
+
 ### Port forwarding
 
 You can securely expose any service (HTTP, TCP, UDP, etc) running in the playground to your local machine with:
