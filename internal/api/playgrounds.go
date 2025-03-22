@@ -74,11 +74,14 @@ type PlaygroundMachine struct {
 }
 
 type PlaygroundTab struct {
-	ID      string `yaml:"id" json:"id"`
-	Kind    string `yaml:"kind" json:"kind"`
-	Name    string `yaml:"name" json:"name"`
-	Machine string `yaml:"machine" json:"machine"`
-	Number  int    `yaml:"number,omitempty" json:"number,omitempty"`
+	ID          string `yaml:"id" json:"id"`
+	Kind        string `yaml:"kind" json:"kind"`
+	Name        string `yaml:"name" json:"name"`
+	Machine     string `yaml:"machine" json:"machine"`
+	Number      int    `yaml:"number,omitempty" json:"number,omitempty"`
+	Tls         bool   `yaml:"tls,omitempty" json:"tls,omitempty"`
+	HostRewrite string `yaml:"hostRewrite,omitempty" json:"hostRewrite,omitempty"`
+	PathRewrite string `yaml:"pathRewrite,omitempty" json:"pathRewrite,omitempty"`
 }
 
 type InitCondition struct {
