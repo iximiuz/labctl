@@ -18,7 +18,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "content <create|list|pull|files|sync|rm> <content-name> [flags]",
 		Aliases: []string{"c", "contents"},
-		Short:   "Authoring and managing content (challenge, tutorial, course, etc.)",
+		Short:   "Author and manage content (challenge, tutorial, course, etc.)",
 	}
 
 	cmd.AddCommand(

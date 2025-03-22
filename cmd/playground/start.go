@@ -66,9 +66,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.StringVar(
+	flags.StringVarP(
 		&opts.machine,
 		"machine",
+		"m",
 		"",
 		`SSH into the machine with the given name (requires --ssh flag, default to the first machine)`,
 	)
@@ -80,9 +81,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		`SSH user (default: the machine's default login user)`,
 	)
 
-	flags.BoolVar(
+	flags.BoolVarP(
 		&opts.open,
 		"open",
+		"o",
 		false,
 		`Open the playground page in a browser`,
 	)

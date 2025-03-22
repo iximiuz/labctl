@@ -62,9 +62,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.StringVar(
+	flags.StringVarP(
 		&opts.machine,
 		"machine",
+		"m",
 		"",
 		`SSH into the machine with the given name (requires --ssh flag, default to the first machine)`,
 	)
