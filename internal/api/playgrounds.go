@@ -60,6 +60,7 @@ func (c *Client) ListPlaygrounds(ctx context.Context, opts *ListPlaygroundsOptio
 type MachineUser struct {
 	Name    string `yaml:"name" json:"name"`
 	Default bool   `yaml:"default,omitempty" json:"default,omitempty"`
+	Welcome string `yaml:"welcome,omitempty" json:"welcome,omitempty"`
 }
 
 type MachineResources struct {
