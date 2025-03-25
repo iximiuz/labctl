@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
@@ -164,7 +165,7 @@ func runPushWatch(ctx context.Context, cli labcli.CLI, dir string, opts *pushOpt
 
 	// Initial push.
 	if err := reconcileContentState(ctx, cli, opts, state); err != nil {
-		return err
+		cli.PrintErr("\n⚠️ WARNING: %s\n\n", err)
 	}
 
 	// Watch for changes.
@@ -190,7 +191,11 @@ func runPushWatch(ctx context.Context, cli labcli.CLI, dir string, opts *pushOpt
 			}
 
 			if err := reconcileContentState(ctx, cli, opts, state); err != nil {
-				return err
+				// Don't break the loop on error - if it's an HTTP 400 because of malformed content,
+				// it will go away by itself when the user fixes the content.
+				// If it's an HTTP 5xx, it'll go away when the server is fixed.
+				cli.PrintErr("\n⚠️ WARNING: %s\n\n", err)
+				time.Sleep(1 * time.Second)
 			}
 
 			if err := addWatchDirs(cli, watcher, state); err != nil {
@@ -222,7 +227,7 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 		if filepath.Ext(file) == ".md" {
 			content, err := os.ReadFile(filepath.Join(state.dir, file))
 			if err != nil {
-				merr = errors.Join(merr, fmt.Errorf("couldn't read content markdown %s: %w", file, err))
+				merr = errors.Join(merr, fmt.Errorf("couldn't read content markdown file %q: %w", file, err))
 				continue
 			}
 
@@ -233,7 +238,7 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 				file,
 				string(content),
 			); err != nil {
-				merr = errors.Join(merr, fmt.Errorf("couldn't upload content markdown %s: %w", file, err))
+				merr = errors.Join(merr, fmt.Errorf("couldn't upload content markdown file %q: %w", file, err))
 			}
 		} else {
 			if err := cli.Client().UploadContentFile(
@@ -243,7 +248,7 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 				file,
 				filepath.Join(state.dir, file),
 			); err != nil {
-				merr = errors.Join(merr, fmt.Errorf("couldn't upload content file %s: %w", file, err))
+				merr = errors.Join(merr, fmt.Errorf("couldn't upload content file %q: %w", file, err))
 			}
 		}
 
@@ -260,7 +265,7 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 		}
 
 		if err := cli.Client().DeleteContentFile(ctx, opts.kind, opts.name, file); err != nil {
-			merr = errors.Join(merr, fmt.Errorf("couldn't delete remote content file %s: %w", file, err))
+			merr = errors.Join(merr, fmt.Errorf("couldn't delete remote content file %q: %w", file, err))
 			continue
 		}
 
