@@ -30,7 +30,7 @@ type startOptions struct {
 	noSSH     bool
 	keepAlive bool
 
-	ide bool
+	ide string
 
 	safetyDisclaimerConsent bool
 
@@ -56,6 +56,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 			if strings.HasPrefix(opts.challenge, "https://") {
 				parts := strings.Split(strings.Trim(opts.challenge, "/"), "/")
 				opts.challenge = parts[len(parts)-1]
+			}
+
+			if cmd.Flags().Changed("ide") && opts.ide == "" {
+				opts.ide = sshproxy.IDEVSCode
 			}
 
 			return labcli.WrapStatusError(runStartChallenge(cmd.Context(), cli, &opts))
@@ -97,11 +101,11 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Keep the challenge playground alive after it's completed`,
 	)
-	flags.BoolVar(
+	flags.StringVar(
 		&opts.ide,
 		"ide",
-		false,
-		`Open the challenge playground in the IDE (only VSCode is supported at the moment)`,
+		"",
+		`Open the challenge playground in the IDE by specifying the IDE name (supported: "code", "cursor")`,
 	)
 	flags.BoolVar(
 		&opts.safetyDisclaimerConsent,
@@ -199,7 +203,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 		}
 	}()
 
-	if opts.ide {
+	if opts.ide != "" {
 		go func() {
 			cli.PrintAux("Opening local IDE...\n")
 
@@ -207,7 +211,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				PlayID:  chal.Play.ID,
 				Machine: opts.machine,
 				User:    opts.user,
-				IDE:     true,
+				IDE:     opts.ide,
 			}); err != nil {
 				cli.PrintErr("Error running IDE session: %v\n", err)
 			}

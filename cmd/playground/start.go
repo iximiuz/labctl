@@ -29,7 +29,7 @@ type startOptions struct {
 
 	ssh bool
 
-	ide bool
+	ide string
 
 	safetyDisclaimerConsent bool
 
@@ -56,7 +56,11 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 					listKnownPlaygrounds(cmd.Context(), cli))
 			}
 
-			if opts.ide && opts.ssh {
+			if cmd.Flags().Changed("ide") && opts.ide == "" {
+				opts.ide = sshproxy.IDEVSCode
+			}
+
+			if opts.ide != "" && opts.ssh {
 				return labcli.NewStatusError(1, "can't use --ide and --ssh flags at the same time")
 			}
 
@@ -96,11 +100,11 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`SSH into the playground immediately after it's created`,
 	)
-	flags.BoolVar(
+	flags.StringVar(
 		&opts.ide,
 		"ide",
-		false,
-		`Open the playground in the IDE (only VSCode is supported at the moment)`,
+		"",
+		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor")`,
 	)
 	flags.BoolVar(
 		&opts.safetyDisclaimerConsent,
@@ -175,12 +179,12 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		}
 	}
 
-	if opts.ide {
+	if opts.ide != "" {
 		return sshproxy.RunSSHProxy(ctx, cli, &sshproxy.Options{
 			PlayID:  play.ID,
 			Machine: opts.machine,
 			User:    opts.user,
-			IDE:     true,
+			IDE:     opts.ide,
 		})
 	}
 

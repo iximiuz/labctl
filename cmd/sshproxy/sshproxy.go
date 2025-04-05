@@ -13,13 +13,18 @@ import (
 	"github.com/iximiuz/labctl/internal/portforward"
 )
 
+const (
+	IDEVSCode = "code"
+	IDECursor = "cursor"
+)
+
 type Options struct {
 	PlayID  string
 	Machine string
 	User    string
 	Address string
 
-	IDE   bool
+	IDE   string
 	Quiet bool
 
 	WithProxy func(ctx context.Context, info *SSHProxyInfo) error
@@ -36,6 +41,10 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 			cli.SetQuiet(opts.Quiet)
 
 			opts.PlayID = args[0]
+
+			if cmd.Flags().Changed("ide") && opts.IDE == "" {
+				opts.IDE = IDEVSCode
+			}
 
 			if opts.Address != "" && strings.Count(opts.Address, ":") != 1 {
 				return fmt.Errorf("invalid address %q", opts.Address)
@@ -66,11 +75,11 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		"",
 		`Local address to map to the machine's SSHD port (default: 'localhost:<random port>')`,
 	)
-	flags.BoolVar(
+	flags.StringVar(
 		&opts.IDE,
 		"ide",
-		false,
-		`Open the playground in the IDE (only VSCode is supported at the moment)`,
+		"",
+		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor")`,
 	)
 	flags.BoolVarP(
 		&opts.Quiet,
@@ -158,10 +167,10 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}
 	}()
 
-	if opts.IDE {
+	if opts.IDE == IDEVSCode || opts.IDE == IDECursor {
 		cli.PrintAux("Opening the playground in the IDE...\n")
 
-		// Hack: SSH into the playground first - otherwise, VSCode will fail to connect for some reason.
+		// Hack: SSH into the playground first - otherwise, the IDE may fail to connect for some reason.
 		cmd := exec.Command("ssh",
 			"-o", "UserKnownHostsFile=/dev/null",
 			"-o", "StrictHostKeyChecking=no",
@@ -172,16 +181,18 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		)
 		cmd.Run()
 
-		cmd = exec.Command("code",
+		cmd = exec.Command(opts.IDE,
 			"--folder-uri", fmt.Sprintf("vscode-remote://ssh-remote+%s@%s:%s%s",
 				opts.User, localHost, localPort, userHomeDir(opts.User)),
 		)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("couldn't open the IDE: %w", err)
 		}
+	} else if opts.IDE != "" {
+		cli.PrintErr("Unsupported IDE (skipping IDE connection): %q\n", opts.IDE)
 	}
 
-	if !opts.IDE && !opts.Quiet {
+	if opts.IDE != "" && !opts.Quiet {
 		cli.PrintAux("SSH proxy is running on %s\n", localPort)
 		cli.PrintAux(
 			"\n# Connect from the terminal:\nssh -i %s ssh://%s@%s:%s\n",
@@ -199,6 +210,10 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 
 		cli.PrintAux("# To access the playground in Visual Studio Code:\n")
 		cli.PrintAux("code --folder-uri vscode-remote://ssh-remote+%s@%s:%s%s\n\n",
+			opts.User, localHost, localPort, userHomeDir(opts.User))
+
+		cli.PrintAux("# To access the playground in Cursor:\n")
+		cli.PrintAux("cursor --folder-uri vscode-remote://ssh-remote+%s@%s:%s%s\n\n",
 			opts.User, localHost, localPort, userHomeDir(opts.User))
 
 		cli.PrintAux("\nPress Ctrl+C to stop\n")
