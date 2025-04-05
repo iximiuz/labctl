@@ -76,8 +76,8 @@ func ReadPublicKey(identityFile string) (string, error) {
 	return string(publicKey), nil
 }
 
-func ReadPrivateKey(identityFile string) (string, error) {
-	privateKey, err := os.ReadFile(identityFile)
+func readPrivateKey(identityFile string) (string, error) {
+	privateKey, err := os.ReadFile(strings.TrimSuffix(identityFile, ".pub"))
 	if err != nil {
 		return "", fmt.Errorf("read SSH private key: %w", err)
 	}

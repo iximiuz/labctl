@@ -23,24 +23,27 @@ import (
 const defaultTermEnv = "xterm-256color"
 
 type Session struct {
-	client *ssh.Client
+	client       *ssh.Client
+	forwardAgent bool
 }
 
 func NewSession(
 	conn net.Conn,
 	user string,
 	sshKeyPath string,
+	forwardAgent bool,
 ) (*Session, error) {
 	var authMethods []ssh.AuthMethod
 
 	// Try SSH agent first
+	var sshAgent agent.Agent
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		agentConn, err := net.Dial("unix", sock)
 		if err != nil {
 			slog.Debug("Failed to connect to SSH agent", "error", err)
 		} else {
-			agentClient := agent.NewClient(agentConn)
-			signers, err := agentClient.Signers()
+			sshAgent = agent.NewClient(agentConn)
+			signers, err := sshAgent.Signers()
 			if err != nil {
 				slog.Debug("Failed to retrieve signers from SSH agent", "error", err)
 			} else if len(signers) > 0 {
@@ -49,7 +52,7 @@ func NewSession(
 		}
 	}
 
-	privateKey, err := ReadPrivateKey(sshKeyPath)
+	privateKey, err := readPrivateKey(sshKeyPath)
 	if err != nil {
 		slog.Debug("Failed to read SSH private key", "error", err)
 	} else {
@@ -57,7 +60,8 @@ func NewSession(
 		if err != nil {
 			slog.Debug("Failed to parse SSH private key", "error", err)
 		} else {
-			authMethods = append(authMethods, ssh.PublicKeys(keySigner))
+			// The key (if exists) takes precedence over the agent.
+			authMethods = append([]ssh.AuthMethod{ssh.PublicKeys(keySigner)}, authMethods...)
 		}
 	}
 
@@ -71,8 +75,16 @@ func NewSession(
 		return nil, fmt.Errorf("create SSH client connection: %w", err)
 	}
 
+	client := ssh.NewClient(sshConn, chans, reqs)
+
+	forwardAgent = forwardAgent && sshAgent != nil
+	if forwardAgent {
+		agent.ForwardToAgent(client, sshAgent)
+	}
+
 	return &Session{
-		client: ssh.NewClient(sshConn, chans, reqs),
+		client:       client,
+		forwardAgent: forwardAgent,
 	}, nil
 }
 
@@ -82,6 +94,12 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 		return fmt.Errorf("create SSH session: %w", err)
 	}
 	defer sess.Close()
+
+	if s.forwardAgent {
+		if err := agent.RequestAgentForwarding(sess); err != nil {
+			slog.Warn("Failed to forward SSH agent", "error", err.Error())
+		}
+	}
 
 	if streams.InputStream().IsTerminal() {
 		if err := streams.InputStream().SetRawTerminal(); err != nil {

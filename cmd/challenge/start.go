@@ -33,6 +33,8 @@ type startOptions struct {
 	ide bool
 
 	safetyDisclaimerConsent bool
+
+	forwardAgent bool
 }
 
 func newStartCommand(cli labcli.CLI) *cobra.Command {
@@ -106,6 +108,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"safety-disclaimer-consent",
 		false,
 		`Acknowledge the safety disclaimer`,
+	)
+	flags.BoolVar(
+		&opts.forwardAgent,
+		"forward-agent",
+		false,
+		`INSECURE: Forward the SSH agent to the playground VM (use at your own risk)`,
 	)
 
 	return cmd
@@ -219,7 +227,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				if !opts.noSSH {
 					cli.PrintAux("SSH-ing into challenge playground (%s machine)...\n", opts.machine)
 
-					sess, err = ssh.StartSSHSession(ctx, cli, chal.Play.ID, opts.machine, opts.user, nil)
+					sess, err = ssh.StartSSHSession(ctx, cli, chal.Play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
 					if err != nil {
 						return fmt.Errorf("couldn't start SSH session: %w", err) // critical error
 					}

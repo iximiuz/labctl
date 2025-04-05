@@ -33,6 +33,8 @@ type startOptions struct {
 
 	safetyDisclaimerConsent bool
 
+	forwardAgent bool
+
 	skipWaitInit bool
 
 	quiet bool
@@ -119,6 +121,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Only print playground's ID`,
 	)
+	flags.BoolVar(
+		&opts.forwardAgent,
+		"forward-agent",
+		false,
+		`INSECURE: Forward the SSH agent to the playground VM (use at your own risk)`,
+	)
 
 	return cmd
 }
@@ -194,7 +202,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	if opts.ssh {
 		cli.PrintAux("SSH-ing into %s machine...\n", opts.machine)
 
-		if sess, err := ssh.StartSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil); err != nil {
+		if sess, err := ssh.StartSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil, opts.forwardAgent); err != nil {
 			return fmt.Errorf("couldn't start SSH session: %w", err)
 		} else {
 			if err := sess.Wait(); err != nil {

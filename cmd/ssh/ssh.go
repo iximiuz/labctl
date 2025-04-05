@@ -31,6 +31,8 @@ type options struct {
 	user    string
 
 	command []string
+
+	forwardAgent bool
 }
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
@@ -65,6 +67,12 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		"",
 		`SSH user (default: the machine's default login user)`,
 	)
+	flags.BoolVar(
+		&opts.forwardAgent,
+		"forward-agent",
+		false,
+		`INSECURE: Forward the SSH agent to the playground VM (use at your own risk)`,
+	)
 
 	return cmd
 }
@@ -94,7 +102,7 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
 	}
 
-	if sess, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command); err != nil {
+	if sess, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command, opts.forwardAgent); err != nil {
 		return fmt.Errorf("couldn't start SSH session: %w", err)
 	} else {
 		if err := sess.Wait(); err != nil {
@@ -112,6 +120,7 @@ func StartSSHSession(
 	machine string,
 	user string,
 	command []string,
+	forwardAgent bool,
 ) (*ssh.Session, error) {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:          playID,
@@ -167,7 +176,7 @@ func StartSSHSession(
 		return nil, fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
 	}
 
-	sess, err := ssh.NewSession(conn, user, cli.Config().SSHIdentityFile)
+	sess, err := ssh.NewSession(conn, user, cli.Config().SSHIdentityFile, forwardAgent)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("couldn't create SSH session: %w", err)
