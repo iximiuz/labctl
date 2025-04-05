@@ -17,6 +17,7 @@ import (
 	"github.com/docker/cli/cli/streams"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 const defaultTermEnv = "xterm-256color"
@@ -30,19 +31,39 @@ func NewSession(
 	user string,
 	sshKeyPath string,
 ) (*Session, error) {
-	privateKey, err := ReadPrivateKey(sshKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("read SSH private key: %w", err)
+	var authMethods []ssh.AuthMethod
+
+	// Try SSH agent first
+	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+		agentConn, err := net.Dial("unix", sock)
+		if err != nil {
+			slog.Debug("Failed to connect to SSH agent", "error", err)
+		} else {
+			agentClient := agent.NewClient(agentConn)
+			signers, err := agentClient.Signers()
+			if err != nil {
+				slog.Debug("Failed to retrieve signers from SSH agent", "error", err)
+			} else if len(signers) > 0 {
+				authMethods = append(authMethods, ssh.PublicKeys(signers...))
+			}
+		}
 	}
 
-	keySigner, err := ssh.ParsePrivateKey([]byte(privateKey))
+	privateKey, err := ReadPrivateKey(sshKeyPath)
 	if err != nil {
-		return nil, fmt.Errorf("parse SSH private key: %w", err)
+		slog.Debug("Failed to read SSH private key", "error", err)
+	} else {
+		keySigner, err := ssh.ParsePrivateKey([]byte(privateKey))
+		if err != nil {
+			slog.Debug("Failed to parse SSH private key", "error", err)
+		} else {
+			authMethods = append(authMethods, ssh.PublicKeys(keySigner))
+		}
 	}
 
 	sshConn, chans, reqs, err := ssh.NewClientConn(conn, conn.RemoteAddr().String(), &ssh.ClientConfig{
 		User:              user,
-		Auth:              []ssh.AuthMethod{ssh.PublicKeys(keySigner)},
+		Auth:              authMethods,
 		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
 		HostKeyAlgorithms: []string{ssh.KeyAlgoED25519},
 	})

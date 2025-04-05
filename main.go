@@ -126,7 +126,8 @@ func loadConfigOrFail(cli labcli.CLI, overrides configOverrides) {
 	}
 
 	if overrides.endpoint != "" {
-		cfg.APIBaseURL = overrides.endpoint
+		cfg.BaseURL = overrides.endpoint
+		cfg.APIBaseURL = overrides.endpoint + "/api"
 	}
 
 	cli.SetConfig(cfg)

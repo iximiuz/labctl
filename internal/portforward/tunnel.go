@@ -23,11 +23,11 @@ const (
 )
 
 type TunnelOptions struct {
-	PlayID   string
-	Machine  string
-	PlaysDir string
-	SSHUser  string
-	SSHDir   string
+	PlayID          string
+	Machine         string
+	PlaysDir        string
+	SSHUser         string
+	SSHIdentityFile string
 }
 
 type Tunnel struct {
@@ -49,8 +49,8 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 		sshPubKey string
 		err       error
 	)
-	if opts.SSHDir != "" {
-		sshPubKey, err = ssh.ReadPublicKey(opts.SSHDir)
+	if opts.SSHIdentityFile != "" {
+		sshPubKey, err = ssh.ReadPublicKey(opts.SSHIdentityFile)
 		if err != nil {
 			return nil, fmt.Errorf("ssh.ReadPublicKey(): %w", err)
 		}

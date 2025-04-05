@@ -14,6 +14,8 @@ const (
 	defaultBaseURL = "https://labs.iximiuz.com"
 
 	defaultAPIBaseURL = defaultBaseURL + "/api"
+
+	defaultSSHIdentityFile = "iximiuz_labs_user"
 )
 
 type Config struct {
@@ -31,7 +33,10 @@ type Config struct {
 
 	PlaysDir string `yaml:"plays_dir"`
 
+	// Deprecated: use SSHIdentityFile instead
 	SSHDir string `yaml:"ssh_dir"`
+
+	SSHIdentityFile string `yaml:"ssh_identity_file"`
 }
 
 func (c *Config) WebSocketOrigin() string {
@@ -46,11 +51,11 @@ func Default(homeDir string) *Config {
 	configFilePath := ConfigFilePath(homeDir)
 
 	return &Config{
-		FilePath:   configFilePath,
-		BaseURL:    defaultBaseURL,
-		APIBaseURL: defaultAPIBaseURL,
-		PlaysDir:   filepath.Join(filepath.Dir(configFilePath), "plays"),
-		SSHDir:     filepath.Join(homeDir, ".ssh"),
+		FilePath:        configFilePath,
+		BaseURL:         defaultBaseURL,
+		APIBaseURL:      defaultAPIBaseURL,
+		PlaysDir:        filepath.Join(filepath.Dir(configFilePath), "plays"),
+		SSHIdentityFile: filepath.Join(homeDir, ".ssh", defaultSSHIdentityFile),
 	}
 }
 
@@ -69,6 +74,10 @@ func Load(homeDir string) (*Config, error) {
 	var cfg Config
 	if err := yaml.NewDecoder(file).Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("unable to decode config from YAML: %s", err)
+	}
+
+	if cfg.SSHDir != "" && cfg.SSHIdentityFile == "" {
+		cfg.SSHIdentityFile = filepath.Join(cfg.SSHDir, defaultSSHIdentityFile)
 	}
 
 	// Migrations

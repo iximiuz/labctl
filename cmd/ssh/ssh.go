@@ -114,11 +114,11 @@ func StartSSHSession(
 	command []string,
 ) (*ssh.Session, error) {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
-		PlayID:   playID,
-		Machine:  machine,
-		PlaysDir: cli.Config().PlaysDir,
-		SSHUser:  user,
-		SSHDir:   cli.Config().SSHDir,
+		PlayID:          playID,
+		Machine:         machine,
+		PlaysDir:        cli.Config().PlaysDir,
+		SSHUser:         user,
+		SSHIdentityFile: cli.Config().SSHIdentityFile,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't start tunnel: %w", err)
@@ -167,7 +167,7 @@ func StartSSHSession(
 		return nil, fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
 	}
 
-	sess, err := ssh.NewSession(conn, user, cli.Config().SSHDir)
+	sess, err := ssh.NewSession(conn, user, cli.Config().SSHIdentityFile)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("couldn't create SSH session: %w", err)

@@ -37,12 +37,13 @@ func runLogout(ctx context.Context, cli labcli.CLI) error {
 		}
 	}
 
-	if err := ssh.RemoveIdentity(cli.Config().SSHDir); err != nil {
+	if err := ssh.RemoveIdentity(cli.Config().SSHIdentityFile); err != nil {
 		slog.Warn("Failed to remove SSH identity file", "error", err.Error())
 	}
 
 	cli.Config().SessionID = ""
 	cli.Config().AccessToken = ""
+	cli.Config().SSHIdentityFile = ""
 	if err := cli.Config().Dump(); err != nil {
 		return err
 	}

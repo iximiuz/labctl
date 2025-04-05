@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
-	"github.com/iximiuz/labctl/internal/ssh"
 )
 
 type Options struct {
@@ -119,11 +117,11 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 	}
 
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
-		PlayID:   opts.PlayID,
-		Machine:  opts.Machine,
-		PlaysDir: cli.Config().PlaysDir,
-		SSHUser:  opts.User,
-		SSHDir:   cli.Config().SSHDir,
+		PlayID:          opts.PlayID,
+		Machine:         opts.Machine,
+		PlaysDir:        cli.Config().PlaysDir,
+		SSHUser:         opts.User,
+		SSHIdentityFile: cli.Config().SSHIdentityFile,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start tunnel: %w", err)
@@ -169,7 +167,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 			"-o", "StrictHostKeyChecking=no",
 			"-o", "IdentitiesOnly=yes",
 			"-o", "PreferredAuthentications=publickey",
-			"-i", fmt.Sprintf("%s/%s", cli.Config().SSHDir, ssh.IdentityFile),
+			"-i", cli.Config().SSHIdentityFile,
 			fmt.Sprintf("ssh://%s@%s:%s", opts.User, localHost, localPort),
 		)
 		cmd.Run()
@@ -186,8 +184,8 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 	if !opts.IDE && !opts.Quiet {
 		cli.PrintAux("SSH proxy is running on %s\n", localPort)
 		cli.PrintAux(
-			"\n# Connect from the terminal:\nssh -i %s/%s ssh://%s@%s:%s\n",
-			cli.Config().SSHDir, ssh.IdentityFile, opts.User, localHost, localPort,
+			"\n# Connect from the terminal:\nssh -i %s ssh://%s@%s:%s\n",
+			cli.Config().SSHIdentityFile, opts.User, localHost, localPort,
 		)
 
 		cli.PrintAux("\n# Or add the following to your ~/.ssh/config:\n")
@@ -195,7 +193,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		cli.PrintAux("  HostName %s\n", localHost)
 		cli.PrintAux("  Port %s\n", localPort)
 		cli.PrintAux("  User %s\n", opts.User)
-		cli.PrintAux("  IdentityFile %s/%s\n", cli.Config().SSHDir, ssh.IdentityFile)
+		cli.PrintAux("  IdentityFile %s\n", cli.Config().SSHIdentityFile)
 		cli.PrintAux("  StrictHostKeyChecking no\n")
 		cli.PrintAux("  UserKnownHostsFile /dev/null\n\n")
 
@@ -212,7 +210,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 			Machine:      opts.Machine,
 			ProxyHost:    localHost,
 			ProxyPort:    localPort,
-			IdentityFile: filepath.Join(cli.Config().SSHDir, ssh.IdentityFile),
+			IdentityFile: cli.Config().SSHIdentityFile,
 		}
 		if err := opts.WithProxy(ctx, info); err != nil {
 			return fmt.Errorf("proxy callback failed: %w", err)
