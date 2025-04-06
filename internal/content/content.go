@@ -10,6 +10,7 @@ const (
 	KindRoadmap   ContentKind = "roadmap"
 	KindSkillPath ContentKind = "skill-path"
 	KindTutorial  ContentKind = "tutorial"
+	KindTraining  ContentKind = "training"
 )
 
 func (k *ContentKind) Set(v string) error {
@@ -24,6 +25,8 @@ func (k *ContentKind) Set(v string) error {
 		*k = KindSkillPath
 	case string(KindTutorial):
 		*k = KindTutorial
+	case string(KindTraining):
+		*k = KindTraining
 	default:
 		return fmt.Errorf("unknown content kind: %s", v)
 	}
@@ -47,6 +50,8 @@ func (k *ContentKind) Plural() string {
 		return "roadmaps"
 	case KindSkillPath:
 		return "skill-paths"
+	case KindTraining:
+		return "trainings"
 	default:
 		panic(fmt.Sprintf("unknown content kind: %s", k))
 	}

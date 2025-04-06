@@ -75,6 +75,9 @@ func getContent(
 	case content.KindSkillPath:
 		return cli.Client().GetSkillPath(ctx, name)
 
+	case content.KindTraining:
+		return cli.Client().GetTraining(ctx, name)
+
 	default:
 		return nil, fmt.Errorf("unknown content kind %q", kind)
 	}

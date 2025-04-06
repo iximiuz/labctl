@@ -34,7 +34,7 @@ type Config struct {
 	PlaysDir string `yaml:"plays_dir"`
 
 	// Deprecated: use SSHIdentityFile instead
-	SSHDir string `yaml:"ssh_dir"`
+	SSHDir string `yaml:"ssh_dir,omitempty"`
 
 	SSHIdentityFile string `yaml:"ssh_identity_file"`
 }
@@ -78,6 +78,10 @@ func Load(homeDir string) (*Config, error) {
 
 	if cfg.SSHDir != "" && cfg.SSHIdentityFile == "" {
 		cfg.SSHIdentityFile = filepath.Join(cfg.SSHDir, defaultSSHIdentityFile)
+	}
+
+	if cfg.SSHIdentityFile == "" {
+		cfg.SSHIdentityFile = filepath.Join(homeDir, ".ssh", defaultSSHIdentityFile)
 	}
 
 	// Migrations

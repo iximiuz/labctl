@@ -29,7 +29,7 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	var opts createOptions
 
 	cmd := &cobra.Command{
-		Use:   "create [flags] <challenge|tutorial|skill-path|course> <name>",
+		Use:   "create [flags] <challenge|tutorial|skill-path|course|training> <name>",
 		Short: "Create a new piece of content (visible only to the author)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -89,6 +89,9 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 	case content.KindSkillPath:
 		cont, err = createSkillPath(ctx, cli, opts)
+
+	case content.KindTraining:
+		cont, err = createTraining(ctx, cli, opts)
 	}
 
 	if err != nil {
@@ -197,6 +200,18 @@ func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) (c
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create tutorial: %w", err)
+	}
+
+	return t, nil
+}
+
+func createTraining(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	t, err := cli.Client().CreateTraining(ctx, api.CreateTrainingRequest{
+		Name:   opts.name,
+		Sample: !opts.noSample,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create training: %w", err)
 	}
 
 	return t, nil
