@@ -84,7 +84,7 @@ func newLoginCommand(cli labcli.CLI) *cobra.Command {
 		"ssh-authorized-key",
 		"k",
 		"",
-		`Path to an alternative (existing) public SSH key to be used instead of the automatically generating a new key`,
+		`Path to an alternative (existing) public SSH key to be used instead of automatically generating a new key`,
 	)
 
 	return cmd
