@@ -104,7 +104,7 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		&opts.ide,
 		"ide",
 		"",
-		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor")`,
+		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
 	)
 	flags.BoolVar(
 		&opts.safetyDisclaimerConsent,

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	IDEVSCode = "code"
-	IDECursor = "cursor"
+	IDEVSCode   = "code"
+	IDECursor   = "cursor"
+	IDEWindsurf = "windsurf"
 )
 
 type Options struct {
@@ -79,7 +80,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		&opts.IDE,
 		"ide",
 		"",
-		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor")`,
+		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
 	)
 	flags.BoolVarP(
 		&opts.Quiet,
@@ -167,7 +168,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}
 	}()
 
-	if opts.IDE == IDEVSCode || opts.IDE == IDECursor {
+	if opts.IDE == IDEVSCode || opts.IDE == IDECursor || opts.IDE == IDEWindsurf {
 		cli.PrintAux("Opening the playground in the IDE...\n")
 
 		// Hack: SSH into the playground first - otherwise, the IDE may fail to connect for some reason.
