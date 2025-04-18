@@ -6,8 +6,8 @@ toolchain go1.24.1
 
 require (
 	github.com/briandowns/spinner v1.23.2
-	github.com/charmbracelet/huh v0.6.0
-	github.com/docker/cli v28.0.4+incompatible
+	github.com/charmbracelet/huh v0.7.0
+	github.com/docker/cli v28.1.0+incompatible
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gorilla/websocket v1.5.3
@@ -29,13 +29,13 @@ require (
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
-	github.com/charmbracelet/bubbles v0.20.0 // indirect
+	github.com/charmbracelet/bubbles v0.21.0 // indirect
 	github.com/charmbracelet/bubbletea v1.3.4 // indirect
 	github.com/charmbracelet/colorprofile v0.3.0 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
-	github.com/charmbracelet/x/exp/strings v0.0.0-20250331185309-2c96f2c3a435 // indirect
+	github.com/charmbracelet/x/exp/strings v0.0.0-20250417172821-98fd948af1b1 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
