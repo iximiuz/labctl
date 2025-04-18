@@ -193,7 +193,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		cli.PrintErr("Unsupported IDE (skipping IDE connection): %q\n", opts.IDE)
 	}
 
-	if opts.IDE != "" && !opts.Quiet {
+	if !opts.Quiet {
 		cli.PrintAux("SSH proxy is running on %s\n", localPort)
 		cli.PrintAux(
 			"\n# Connect from the terminal:\nssh -i %s ssh://%s@%s:%s\n",
