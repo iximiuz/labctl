@@ -2,6 +2,7 @@ package content
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -218,19 +219,14 @@ func createTraining(ctx context.Context, cli labcli.CLI, opts *createOptions) (c
 }
 
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {
-	me, err := cli.Client().GetMe(ctx)
-	if err != nil {
-		return false, fmt.Errorf("couldn't get the current user info: %w", err)
+	if _, err := cli.Client().GetAuthor(ctx); err != nil {
+		if errors.Is(err, api.ErrNotFound) {
+			return false, nil // no author profile found (HTTP 404)
+		}
+		return false, fmt.Errorf("couldn't get the current author profile: %w", err)
 	}
 
-	authors, err := cli.Client().ListAuthors(ctx, api.ListAuthorsFilter{
-		UserID: []string{me.ID},
-	})
-	if err != nil {
-		return false, fmt.Errorf("couldn't list author profiles: %w", err)
-	}
-
-	return len(authors) > 0, nil
+	return true, nil
 }
 
 func maybeCreateAuthorProfile(ctx context.Context, cli labcli.CLI) error {

@@ -17,6 +17,7 @@ import (
 var (
 	ErrAuthenticationRequired = errors.New("authentication required")
 	ErrGatewayTimeout         = errors.New("gateway timeout")
+	ErrNotFound               = errors.New("not found")
 )
 
 func isAuthenticationRequiredResponse(resp *http.Response) bool {
@@ -25,6 +26,10 @@ func isAuthenticationRequiredResponse(resp *http.Response) bool {
 
 func isGatewayTimeoutResponse(resp *http.Response) bool {
 	return resp.StatusCode == http.StatusGatewayTimeout
+}
+
+func isNotFoundResponse(resp *http.Response) bool {
+	return resp.StatusCode == http.StatusNotFound
 }
 
 type Client struct {
@@ -365,6 +370,9 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 		}
 		if isGatewayTimeoutResponse(resp) {
 			return nil, ErrGatewayTimeout
+		}
+		if isNotFoundResponse(resp) {
+			return nil, ErrNotFound
 		}
 
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body)
