@@ -239,6 +239,11 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 
 	// Upload new and update existing files.
 	for _, file := range state.toUpload() {
+		// Skip reconciling index.md and manifest files for playgrounds
+		if config.Kind == content.KindPlayground && slices.Contains([]string{"index.md", "manifest.yaml", "manifest.yml"}, file) {
+			continue
+		}
+
 		cli.PrintAux("🌍 Pushing %s\n", file)
 
 		if _, found := state.remoteFiles[file]; found && !config.Force {
@@ -281,6 +286,11 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 
 	// Delete remote files that don't exist locally.
 	for _, file := range state.toDelete() {
+		// Skip reconciling index.md and manifest files for playgrounds
+		if config.Kind == content.KindPlayground && slices.Contains([]string{"index.md", "manifest.yaml", "manifest.yml"}, file) {
+			continue
+		}
+
 		cli.PrintAux("🗑️  Deleting remote %s\n", file)
 
 		if !config.Force && !cli.Confirm(fmt.Sprintf("File %s doesn't exist locally. Delete remotely?", file), "Yes", "No") {
