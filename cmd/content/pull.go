@@ -16,7 +16,7 @@ type pullOptions struct {
 	kind content.ContentKind
 	name string
 
-	dirOptions
+	DirOptions
 
 	force bool
 }
@@ -40,7 +40,7 @@ func newPullCommand(cli labcli.CLI) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	opts.AddDirFlag(flags)
+	opts.AddDirFlag(flags, "")
 
 	flags.BoolVarP(
 		&opts.force,

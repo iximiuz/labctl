@@ -32,15 +32,23 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	return cmd
 }
 
-type dirOptions struct {
+type DirOptions struct {
 	dir string
 }
 
-func (o *dirOptions) AddDirFlag(fs *pflag.FlagSet) {
-	fs.StringVarP(&o.dir, "dir", "d", "", "Local directory with content files (default: $CWD/<content-name>)")
+func (o *DirOptions) AddDirFlag(fs *pflag.FlagSet, msg string) {
+	if msg == "" {
+		msg = "Local directory with content files (default: $CWD/<content-name>)"
+	}
+
+	fs.StringVarP(&o.dir, "dir", "d", "", msg)
 }
 
-func (o *dirOptions) ContentDir(name string) (string, error) {
+func (o *DirOptions) IsSet() bool {
+	return o.dir != ""
+}
+
+func (o *DirOptions) ContentDir(name string) (string, error) {
 	dir := o.dir
 	if dir == "" {
 		dir = name

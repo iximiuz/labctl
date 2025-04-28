@@ -17,7 +17,8 @@ import (
 
 type updateOptions struct {
 	file string
-	dir  string
+
+	clicontent.DirOptions
 
 	quiet bool
 
@@ -33,6 +34,10 @@ func newUpdateCommand(cli labcli.CLI) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
+
+			if opts.DirOptions.IsSet() && opts.file != "" {
+				return fmt.Errorf("only one of --file or --dir can be provided")
+			}
 
 			return labcli.WrapStatusError(runUpdate(cmd.Context(), cli, args[0], &opts))
 		},
@@ -51,14 +56,7 @@ func newUpdateCommand(cli labcli.CLI) *cobra.Command {
 		"file",
 		"f",
 		"",
-		`Path to playground manifest file`,
-	)
-	flags.StringVarP(
-		&opts.dir,
-		"dir",
-		"d",
-		"",
-		"Local directory with content files (default: $CWD/<playground-name>)",
+		`Path to the playground manifest YAML file`,
 	)
 	flags.BoolVarP(
 		&opts.force,
@@ -67,51 +65,38 @@ func newUpdateCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		"Overwrite existing remote files with the local ones and delete remote files that don't exist locally without confirmation",
 	)
+	opts.DirOptions.AddDirFlag(
+		flags,
+		"Local directory with the manifest YAML file and possibly other content files to accompany the playground (default: $CWD/<playground-name>)",
+	)
 
 	return cmd
 }
 
 func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOptions) error {
-	// File takes precedence for backward compatibility
-	dir := ""
-
 	if opts.file == "" {
-		dir = opts.dir
-
-		if dir == "" {
-			dir = name
-		}
-
-		abs, err := filepath.Abs(dir)
+		dir, err := opts.DirOptions.ContentDir(name)
 		if err != nil {
-			return fmt.Errorf("couldn't get the absolute path of %s: %w", dir, err)
+			return fmt.Errorf("couldn't get the playground directory: %w", err)
 		}
 
 		if _, err := os.Stat(dir); err != nil {
 			return fmt.Errorf("update failed: directory %s doesn't exist or is not accessible", dir)
 		}
 
-		dir = abs
-
-		file := ""
-
-		for _, manifestFile := range []string{"manifest.yaml", "manifest.yml"} {
-			manifestPath := filepath.Join(dir, manifestFile)
-
-			if _, err := os.Stat(manifestPath); err != nil {
+		for _, filename := range []string{"manifest.yaml", "manifest.yml"} {
+			path := filepath.Join(dir, filename)
+			if _, err := os.Stat(path); err != nil {
 				continue
 			}
 
-			file = manifestPath
-
+			opts.file = path
 			break
 		}
 
-		if file == "" {
-			return fmt.Errorf("update failed: no manifest file found in directory %s", dir)
+		if opts.file == "" {
+			return fmt.Errorf("update failed: no manifest file (manifest.yaml or manifest.yml) found in directory %s", dir)
 		}
-
-		opts.file = file
 	}
 
 	absFile, err := filepath.Abs(opts.file)
@@ -155,20 +140,6 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 		return fmt.Errorf("invalid manifest kind: %s", manifest.Kind)
 	}
 
-	if dir != "" {
-		config := clicontent.PushConfig{
-			Kind:  content.KindPlayground,
-			Name:  name,
-			Dir:   dir,
-			Force: opts.force,
-		}
-
-		err = clicontent.RunPushOnce(ctx, cli, config)
-		if err != nil {
-			return fmt.Errorf("couldn't update playground: %w", err)
-		}
-	}
-
 	req := api.UpdatePlaygroundRequest{
 		Title:          manifest.Title,
 		Description:    manifest.Description,
@@ -186,6 +157,20 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 	playground, err := cli.Client().UpdatePlayground(ctx, name, req)
 	if err != nil {
 		return fmt.Errorf("couldn't update playground: %w", err)
+	}
+
+	if opts.DirOptions.IsSet() {
+		config := clicontent.PushConfig{
+			Kind:  content.KindPlayground,
+			Name:  name,
+			Dir:   filepath.Dir(opts.file),
+			Force: opts.force,
+		}
+
+		err = clicontent.RunPushOnce(ctx, cli, config)
+		if err != nil {
+			return fmt.Errorf("couldn't update playground: %w", err)
+		}
 	}
 
 	cli.PrintAux("Playground URL: %s\n", playground.PageURL)

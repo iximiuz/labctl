@@ -21,7 +21,7 @@ type createOptions struct {
 	kind content.ContentKind
 	name string
 
-	dirOptions
+	DirOptions
 
 	noSample bool
 }
@@ -52,7 +52,7 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 		`Don't create a sample piece of content`,
 	)
 
-	opts.AddDirFlag(flags)
+	opts.AddDirFlag(flags, "Local directory with content files (default: $CWD/<content-name>)")
 
 	return cmd
 }

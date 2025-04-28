@@ -25,7 +25,7 @@ type pushOptions struct {
 	kind content.ContentKind
 	name string
 
-	dirOptions
+	DirOptions
 
 	watch bool
 
@@ -76,7 +76,7 @@ func newPushCommand(cli labcli.CLI) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	opts.AddDirFlag(flags)
+	opts.AddDirFlag(flags, "")
 
 	flags.BoolVarP(
 		&opts.watch,
@@ -240,7 +240,7 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 	// Upload new and update existing files.
 	for _, file := range state.toUpload() {
 		// Skip reconciling index.md and manifest files for playgrounds
-		if config.Kind == content.KindPlayground && slices.Contains([]string{"index.md", "manifest.yaml", "manifest.yml"}, file) {
+		if isExcluded(config.Kind, file) {
 			continue
 		}
 
@@ -287,7 +287,7 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 	// Delete remote files that don't exist locally.
 	for _, file := range state.toDelete() {
 		// Skip reconciling index.md and manifest files for playgrounds
-		if config.Kind == content.KindPlayground && slices.Contains([]string{"index.md", "manifest.yaml", "manifest.yml"}, file) {
+		if isExcluded(config.Kind, file) {
 			continue
 		}
 
@@ -441,4 +441,13 @@ func fileChecksum(file string) (string, error) {
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func isExcluded(kind content.ContentKind, file string) bool {
+	switch kind {
+	case content.KindPlayground:
+		return slices.Contains([]string{"index.md", "manifest.yaml", "manifest.yml"}, file)
+	}
+
+	return false
 }
