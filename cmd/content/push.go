@@ -32,6 +32,27 @@ type pushOptions struct {
 	force bool
 }
 
+func (opts *pushOptions) toConfig() (PushConfig, error) {
+	config := PushConfig{
+		Kind:  opts.kind,
+		Name:  opts.name,
+		Force: opts.force,
+	}
+
+	dir, err := opts.ContentDir(opts.name)
+	if err != nil {
+		return config, err
+	}
+
+	if _, err := os.Stat(dir); err != nil {
+		return config, fmt.Errorf("directory %s doesn't exist or is not accessible", dir)
+	}
+
+	config.Dir = dir
+
+	return config, nil
+}
+
 func newPushCommand(cli labcli.CLI) *cobra.Command {
 	var opts pushOptions
 
@@ -76,13 +97,9 @@ func newPushCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runPushContent(ctx context.Context, cli labcli.CLI, opts *pushOptions) error {
-	dir, err := opts.ContentDir(opts.name)
+	config, err := opts.toConfig()
 	if err != nil {
-		return err
-	}
-
-	if _, err := os.Stat(dir); err != nil {
-		return fmt.Errorf("push failed: directory %s doesn't exist or is not accessible", dir)
+		return fmt.Errorf("push failed: %w", err)
 	}
 
 	cont, err := getContent(ctx, cli, opts.kind, opts.name)
@@ -92,10 +109,17 @@ func runPushContent(ctx context.Context, cli labcli.CLI, opts *pushOptions) erro
 	cli.PrintAux("Found %s at %s\n", opts.kind, cont.GetPageURL())
 
 	if opts.watch {
-		return runPushWatch(ctx, cli, dir, opts)
+		return RunPushWatch(ctx, cli, config)
 	} else {
-		return runPushOnce(ctx, cli, dir, opts)
+		return RunPushOnce(ctx, cli, config)
 	}
+}
+
+type PushConfig struct {
+	Kind  content.ContentKind
+	Name  string
+	Dir   string
+	Force bool
 }
 
 type pushState struct {
@@ -128,43 +152,43 @@ func (s *pushState) toDelete() []string {
 	return files
 }
 
-func runPushOnce(ctx context.Context, cli labcli.CLI, dir string, opts *pushOptions) error {
+func RunPushOnce(ctx context.Context, cli labcli.CLI, config PushConfig) error {
 	var (
-		state pushState = pushState{dir: dir}
+		state pushState = pushState{dir: config.Dir}
 		err   error
 	)
 
-	state.remoteFiles, err = listContentFilesRemote(ctx, cli.Client(), opts.kind, opts.name)
+	state.remoteFiles, err = listContentFilesRemote(ctx, cli.Client(), config.Kind, config.Name)
 	if err != nil {
 		return fmt.Errorf("couldn't list remote content files: %w", err)
 	}
 
-	state.localFiles, err = listContentFilesLocal(dir)
+	state.localFiles, err = listContentFilesLocal(config.Dir)
 	if err != nil {
 		return fmt.Errorf("couldn't list local content files: %w", err)
 	}
 
-	return reconcileContentState(ctx, cli, opts, state)
+	return reconcileContentState(ctx, cli, config, state)
 }
 
-func runPushWatch(ctx context.Context, cli labcli.CLI, dir string, opts *pushOptions) error {
+func RunPushWatch(ctx context.Context, cli labcli.CLI, config PushConfig) error {
 	var (
-		state pushState = pushState{dir: dir}
+		state pushState = pushState{dir: config.Dir}
 		err   error
 	)
 
-	state.remoteFiles, err = listContentFilesRemote(ctx, cli.Client(), opts.kind, opts.name)
+	state.remoteFiles, err = listContentFilesRemote(ctx, cli.Client(), config.Kind, config.Name)
 	if err != nil {
 		return fmt.Errorf("couldn't list remote content files: %w", err)
 	}
 
-	state.localFiles, err = listContentFilesLocal(dir)
+	state.localFiles, err = listContentFilesLocal(config.Dir)
 	if err != nil {
 		return fmt.Errorf("couldn't list local content files: %w", err)
 	}
 
 	// Initial push.
-	if err := reconcileContentState(ctx, cli, opts, state); err != nil {
+	if err := reconcileContentState(ctx, cli, config, state); err != nil {
 		cli.PrintErr("\n⚠️ WARNING: %s\n\n", err)
 	}
 
@@ -185,12 +209,12 @@ func runPushWatch(ctx context.Context, cli labcli.CLI, dir string, opts *pushOpt
 			return nil
 
 		case <-watcher.Events:
-			state.localFiles, err = listContentFilesLocal(dir)
+			state.localFiles, err = listContentFilesLocal(config.Dir)
 			if err != nil {
 				return fmt.Errorf("couldn't list local content files: %w", err)
 			}
 
-			if err := reconcileContentState(ctx, cli, opts, state); err != nil {
+			if err := reconcileContentState(ctx, cli, config, state); err != nil {
 				// Don't break the loop on error - if it's an HTTP 400 because of malformed content,
 				// it will go away by itself when the user fixes the content.
 				// If it's an HTTP 5xx, it'll go away when the server is fixed.
@@ -210,14 +234,19 @@ func runPushWatch(ctx context.Context, cli labcli.CLI, dir string, opts *pushOpt
 	return ctx.Err()
 }
 
-func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOptions, state pushState) error {
+func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfig, state pushState) error {
 	var merr error
 
 	// Upload new and update existing files.
 	for _, file := range state.toUpload() {
+		// Skip reconciling index.md and manifest files for playgrounds
+		if config.Kind == content.KindPlayground && slices.Contains([]string{"index.md", "manifest.yaml", "manifest.yml"}, file) {
+			continue
+		}
+
 		cli.PrintAux("🌍 Pushing %s\n", file)
 
-		if _, found := state.remoteFiles[file]; found && !opts.force {
+		if _, found := state.remoteFiles[file]; found && !config.Force {
 			if !cli.Confirm(fmt.Sprintf("File %s already exists remotely. Overwrite?", file), "Yes", "No") {
 				cli.PrintAux("Skipping...\n")
 				continue
@@ -233,8 +262,8 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 
 			if err := cli.Client().PutContentMarkdown(
 				ctx,
-				opts.kind,
-				opts.name,
+				config.Kind,
+				config.Name,
 				file,
 				string(content),
 			); err != nil {
@@ -243,8 +272,8 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 		} else {
 			if err := cli.Client().UploadContentFile(
 				ctx,
-				opts.kind,
-				opts.name,
+				config.Kind,
+				config.Name,
 				file,
 				filepath.Join(state.dir, file),
 			); err != nil {
@@ -257,14 +286,19 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, opts *pushOption
 
 	// Delete remote files that don't exist locally.
 	for _, file := range state.toDelete() {
+		// Skip reconciling index.md and manifest files for playgrounds
+		if config.Kind == content.KindPlayground && slices.Contains([]string{"index.md", "manifest.yaml", "manifest.yml"}, file) {
+			continue
+		}
+
 		cli.PrintAux("🗑️  Deleting remote %s\n", file)
 
-		if !opts.force && !cli.Confirm(fmt.Sprintf("File %s doesn't exist locally. Delete remotely?", file), "Yes", "No") {
+		if !config.Force && !cli.Confirm(fmt.Sprintf("File %s doesn't exist locally. Delete remotely?", file), "Yes", "No") {
 			cli.PrintAux("Skipping...\n")
 			continue
 		}
 
-		if err := cli.Client().DeleteContentFile(ctx, opts.kind, opts.name, file); err != nil {
+		if err := cli.Client().DeleteContentFile(ctx, config.Kind, config.Name, file); err != nil {
 			merr = errors.Join(merr, fmt.Errorf("couldn't delete remote content file %q: %w", file, err))
 			continue
 		}

@@ -5,12 +5,13 @@ import "fmt"
 type ContentKind string
 
 const (
-	KindChallenge ContentKind = "challenge"
-	KindCourse    ContentKind = "course"
-	KindRoadmap   ContentKind = "roadmap"
-	KindSkillPath ContentKind = "skill-path"
-	KindTutorial  ContentKind = "tutorial"
-	KindTraining  ContentKind = "training"
+	KindChallenge  ContentKind = "challenge"
+	KindCourse     ContentKind = "course"
+	KindRoadmap    ContentKind = "roadmap"
+	KindSkillPath  ContentKind = "skill-path"
+	KindTutorial   ContentKind = "tutorial"
+	KindTraining   ContentKind = "training"
+	KindPlayground ContentKind = "playground"
 )
 
 func (k *ContentKind) Set(v string) error {
@@ -27,6 +28,8 @@ func (k *ContentKind) Set(v string) error {
 		*k = KindTutorial
 	case string(KindTraining):
 		*k = KindTraining
+	case string(KindPlayground):
+		*k = KindPlayground
 	default:
 		return fmt.Errorf("unknown content kind: %s", v)
 	}
@@ -52,6 +55,8 @@ func (k *ContentKind) Plural() string {
 		return "skill-paths"
 	case KindTraining:
 		return "trainings"
+	case KindPlayground:
+		return "playgrounds"
 	default:
 		panic(fmt.Sprintf("unknown content kind: %s", k))
 	}
