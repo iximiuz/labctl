@@ -68,10 +68,19 @@ type MachineResources struct {
 	RAMSize  string `yaml:"ramSize" json:"ramSize"`
 }
 
+type MachineStartupFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Mode    string `json:"mode,omitempty"`
+	Owner   string `json:"owner,omitempty"`
+	Append  bool   `json:"append,omitempty"`
+}
+
 type PlaygroundMachine struct {
-	Name      string           `yaml:"name" json:"name"`
-	Users     []MachineUser    `yaml:"users" json:"users"`
-	Resources MachineResources `yaml:"resources" json:"resources"`
+	Name         string               `yaml:"name" json:"name"`
+	Users        []MachineUser        `yaml:"users" json:"users"`
+	Resources    MachineResources     `yaml:"resources" json:"resources"`
+	StartupFiles []MachineStartupFile `yaml:"startupFiles" json:"startupFiles"`
 }
 
 type PlaygroundTab struct {
