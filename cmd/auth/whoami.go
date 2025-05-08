@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"

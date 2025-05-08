@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 

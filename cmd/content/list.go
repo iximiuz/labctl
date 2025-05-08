@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )

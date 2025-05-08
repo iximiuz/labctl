@@ -11,9 +11,9 @@ import (
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
-	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/safety"
 	issh "github.com/iximiuz/labctl/internal/ssh"
