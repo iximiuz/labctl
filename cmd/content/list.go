@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/iximiuz/labctl/api"
-	"github.com/iximiuz/labctl/internal/content"
+	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 

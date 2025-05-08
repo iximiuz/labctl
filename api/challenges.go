@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/iximiuz/labctl/internal/content"
+	"github.com/iximiuz/labctl/content"
 )
 
 type Challenge struct {

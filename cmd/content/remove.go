@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/iximiuz/labctl/internal/content"
+	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 

@@ -11,7 +11,7 @@ import (
 
 	"github.com/iximiuz/labctl/api"
 	clicontent "github.com/iximiuz/labctl/cmd/content"
-	"github.com/iximiuz/labctl/internal/content"
+	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
