@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/iximiuz/labctl/internal/content"
+	"github.com/iximiuz/labctl/content"
 )
 
 type Tutorial struct {

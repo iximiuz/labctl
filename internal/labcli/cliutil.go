@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/docker/cli/cli/streams"
-	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/config"
 	"github.com/sirupsen/logrus"
 )

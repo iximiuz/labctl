@@ -8,6 +8,7 @@ import (
 	"github.com/moby/term"
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/cmd/auth"
 	"github.com/iximiuz/labctl/cmd/challenge"
 	"github.com/iximiuz/labctl/cmd/content"
@@ -18,7 +19,6 @@ import (
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	versioncmd "github.com/iximiuz/labctl/cmd/version"
-	"github.com/iximiuz/labctl/internal/api"
 	"github.com/iximiuz/labctl/internal/config"
 	"github.com/iximiuz/labctl/internal/labcli"
 )

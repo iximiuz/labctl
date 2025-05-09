@@ -16,8 +16,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 
-	"github.com/iximiuz/labctl/internal/api"
-	"github.com/iximiuz/labctl/internal/content"
+	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 

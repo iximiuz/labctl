@@ -13,7 +13,7 @@ import (
 
 	"github.com/iximiuz/wsmux/pkg/client"
 
-	"github.com/iximiuz/labctl/internal/api"
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/retry"
 	"github.com/iximiuz/labctl/internal/ssh"
 )

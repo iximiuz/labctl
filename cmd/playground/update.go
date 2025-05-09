@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/iximiuz/labctl/api"
 	clicontent "github.com/iximiuz/labctl/cmd/content"
-	"github.com/iximiuz/labctl/internal/api"
-	"github.com/iximiuz/labctl/internal/content"
+	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
