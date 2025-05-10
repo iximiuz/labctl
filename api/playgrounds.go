@@ -92,6 +92,7 @@ type PlaygroundTab struct {
 	Tls         bool   `yaml:"tls,omitempty" json:"tls,omitempty"`
 	HostRewrite string `yaml:"hostRewrite,omitempty" json:"hostRewrite,omitempty"`
 	PathRewrite string `yaml:"pathRewrite,omitempty" json:"pathRewrite,omitempty"`
+	URL         string `yaml:"url,omitempty" json:"url,omitempty"`
 }
 
 type InitCondition struct {
