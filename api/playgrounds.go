@@ -84,10 +84,10 @@ type PlaygroundMachine struct {
 }
 
 type PlaygroundTab struct {
-	ID          string `yaml:"id" json:"id"`
+	ID          string `yaml:"id,omitempty" json:"id,omitempty"`
 	Kind        string `yaml:"kind" json:"kind"`
 	Name        string `yaml:"name" json:"name"`
-	Machine     string `yaml:"machine" json:"machine"`
+	Machine     string `yaml:"machine,omitempty" json:"machine,omitempty"`
 	Number      int    `yaml:"number,omitempty" json:"number,omitempty"`
 	Tls         bool   `yaml:"tls,omitempty" json:"tls,omitempty"`
 	HostRewrite string `yaml:"hostRewrite,omitempty" json:"hostRewrite,omitempty"`
