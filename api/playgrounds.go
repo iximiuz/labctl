@@ -103,9 +103,9 @@ type InitCondition struct {
 type InitTask struct {
 	Name           string          `yaml:"name" json:"name"`
 	Machine        string          `yaml:"machine,omitempty" json:"machine,omitempty"`
-	Init           bool            `yaml:"init" json:"init"`
+	Init           bool            `yaml:"init,omitempty" json:"init,omitempty"`
 	User           string          `yaml:"user" json:"user"`
-	TimeoutSeconds int             `yaml:"timeout_seconds" json:"timeout_seconds"`
+	TimeoutSeconds int             `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
 	Needs          []string        `yaml:"needs,omitempty" json:"needs,omitempty"`
 	Run            string          `yaml:"run" json:"run"`
 	Status         int             `yaml:"status,omitempty" json:"status,omitempty"`
