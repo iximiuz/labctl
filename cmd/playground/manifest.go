@@ -49,6 +49,7 @@ func runManifest(ctx context.Context, cli labcli.CLI, opts *manifestOptions) err
 		Categories:  playground.Categories,
 		Markdown:    playground.Markdown,
 		Playground: api.PlaygroundSpec{
+			Networks:       playground.Networks,
 			Machines:       playground.Machines,
 			Tabs:           playground.Tabs,
 			InitTasks:      playground.InitTasks,

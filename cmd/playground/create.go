@@ -106,6 +106,7 @@ func runCreate(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
 		Description:    manifest.Description,
 		Categories:     manifest.Categories,
 		Markdown:       manifest.Markdown,
+		Networks:       manifest.Playground.Networks,
 		Machines:       manifest.Playground.Machines,
 		Tabs:           manifest.Playground.Tabs,
 		InitTasks:      manifest.Playground.InitTasks,
