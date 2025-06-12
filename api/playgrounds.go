@@ -17,6 +17,7 @@ type Playground struct {
 	Markdown       string              `yaml:"markdown,omitempty" json:"markdown,omitempty"`
 	Published      bool                `yaml:"published" json:"published"`
 	PageURL        string              `yaml:"pageUrl" json:"pageUrl"`
+	Networks       []PlaygroundNetwork `yaml:"networks" json:"networks"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks,omitempty" json:"initTasks,omitempty"`
@@ -57,10 +58,35 @@ func (c *Client) ListPlaygrounds(ctx context.Context, opts *ListPlaygroundsOptio
 	return plays, c.GetInto(ctx, "/playgrounds", q, nil, &plays)
 }
 
+type PlaygroundNetwork struct {
+	Name    string `yaml:"name" json:"name"`
+	Subnet  string `yaml:"subnet" json:"subnet"`
+	Gateway string `yaml:"gateway,omitempty" json:"gateway,omitempty"`
+	Private bool   `yaml:"private,omitempty" json:"private,omitempty"`
+}
+
 type MachineUser struct {
 	Name    string `yaml:"name" json:"name"`
 	Default bool   `yaml:"default,omitempty" json:"default,omitempty"`
 	Welcome string `yaml:"welcome,omitempty" json:"welcome,omitempty"`
+}
+
+type MachineDrive struct {
+	Source     string `yaml:"source,omitempty" json:"source,omitempty"`
+	Mount      string `yaml:"mount,omitempty" json:"mount,omitempty"`
+	Size       string `yaml:"size,omitempty" json:"size,omitempty"`
+	Filesystem string `yaml:"filesystem,omitempty" json:"filesystem,omitempty"`
+	ReadOnly   bool   `yaml:"readOnly,omitempty" json:"readOnly,omitempty"`
+}
+
+type MachineNetworkInterface struct {
+	Name    string `yaml:"name,omitempty" json:"name,omitempty"`
+	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+	Network string `yaml:"network,omitempty" json:"network,omitempty"`
+}
+
+type MachineNetwork struct {
+	Interfaces []MachineNetworkInterface `yaml:"interfaces" json:"interfaces"`
 }
 
 type MachineResources struct {
@@ -79,6 +105,9 @@ type MachineStartupFile struct {
 type PlaygroundMachine struct {
 	Name         string               `yaml:"name" json:"name"`
 	Users        []MachineUser        `yaml:"users" json:"users"`
+	Kernel       string               `yaml:"kernel,omitempty" json:"kernel,omitempty"`
+	Drives       []MachineDrive       `yaml:"drives" json:"drives"`
+	Network      MachineNetwork       `yaml:"network" json:"network"`
 	Resources    MachineResources     `yaml:"resources" json:"resources"`
 	StartupFiles []MachineStartupFile `yaml:"startupFiles" json:"startupFiles"`
 }
@@ -142,6 +171,7 @@ type PlaygroundUserAccess struct {
 }
 
 type PlaygroundSpec struct {
+	Networks       []PlaygroundNetwork `yaml:"networks" json:"networks"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
@@ -179,6 +209,7 @@ type CreatePlaygroundRequest struct {
 	Description    string              `yaml:"description" json:"description"`
 	Categories     []string            `yaml:"categories" json:"categories"`
 	Markdown       string              `yaml:"markdown" json:"markdown"`
+	Networks       []PlaygroundNetwork `yaml:"networks" json:"networks"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
@@ -204,6 +235,7 @@ type UpdatePlaygroundRequest struct {
 	Categories     []string            `yaml:"categories" json:"categories"`
 	Cover          string              `yaml:"cover,omitempty" json:"cover,omitempty"`
 	Markdown       string              `yaml:"markdown,omitempty" json:"markdown,omitempty"`
+	Networks       []PlaygroundNetwork `yaml:"networks" json:"networks"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
