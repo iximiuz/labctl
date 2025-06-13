@@ -80,7 +80,6 @@ type MachineDrive struct {
 }
 
 type MachineNetworkInterface struct {
-	Name    string `yaml:"name,omitempty" json:"name,omitempty"`
 	Address string `yaml:"address,omitempty" json:"address,omitempty"`
 	Network string `yaml:"network,omitempty" json:"network,omitempty"`
 }
