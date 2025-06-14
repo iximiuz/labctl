@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/iximiuz/labctl/content"
 )
@@ -10,12 +11,20 @@ type Tutorial struct {
 	CreatedAt string `json:"createdAt" yaml:"createdAt"`
 	UpdatedAt string `json:"updatedAt" yaml:"updatedAt"`
 
-	Name  string `json:"name" yaml:"name"`
-	Title string `json:"title" yaml:"title"`
+	Name        string   `json:"name" yaml:"name"`
+	Title       string   `json:"title" yaml:"title"`
+	Description string   `json:"description" yaml:"description"`
+	Categories  []string `json:"categories" yaml:"categories"`
+	Tags        []string `json:"tags,omitempty" yaml:"tags,omitempty"`
+
+	Authors []Author `json:"authors" yaml:"authors"`
 
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
 
-	Authors []Author `json:"authors" yaml:"authors"`
+	AttemptCount    int `json:"attemptCount" yaml:"attemptCount"`
+	CompletionCount int `json:"completionCount" yaml:"completionCount"`
+
+	Play *Play `json:"play,omitempty" yaml:"play,omitempty"`
 }
 
 var _ content.Content = (*Tutorial)(nil)
@@ -70,9 +79,26 @@ func (c *Client) GetTutorial(ctx context.Context, name string) (*Tutorial, error
 	return &t, c.GetInto(ctx, "/tutorials/"+name, nil, nil, &t)
 }
 
-func (c *Client) ListTutorials(ctx context.Context) ([]Tutorial, error) {
+type ListTutorialsOptions struct {
+	Category []string
+	Status   []string
+}
+
+func (c *Client) ListTutorials(ctx context.Context, opts *ListTutorialsOptions) ([]Tutorial, error) {
 	var tutorials []Tutorial
-	return tutorials, c.GetInto(ctx, "/tutorials", nil, nil, &tutorials)
+	query := url.Values{}
+
+	if opts != nil {
+		for _, category := range opts.Category {
+			query.Add("category", category)
+		}
+
+		for _, status := range opts.Status {
+			query.Add("status", status)
+		}
+	}
+
+	return tutorials, c.GetInto(ctx, "/tutorials", query, nil, &tutorials)
 }
 
 func (c *Client) ListAuthoredTutorials(ctx context.Context) ([]Tutorial, error) {
@@ -87,4 +113,47 @@ func (c *Client) DeleteTutorial(ctx context.Context, name string) error {
 	}
 	resp.Body.Close()
 	return nil
+}
+
+type StartTutorialOptions struct {
+	SafetyDisclaimerConsent bool
+}
+
+func (c *Client) StartTutorial(ctx context.Context, name string, opts StartTutorialOptions) (*Tutorial, error) {
+	type startTutorialRequest struct {
+		Started                 bool `json:"started"`
+		SafetyDisclaimerConsent bool `json:"safetyDisclaimerConsent,omitempty"`
+	}
+	req := startTutorialRequest{
+		Started:                 true,
+		SafetyDisclaimerConsent: opts.SafetyDisclaimerConsent,
+	}
+
+	body, err := toJSONBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var t Tutorial
+	return &t, c.PatchInto(ctx, "/tutorials/"+name, nil, nil, body, &t)
+}
+
+func (c *Client) StopTutorial(ctx context.Context, name string) (*Tutorial, error) {
+	body, err := toJSONBody(map[string]any{"started": false})
+	if err != nil {
+		return nil, err
+	}
+
+	var t Tutorial
+	return &t, c.PatchInto(ctx, "/tutorials/"+name, nil, nil, body, &t)
+}
+
+func (c *Client) CompleteTutorial(ctx context.Context, name string) (*Tutorial, error) {
+	body, err := toJSONBody(map[string]any{"completed": true})
+	if err != nil {
+		return nil, err
+	}
+
+	var t Tutorial
+	return &t, c.PatchInto(ctx, "/tutorials/"+name, nil, nil, body, &t)
 }
