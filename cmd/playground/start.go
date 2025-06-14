@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/cmd/ssh"
@@ -25,17 +27,17 @@ type startOptions struct {
 	machine    string
 	user       string
 
+	file string
 	open bool
+	ssh  bool
+	ide  string
 
-	ssh bool
-
-	ide string
+	forwardAgent bool
+	skipWaitInit bool
 
 	safetyDisclaimerConsent bool
 
-	forwardAgent bool
-
-	skipWaitInit bool
+	asFreeTierUser bool
 
 	quiet bool
 }
@@ -73,6 +75,13 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	flags := cmd.Flags()
 
 	flags.StringVarP(
+		&opts.file,
+		"file",
+		"f",
+		"",
+		`Path to a manifest file with playground configuration (machines, tabs, custom init tasks, etc.)`,
+	)
+	flags.StringVarP(
 		&opts.machine,
 		"machine",
 		"m",
@@ -86,7 +95,6 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"",
 		`SSH user (default: the machine's default login user)`,
 	)
-
 	flags.BoolVarP(
 		&opts.open,
 		"open",
@@ -105,6 +113,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"ide",
 		"",
 		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
+	)
+	flags.BoolVar(
+		&opts.asFreeTierUser,
+		"as-free-tier-user",
+		false,
+		`Run this playground as a free tier user (handy for testing that the playground works on all tiers)`,
 	)
 	flags.BoolVar(
 		&opts.safetyDisclaimerConsent,
@@ -142,10 +156,36 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		return err
 	}
 
-	play, err := cli.Client().CreatePlay(ctx, api.CreatePlayRequest{
+	// Parse manifest file if provided
+	var manifest *api.PlaygroundManifest
+	if opts.file != "" {
+		manifest, err = readManifestFile(opts.file)
+		if err != nil {
+			return fmt.Errorf("couldn't read manifest file: %w", err)
+		}
+	}
+
+	// Build CreatePlay request
+	req := api.CreatePlayRequest{
 		Playground:              opts.playground,
 		SafetyDisclaimerConsent: opts.safetyDisclaimerConsent,
-	})
+		AsFreeTierUser:          opts.asFreeTierUser,
+	}
+
+	// Add manifest fields if available
+	if manifest != nil {
+		req.Tabs = manifest.Playground.Tabs
+		req.Networks = manifest.Playground.Networks
+		req.Machines = manifest.Playground.Machines
+		if len(manifest.Playground.InitTasks) > 0 {
+			req.InitTasks = manifest.Playground.InitTasks
+		}
+		if len(manifest.Playground.InitConditions.Values) > 0 {
+			req.InitConditions = &manifest.Playground.InitConditions
+		}
+	}
+
+	play, err := cli.Client().CreatePlay(ctx, req)
 	if err != nil {
 		return fmt.Errorf("couldn't create a new playground: %w", err)
 	}
@@ -219,6 +259,24 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	cli.PrintOut("%s\n", play.ID)
 
 	return nil
+}
+
+func readManifestFile(filePath string) (*api.PlaygroundManifest, error) {
+	rawManifest, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read manifest file: %w", err)
+	}
+
+	var manifest api.PlaygroundManifest
+	if err := yaml.Unmarshal(rawManifest, &manifest); err != nil {
+		return nil, fmt.Errorf("failed to parse manifest file: %w", err)
+	}
+
+	if manifest.Kind != "playground" {
+		return nil, fmt.Errorf("invalid manifest kind: %s (expected 'playground')", manifest.Kind)
+	}
+
+	return &manifest, nil
 }
 
 func listKnownPlaygrounds(ctx context.Context, cli labcli.CLI) string {

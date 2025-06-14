@@ -144,8 +144,14 @@ func (m *Machine) HasUser(name string) bool {
 }
 
 type CreatePlayRequest struct {
-	Playground              string `json:"playground"`
-	SafetyDisclaimerConsent bool   `json:"safetyDisclaimerConsent"`
+	Playground              string              `json:"playground"`
+	Tabs                    []PlaygroundTab     `json:"tabs,omitempty"`
+	Networks                []PlaygroundNetwork `json:"networks,omitempty"`
+	Machines                []PlaygroundMachine `json:"machines,omitempty"`
+	InitTasks               map[string]InitTask `json:"initTasks,omitempty"`
+	InitConditions          *InitConditions     `json:"initConditions,omitempty"`
+	SafetyDisclaimerConsent bool                `json:"safetyDisclaimerConsent"`
+	AsFreeTierUser          bool                `json:"asFreeTierUser,omitempty"`
 }
 
 func (c *Client) CreatePlay(ctx context.Context, req CreatePlayRequest) (*Play, error) {
