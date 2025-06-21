@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/iximiuz/labctl/api"
 	clicontent "github.com/iximiuz/labctl/cmd/content"
@@ -99,20 +98,19 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 		}
 	}
 
-	absFile, err := filepath.Abs(opts.file)
-	if err != nil {
-		return fmt.Errorf("couldn't get the absolute path of %s: %w", opts.file, err)
+	if opts.file != "-" {
+		absFile, err := filepath.Abs(opts.file)
+		if err != nil {
+			return fmt.Errorf("couldn't get the absolute path of %s: %w", opts.file, err)
+		}
+		cli.PrintAux("Updating playground %s from %s\n", name, absFile)
+	} else {
+		cli.PrintAux("Updating playground %s from stdin\n", name)
 	}
-	cli.PrintAux("Updating playground %s from %s\n", name, absFile)
 
-	rawManifest, err := os.ReadFile(opts.file)
+	manifest, err := readManifestFile(opts.file)
 	if err != nil {
-		return fmt.Errorf("failed to read manifest file: %w", err)
-	}
-
-	var manifest api.PlaygroundManifest
-	if err := yaml.Unmarshal(rawManifest, &manifest); err != nil {
-		return fmt.Errorf("failed to parse manifest file: %w", err)
+		return fmt.Errorf("couldn't read manifest: %w", err)
 	}
 
 	if !manifest.Playground.HasAccessControl() && manifest.Playground.Access.Mode != "" {
@@ -134,10 +132,6 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 		default:
 			return fmt.Errorf("unsupported access mode: %s (only 'private' and 'public' are supported)", manifest.Playground.Access.Mode)
 		}
-	}
-
-	if manifest.Kind != "playground" {
-		return fmt.Errorf("invalid manifest kind: %s", manifest.Kind)
 	}
 
 	req := api.UpdatePlaygroundRequest{

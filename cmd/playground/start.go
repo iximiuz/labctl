@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/cmd/ssh"
@@ -106,7 +104,7 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		&opts.ssh,
 		"ssh",
 		false,
-		`SSH into the playground immediately after it's created`,
+		`SSH into the playground immediately after it's started`,
 	)
 	flags.StringVar(
 		&opts.ide,
@@ -187,7 +185,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 
 	play, err := cli.Client().CreatePlay(ctx, req)
 	if err != nil {
-		return fmt.Errorf("couldn't create a new playground: %w", err)
+		return fmt.Errorf("couldn't start the playground: %w", err)
 	}
 
 	if opts.machine == "" {
@@ -209,7 +207,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
 	}
 
-	cli.PrintAux("New %s playground created with ID %s\n", opts.playground, play.ID)
+	cli.PrintAux("New %s playground started with ID %s\n", opts.playground, play.ID)
 
 	if opts.open {
 		cli.PrintAux("Opening %s in your browser...\n", play.PageURL)
@@ -259,24 +257,6 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	cli.PrintOut("%s\n", play.ID)
 
 	return nil
-}
-
-func readManifestFile(filePath string) (*api.PlaygroundManifest, error) {
-	rawManifest, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest file: %w", err)
-	}
-
-	var manifest api.PlaygroundManifest
-	if err := yaml.Unmarshal(rawManifest, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest file: %w", err)
-	}
-
-	if manifest.Kind != "playground" {
-		return nil, fmt.Errorf("invalid manifest kind: %s (expected 'playground')", manifest.Kind)
-	}
-
-	return &manifest, nil
 }
 
 func listKnownPlaygrounds(ctx context.Context, cli labcli.CLI) string {

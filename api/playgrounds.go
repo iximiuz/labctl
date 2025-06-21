@@ -108,7 +108,7 @@ type PlaygroundMachine struct {
 	Drives       []MachineDrive       `yaml:"drives" json:"drives"`
 	Network      MachineNetwork       `yaml:"network" json:"network"`
 	Resources    MachineResources     `yaml:"resources" json:"resources"`
-	StartupFiles []MachineStartupFile `yaml:"startupFiles" json:"startupFiles"`
+	StartupFiles []MachineStartupFile `yaml:"startupFiles,omitempty" json:"startupFiles,omitempty"`
 }
 
 type PlaygroundTab struct {
@@ -170,11 +170,11 @@ type PlaygroundUserAccess struct {
 }
 
 type PlaygroundSpec struct {
-	Networks       []PlaygroundNetwork `yaml:"networks" json:"networks"`
-	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
-	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`
-	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
-	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
+	Networks       []PlaygroundNetwork `yaml:"networks,omitempty" json:"networks,omitempty"`
+	Machines       []PlaygroundMachine `yaml:"machines,omitempty" json:"machines,omitempty"`
+	Tabs           []PlaygroundTab     `yaml:"tabs,omitempty" json:"tabs,omitempty"`
+	InitTasks      map[string]InitTask `yaml:"initTasks,omitempty" json:"initTasks,omitempty"`
+	InitConditions InitConditions      `yaml:"initConditions,omitempty" json:"initConditions,omitempty"`
 	RegistryAuth   string              `yaml:"registryAuth,omitempty" json:"registryAuth,omitempty"`
 
 	// Deprecated: Use PlaygroundAccessControl instead
@@ -192,12 +192,12 @@ func (s *PlaygroundSpec) HasAccessControl() bool {
 type PlaygroundManifest struct {
 	Kind        string         `yaml:"kind" json:"kind"`
 	Name        string         `yaml:"name" json:"name"`
-	Base        string         `yaml:"base" json:"base"`
-	Title       string         `yaml:"title" json:"title"`
-	Description string         `yaml:"description" json:"description"`
-	Cover       string         `yaml:"cover" json:"cover"`
-	Categories  []string       `yaml:"categories" json:"categories"`
-	Markdown    string         `yaml:"markdown" json:"markdown"`
+	Base        string         `yaml:"base,omitempty" json:"base,omitempty"`
+	Title       string         `yaml:"title,omitempty" json:"title,omitempty"`
+	Description string         `yaml:"description,omitempty" json:"description,omitempty"`
+	Cover       string         `yaml:"cover,omitempty" json:"cover,omitempty"`
+	Categories  []string       `yaml:"categories,omitempty" json:"categories,omitempty"`
+	Markdown    string         `yaml:"markdown,omitempty" json:"markdown,omitempty"`
 	Playground  PlaygroundSpec `yaml:"playground" json:"playground"`
 }
 
@@ -207,7 +207,7 @@ type CreatePlaygroundRequest struct {
 	Title          string              `yaml:"title" json:"title"`
 	Description    string              `yaml:"description" json:"description"`
 	Categories     []string            `yaml:"categories" json:"categories"`
-	Markdown       string              `yaml:"markdown" json:"markdown"`
+	Markdown       string              `yaml:"markdown,omitempty" json:"markdown,omitempty"`
 	Networks       []PlaygroundNetwork `yaml:"networks" json:"networks"`
 	Machines       []PlaygroundMachine `yaml:"machines" json:"machines"`
 	Tabs           []PlaygroundTab     `yaml:"tabs" json:"tabs"`

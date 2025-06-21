@@ -3,11 +3,9 @@ package playground
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/labcli"
@@ -76,25 +74,21 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runCreate(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
-	absFile, err := filepath.Abs(opts.file)
+	if opts.file != "-" {
+		absFile, err := filepath.Abs(opts.file)
+		if err != nil {
+			return fmt.Errorf("couldn't get the absolute path of %s: %w", opts.file, err)
+		}
+		cli.PrintAux("Creating playground from %s\n", absFile)
+	} else {
+		cli.PrintAux("Creating playground from stdin\n")
+	}
+
+	manifest, err := readManifestFile(opts.file)
 	if err != nil {
-		return fmt.Errorf("couldn't get the absolute path of %s: %w", opts.file, err)
-	}
-	cli.PrintAux("Creating playground from %s\n", absFile)
-
-	rawManifest, err := os.ReadFile(opts.file)
-	if err != nil {
-		return fmt.Errorf("failed to read manifest file: %w", err)
+		return fmt.Errorf("couldn't read manifest: %w", err)
 	}
 
-	var manifest api.PlaygroundManifest
-	if err := yaml.Unmarshal(rawManifest, &manifest); err != nil {
-		return fmt.Errorf("failed to parse manifest file: %w", err)
-	}
-
-	if manifest.Kind != "playground" {
-		return fmt.Errorf("invalid manifest kind: %s", manifest.Kind)
-	}
 	if manifest.Name != "" && manifest.Name != opts.name {
 		return fmt.Errorf("name in manifest (%s) does not match playground name argument (%s)", manifest.Name, opts.name)
 	}
