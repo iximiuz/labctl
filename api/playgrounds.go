@@ -85,12 +85,12 @@ type MachineNetworkInterface struct {
 }
 
 type MachineNetwork struct {
-	Interfaces []MachineNetworkInterface `yaml:"interfaces" json:"interfaces"`
+	Interfaces []MachineNetworkInterface `yaml:"interfaces,omitempty" json:"interfaces,omitempty"`
 }
 
 type MachineResources struct {
-	CPUCount int    `yaml:"cpuCount" json:"cpuCount"`
-	RAMSize  string `yaml:"ramSize" json:"ramSize"`
+	CPUCount int    `yaml:"cpuCount,omitempty" json:"cpuCount,omitempty"`
+	RAMSize  string `yaml:"ramSize,omitempty" json:"ramSize,omitempty"`
 }
 
 type MachineStartupFile struct {
@@ -103,11 +103,11 @@ type MachineStartupFile struct {
 
 type PlaygroundMachine struct {
 	Name         string               `yaml:"name" json:"name"`
-	Users        []MachineUser        `yaml:"users" json:"users"`
+	Users        []MachineUser        `yaml:"users,omitempty" json:"users,omitempty"`
 	Kernel       string               `yaml:"kernel,omitempty" json:"kernel,omitempty"`
-	Drives       []MachineDrive       `yaml:"drives" json:"drives"`
-	Network      MachineNetwork       `yaml:"network" json:"network"`
-	Resources    MachineResources     `yaml:"resources" json:"resources"`
+	Drives       []MachineDrive       `yaml:"drives,omitempty" json:"drives,omitempty"`
+	Network      *MachineNetwork      `yaml:"network,omitempty" json:"network,omitempty"`
+	Resources    *MachineResources    `yaml:"resources,omitempty" json:"resources,omitempty"`
 	StartupFiles []MachineStartupFile `yaml:"startupFiles,omitempty" json:"startupFiles,omitempty"`
 }
 
