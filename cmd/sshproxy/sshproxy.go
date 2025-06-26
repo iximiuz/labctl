@@ -199,6 +199,10 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 			"\n# Connect from the terminal:\nssh -i %s ssh://%s@%s:%s\n",
 			cli.Config().SSHIdentityFile, opts.User, localHost, localPort,
 		)
+		cli.PrintAux(
+			"\n# Copy a file from/to the machine using scp:\nscp -i %s -P %s %s@%s:path/to/file .\n",
+			cli.Config().SSHIdentityFile, localPort, opts.User, localHost,
+		)
 
 		cli.PrintAux("\n# Or add the following to your ~/.ssh/config:\n")
 		cli.PrintAux("Host %s\n", opts.PlayID+"-"+opts.Machine)
