@@ -16,8 +16,9 @@ import (
 )
 
 type listOptions struct {
-	all   bool
-	quiet bool
+	all    bool
+	quiet  bool
+	filter string
 }
 
 func newListCommand(cli labcli.CLI) *cobra.Command {
@@ -48,6 +49,13 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Only print playground IDs`,
 	)
+	flags.StringVarP(
+		&opts.filter,
+		"filter",
+		"f",
+		"",
+		`Filter playgrounds by tutorial=<name>, challenge=<name>, course=<name>, or playground=<name>`,
+	)
 
 	return cmd
 }
@@ -58,13 +66,18 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 
 	printer.printHeader()
 
+	filter, err := parseFilter(opts.filter)
+	if err != nil {
+		return err
+	}
+
 	plays, err := cli.Client().ListPlays(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't list playgrounds: %w", err)
 	}
 
 	for _, play := range plays {
-		if opts.all || play.Active {
+		if (opts.all || play.Active) && filter.matches(play) {
 			printer.printOne(play)
 		}
 	}
@@ -146,4 +159,52 @@ func playStatus(play *api.Play) string {
 func safeParseTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
+}
+
+func parseFilter(filter string) (*playFilter, error) {
+	if filter == "" {
+		return &playFilter{}, nil
+	}
+
+	parts := strings.SplitN(filter, "=", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid filter format: %s (expected format: type=value)", filter)
+	}
+
+	filterType := strings.ToLower(parts[0])
+	filterValue := parts[1]
+
+	switch filterType {
+	case "tutorial", "challenge", "course", "playground":
+		return &playFilter{
+			kind:  filterType,
+			value: filterValue,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown filter type: %s (supported types: tutorial, challenge, course, playground)", filterType)
+	}
+}
+
+type playFilter struct {
+	kind  string
+	value string
+}
+
+func (f *playFilter) matches(play *api.Play) bool {
+	if f == nil || f.kind == "" {
+		return true
+	}
+
+	switch f.kind {
+	case "tutorial":
+		return play.TutorialName == f.value
+	case "challenge":
+		return play.ChallengeName == f.value
+	case "course":
+		return play.CourseName == f.value
+	case "playground":
+		return play.Playground.Name == f.value
+	default:
+		return false
+	}
 }
