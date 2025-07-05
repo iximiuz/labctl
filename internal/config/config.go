@@ -58,13 +58,7 @@ func Default(homeDir string) *Config {
 		SSHIdentityFile: filepath.Join(homeDir, ".ssh", defaultSSHIdentityFile),
 	}
 
-	// Override with environment variables if present
-	if sessionID := os.Getenv("IXIMIUZ_SESSION_ID"); sessionID != "" {
-		cfg.SessionID = sessionID
-	}
-	if accessToken := os.Getenv("IXIMIUZ_ACCESS_TOKEN"); accessToken != "" {
-		cfg.AccessToken = accessToken
-	}
+	applyEnvOverrides(cfg)
 
 	return cfg
 }
@@ -99,13 +93,7 @@ func Load(homeDir string) (*Config, error) {
 		cfg.BaseURL = strings.TrimSuffix(cfg.APIBaseURL, "/api")
 	}
 
-	// Override with environment variables if present
-	if sessionID := os.Getenv("IXIMIUZ_SESSION_ID"); sessionID != "" {
-		cfg.SessionID = sessionID
-	}
-	if accessToken := os.Getenv("IXIMIUZ_ACCESS_TOKEN"); accessToken != "" {
-		cfg.AccessToken = accessToken
-	}
+	applyEnvOverrides(&cfg)
 
 	cfg.FilePath = path
 
@@ -139,4 +127,13 @@ func (c *Config) Dump() error {
 	}
 
 	return nil
+}
+
+func applyEnvOverrides(cfg *Config) {
+	if sessionID := os.Getenv("IXIMIUZ_SESSION_ID"); sessionID != "" {
+		cfg.SessionID = sessionID
+	}
+	if accessToken := os.Getenv("IXIMIUZ_ACCESS_TOKEN"); accessToken != "" {
+		cfg.AccessToken = accessToken
+	}
 }
