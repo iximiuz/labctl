@@ -16,8 +16,9 @@ import (
 )
 
 type listOptions struct {
-	all   bool
-	quiet bool
+	all    bool
+	quiet  bool
+	filter string
 }
 
 func newListCommand(cli labcli.CLI) *cobra.Command {
@@ -48,6 +49,13 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Only print playground IDs`,
 	)
+	flags.StringVarP(
+		&opts.filter,
+		"filter",
+		"f",
+		"",
+		`Filter playgrounds by tutorial=<name>, challenge=<name>, course=<name>, or playground=<name>`,
+	)
 
 	return cmd
 }
@@ -64,7 +72,7 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 	}
 
 	for _, play := range plays {
-		if opts.all || play.Active {
+		if (opts.all || play.Active) && matchesFilter(play, opts.filter) {
 			printer.printOne(play)
 		}
 	}
@@ -146,4 +154,31 @@ func playStatus(play *api.Play) string {
 func safeParseTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
+}
+
+func matchesFilter(play *api.Play, filter string) bool {
+	if filter == "" {
+		return true
+	}
+
+	parts := strings.SplitN(filter, "=", 2)
+	if len(parts) != 2 {
+		return true // Invalid filter format, show all
+	}
+
+	filterType := strings.ToLower(parts[0])
+	filterValue := parts[1]
+
+	switch filterType {
+	case "tutorial":
+		return play.TutorialName == filterValue
+	case "challenge":
+		return play.ChallengeName == filterValue
+	case "course":
+		return play.CourseName == filterValue
+	case "playground":
+		return play.Playground.Name == filterValue
+	default:
+		return true // Unknown filter type, show all
+	}
 }
