@@ -72,7 +72,11 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 	}
 
 	for _, play := range plays {
-		if (opts.all || play.Active) && matchesFilter(play, opts.filter) {
+		matches, err := matchesFilter(play, opts.filter)
+		if err != nil {
+			return err
+		}
+		if (opts.all || play.Active) && matches {
 			printer.printOne(play)
 		}
 	}
@@ -156,14 +160,14 @@ func safeParseTime(s string) time.Time {
 	return t
 }
 
-func matchesFilter(play *api.Play, filter string) bool {
+func matchesFilter(play *api.Play, filter string) (bool, error) {
 	if filter == "" {
-		return true
+		return true, nil
 	}
 
 	parts := strings.SplitN(filter, "=", 2)
 	if len(parts) != 2 {
-		return true // Invalid filter format, show all
+		return false, fmt.Errorf("invalid filter format: %s (expected format: type=value)", filter)
 	}
 
 	filterType := strings.ToLower(parts[0])
@@ -171,14 +175,14 @@ func matchesFilter(play *api.Play, filter string) bool {
 
 	switch filterType {
 	case "tutorial":
-		return play.TutorialName == filterValue
+		return play.TutorialName == filterValue, nil
 	case "challenge":
-		return play.ChallengeName == filterValue
+		return play.ChallengeName == filterValue, nil
 	case "course":
-		return play.CourseName == filterValue
+		return play.CourseName == filterValue, nil
 	case "playground":
-		return play.Playground.Name == filterValue
+		return play.Playground.Name == filterValue, nil
 	default:
-		return true // Unknown filter type, show all
+		return false, fmt.Errorf("unknown filter type: %s (supported types: tutorial, challenge, course, playground)", filterType)
 	}
 }
