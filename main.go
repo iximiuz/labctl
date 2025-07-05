@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
+	apicmd "github.com/iximiuz/labctl/cmd/api"
 	"github.com/iximiuz/labctl/cmd/auth"
 	"github.com/iximiuz/labctl/cmd/challenge"
 	"github.com/iximiuz/labctl/cmd/content"
@@ -70,6 +71,7 @@ func main() {
 	cmd.SetErr(cli.ErrorStream())
 
 	cmd.AddCommand(
+		apicmd.NewCommand(cli),
 		auth.NewCommand(cli),
 		challenge.NewCommand(cli),
 		content.NewCommand(cli),
