@@ -242,6 +242,17 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 						}
 						eventCh <- EventSSHConnEnded
 					}()
+				} else {
+					cli.PrintAux("Challenge playground is ready!\n")
+					cli.PrintAux("Challenge page: %s\n", chal.PageURL)
+					if opts.keepAlive {
+						cli.PrintAux("The challenge playground will be kept alive.\n")
+						cli.PrintAux("Press ENTER to continue...\n")
+						var input string
+						fmt.Scanln(&input)
+					}
+
+					return nil
 				}
 
 			case EventChallengeCompletable:
