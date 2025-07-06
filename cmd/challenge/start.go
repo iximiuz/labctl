@@ -29,6 +29,7 @@ type startOptions struct {
 	noOpen    bool
 	noSSH     bool
 	keepAlive bool
+	detach    bool
 
 	ide string
 
@@ -100,6 +101,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"keep-alive",
 		false,
 		`Keep the challenge playground alive after it's completed`,
+	)
+	flags.BoolVar(
+		&opts.detach,
+		"detach",
+		false,
+		`Return immediately after the playground is started without waiting for completion`,
 	)
 	flags.StringVar(
 		&opts.ide,
@@ -228,6 +235,12 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 		case ev := <-eventCh:
 			switch ev {
 			case EventChallengeReady:
+				if opts.detach {
+					cli.PrintAux("Playground is ready. Detaching...\n")
+
+					return nil
+				}
+
 				if !opts.noSSH {
 					cli.PrintAux("SSH-ing into challenge playground (%s machine)...\n", opts.machine)
 
