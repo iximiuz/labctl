@@ -1,6 +1,7 @@
 package labcli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -170,6 +171,11 @@ func WrapStatusError(err error) error {
 	if err == nil {
 		return nil
 	}
+
+	if errors.As(err, new(StatusError)) {
+		return err
+	}
+
 	return NewStatusError(1, err.Error())
 }
 
