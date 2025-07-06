@@ -220,7 +220,7 @@ func runStartTutorial(ctx context.Context, cli labcli.CLI, opts *startOptions) e
 				if !opts.noSSH {
 					cli.PrintAux("SSH-ing into tutorial playground (%s machine)...\n", opts.machine)
 
-					sess, err = ssh.StartSSHSession(ctx, cli, tut.Play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
+					sess, _, err = ssh.StartSSHSession(ctx, cli, tut.Play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
 					if err != nil {
 						return fmt.Errorf("couldn't start SSH session: %w", err)
 					}
