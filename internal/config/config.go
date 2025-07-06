@@ -50,13 +50,17 @@ func ConfigFilePath(homeDir string) string {
 func Default(homeDir string) *Config {
 	configFilePath := ConfigFilePath(homeDir)
 
-	return &Config{
+	cfg := &Config{
 		FilePath:        configFilePath,
 		BaseURL:         defaultBaseURL,
 		APIBaseURL:      defaultAPIBaseURL,
 		PlaysDir:        filepath.Join(filepath.Dir(configFilePath), "plays"),
 		SSHIdentityFile: filepath.Join(homeDir, ".ssh", defaultSSHIdentityFile),
 	}
+
+	applyEnvOverrides(cfg)
+
+	return cfg
 }
 
 func Load(homeDir string) (*Config, error) {
@@ -88,6 +92,8 @@ func Load(homeDir string) (*Config, error) {
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = strings.TrimSuffix(cfg.APIBaseURL, "/api")
 	}
+
+	applyEnvOverrides(&cfg)
 
 	cfg.FilePath = path
 
@@ -121,4 +127,13 @@ func (c *Config) Dump() error {
 	}
 
 	return nil
+}
+
+func applyEnvOverrides(cfg *Config) {
+	if sessionID := os.Getenv("IXIMIUZ_SESSION_ID"); sessionID != "" {
+		cfg.SessionID = sessionID
+	}
+	if accessToken := os.Getenv("IXIMIUZ_ACCESS_TOKEN"); accessToken != "" {
+		cfg.AccessToken = accessToken
+	}
 }
