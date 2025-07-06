@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -103,8 +104,8 @@ func main() {
 	)
 
 	if err := cmd.Execute(); err != nil {
-		if sterr, ok := err.(labcli.StatusError); ok {
-			cli.PrintErr("labctl: %s\n", sterr)
+		if sterr := (labcli.StatusError{}); errors.As(err, &sterr) {
+			cli.PrintErr("labctl: %s\n", err.Error())
 			os.Exit(sterr.Code())
 		}
 
