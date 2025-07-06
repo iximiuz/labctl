@@ -2,6 +2,7 @@ package playground
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -19,6 +20,14 @@ type listOptions struct {
 	all    bool
 	quiet  bool
 	filter string
+	output string
+}
+
+func (opts *listOptions) validate() error {
+	if opts.output != "table" && opts.output != "json" {
+		return fmt.Errorf("invalid output format: %s (supported formats: table, json)", opts.output)
+	}
+	return nil
 }
 
 func newListCommand(cli labcli.CLI) *cobra.Command {
@@ -28,6 +37,9 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 		Use:     "list [flags]",
 		Aliases: []string{"ls"},
 		Short:   `List current or recently run playgrounds (up to 50)`,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			return opts.validate()
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return labcli.WrapStatusError(runListPlays(cmd.Context(), cli, &opts))
 		},
@@ -56,16 +68,18 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 		"",
 		`Filter playgrounds by tutorial=<name>, challenge=<name>, course=<name>, or playground=<name>`,
 	)
+	flags.StringVarP(
+		&opts.output,
+		"output",
+		"o",
+		"table",
+		`Output format: table, json`,
+	)
 
 	return cmd
 }
 
 func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error {
-	printer := newListPrinter(cli.OutputStream(), opts.quiet)
-	defer printer.flush()
-
-	printer.printHeader()
-
 	filter, err := parseFilter(opts.filter)
 	if err != nil {
 		return err
@@ -76,10 +90,24 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		return fmt.Errorf("couldn't list playgrounds: %w", err)
 	}
 
+	var filteredPlays []*api.Play
 	for _, play := range plays {
 		if (opts.all || play.Active) && filter.matches(play) {
-			printer.printOne(play)
+			filteredPlays = append(filteredPlays, play)
 		}
+	}
+
+	if opts.output == "json" {
+		return printJSON(cli.OutputStream(), filteredPlays)
+	}
+
+	printer := newListPrinter(cli.OutputStream(), opts.quiet)
+	defer printer.flush()
+
+	printer.printHeader()
+
+	for _, play := range filteredPlays {
+		printer.printOne(play)
 	}
 
 	return nil
@@ -137,6 +165,12 @@ func (p *listPrinter) printOne(play *api.Play) {
 
 func (p *listPrinter) flush() {
 	p.writer.Flush()
+}
+
+func printJSON(outStream io.Writer, plays []*api.Play) error {
+	encoder := json.NewEncoder(outStream)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(plays)
 }
 
 func playStatus(play *api.Play) string {
