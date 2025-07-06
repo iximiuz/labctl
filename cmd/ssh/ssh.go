@@ -102,12 +102,13 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
 	}
 
-	if sess, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command, opts.forwardAgent); err != nil {
+	sess, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command, opts.forwardAgent)
+	if err != nil {
 		return fmt.Errorf("couldn't start SSH session: %w", err)
-	} else {
-		if err := sess.Wait(); err != nil {
-			slog.Debug("SSH session wait said: " + err.Error())
-		}
+	}
+
+	if err := sess.Wait(); err != nil {
+		slog.Debug("SSH session wait said: " + err.Error())
 	}
 
 	return nil

@@ -244,14 +244,16 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	if opts.ssh {
 		cli.PrintAux("SSH-ing into %s machine...\n", opts.machine)
 
-		if sess, err := ssh.StartSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil, opts.forwardAgent); err != nil {
+		sess, err := ssh.StartSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
+		if err != nil {
 			return fmt.Errorf("couldn't start SSH session: %w", err)
-		} else {
-			if err := sess.Wait(); err != nil {
-				slog.Debug("SSH session wait said: " + err.Error())
-			}
-			return nil
 		}
+
+		if err := sess.Wait(); err != nil {
+			slog.Debug("SSH session wait said: " + err.Error())
+		}
+
+		return nil
 	}
 
 	cli.PrintOut("%s\n", play.ID)

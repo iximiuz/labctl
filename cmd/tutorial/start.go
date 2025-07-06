@@ -227,7 +227,7 @@ func runStartTutorial(ctx context.Context, cli labcli.CLI, opts *startOptions) e
 
 					go func() {
 						if err := sess.Wait(); err != nil {
-							slog.Debug("SSH session said: " + err.Error())
+							slog.Debug("SSH session wait said: " + err.Error())
 						}
 						eventCh <- EventSSHConnEnded
 					}()
