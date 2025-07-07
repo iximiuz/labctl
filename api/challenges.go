@@ -108,16 +108,19 @@ func (c *Client) ListAuthoredChallenges(ctx context.Context) ([]Challenge, error
 
 type StartChallengeOptions struct {
 	SafetyDisclaimerConsent bool
+	AsFreeTierUser          bool
 }
 
 func (c *Client) StartChallenge(ctx context.Context, name string, opts StartChallengeOptions) (*Challenge, error) {
 	type startChallengeRequest struct {
 		Started                 bool `json:"started"`
 		SafetyDisclaimerConsent bool `json:"safetyDisclaimerConsent,omitempty"`
+		AsFreeTierUser          bool `json:"asFreeTierUser,omitempty"`
 	}
 	req := startChallengeRequest{
 		Started:                 true,
 		SafetyDisclaimerConsent: opts.SafetyDisclaimerConsent,
+		AsFreeTierUser:          opts.AsFreeTierUser,
 	}
 
 	body, err := toJSONBody(req)

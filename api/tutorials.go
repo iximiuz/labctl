@@ -117,16 +117,20 @@ func (c *Client) DeleteTutorial(ctx context.Context, name string) error {
 
 type StartTutorialOptions struct {
 	SafetyDisclaimerConsent bool
+	AsFreeTierUser          bool
 }
 
 func (c *Client) StartTutorial(ctx context.Context, name string, opts StartTutorialOptions) (*Tutorial, error) {
 	type startTutorialRequest struct {
 		Started                 bool `json:"started"`
 		SafetyDisclaimerConsent bool `json:"safetyDisclaimerConsent,omitempty"`
+		AsFreeTierUser          bool `json:"asFreeTierUser,omitempty"`
 	}
+
 	req := startTutorialRequest{
 		Started:                 true,
 		SafetyDisclaimerConsent: opts.SafetyDisclaimerConsent,
+		AsFreeTierUser:          opts.AsFreeTierUser,
 	}
 
 	body, err := toJSONBody(req)
