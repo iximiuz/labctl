@@ -152,10 +152,14 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 	go func() {
 		defer close(cmdC)
 
+		var err error
+
 		if cmd == "" {
 			err = sess.Shell()
 			if err == nil {
-				if err := sess.Wait(); err != nil {
+				err = sess.Wait()
+				if err != nil {
+					// TODO: is this still necessary?
 					slog.Debug("Waiting for shell failed", "error", err.Error())
 				}
 			}
