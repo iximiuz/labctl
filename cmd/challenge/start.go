@@ -231,12 +231,18 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				if !opts.noSSH {
 					cli.PrintAux("SSH-ing into challenge playground (%s machine)...\n", opts.machine)
 
-					sess, _, err = ssh.StartSSHSession(ctx, cli, chal.Play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
+					var errCh <-chan error
+
+					sess, errCh, err = ssh.StartSSHSession(ctx, cli, chal.Play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
 					if err != nil {
 						return fmt.Errorf("couldn't start SSH session: %w", err) // critical error
 					}
 
 					go func() {
+						if err := <-errCh; err != nil {
+							slog.Debug("SSH session error: " + err.Error())
+						}
+
 						if err := sess.Wait(); err != nil {
 							slog.Debug("SSH session said: " + err.Error())
 						}
