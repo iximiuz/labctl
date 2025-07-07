@@ -102,12 +102,17 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
 	}
 
-	if sess, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command, opts.forwardAgent); err != nil {
+	sess, errCh, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command, opts.forwardAgent)
+	if err != nil {
 		return fmt.Errorf("couldn't start SSH session: %w", err)
-	} else {
-		if err := sess.Wait(); err != nil {
-			slog.Debug("SSH session wait said: " + err.Error())
-		}
+	}
+
+	if err := <-errCh; err != nil {
+		return err
+	}
+
+	if err := sess.Wait(); err != nil {
+		slog.Debug("SSH session wait said: " + err.Error())
 	}
 
 	return nil
@@ -121,7 +126,7 @@ func StartSSHSession(
 	user string,
 	command []string,
 	forwardAgent bool,
-) (*ssh.Session, error) {
+) (*ssh.Session, <-chan error, error) {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:          playID,
 		Machine:         machine,
@@ -130,7 +135,7 @@ func StartSSHSession(
 		SSHIdentityFile: cli.Config().SSHIdentityFile,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("couldn't start tunnel: %w", err)
+		return nil, nil, fmt.Errorf("couldn't start tunnel: %w", err)
 	}
 
 	var (
@@ -173,22 +178,27 @@ func StartSSHSession(
 		return err
 	}, 60, 1*time.Second); err != nil {
 		cancel()
-		return nil, fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
+		return nil, nil, fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
 	}
 
 	sess, err := ssh.NewSession(conn, user, cli.Config().SSHIdentityFile, forwardAgent)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("couldn't create SSH session: %w", err)
+		return nil, nil, fmt.Errorf("couldn't create SSH session: %w", err)
 	}
+
+	runErrCh := make(chan error, 1)
 
 	go func() {
 		defer conn.Close()
 		defer cancel()
-		if err := sess.Run(ctx, cli, strings.Join(command, " ")); err != nil {
-			slog.Error("SSH session error", "error", err.Error())
+		defer close(runErrCh)
+
+		err := sess.Run(ctx, cli, strings.Join(command, " "))
+		if err != nil {
+			runErrCh <- err
 		}
 	}()
 
-	return sess, nil
+	return sess, runErrCh, nil
 }

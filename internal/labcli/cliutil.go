@@ -167,6 +167,10 @@ func NewStatusError(code int, format string, a ...any) StatusError {
 	}
 }
 
+type ExitError interface {
+	ExitStatus() int
+}
+
 func WrapStatusError(err error) error {
 	if err == nil {
 		return nil
@@ -174,6 +178,11 @@ func WrapStatusError(err error) error {
 
 	if errors.As(err, new(StatusError)) {
 		return err
+	}
+
+	var exitErr ExitError
+	if errors.As(err, &exitErr) {
+		return NewStatusError(exitErr.ExitStatus(), err.Error())
 	}
 
 	return NewStatusError(1, err.Error())
