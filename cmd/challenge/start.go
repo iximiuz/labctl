@@ -186,12 +186,16 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 
 	go func() {
 		if err := playConn.WaitPlayReady(startChallengeTimeout, spin); err != nil {
+			slog.Debug("websocket connection failed", "error", err)
+
 			eventCh <- EventWSConnFailed
 			return
 		}
 		eventCh <- EventChallengeReady
 
 		if err := playConn.WaitDone(); err != nil {
+			slog.Debug("websocket connection failed", "error", err)
+
 			eventCh <- EventWSConnFailed
 			return
 		}

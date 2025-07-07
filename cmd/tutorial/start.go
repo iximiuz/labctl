@@ -186,6 +186,8 @@ func runStartTutorial(ctx context.Context, cli labcli.CLI, opts *startOptions) e
 
 	go func() {
 		if err := playConn.WaitPlayReady(startTutorialTimeout, spin); err != nil {
+			slog.Debug("websocket connection failed", "error", err)
+
 			eventCh <- EventWSConnFailed
 			return
 		}
