@@ -35,6 +35,8 @@ type startOptions struct {
 	safetyDisclaimerConsent bool
 
 	forwardAgent bool
+
+	asFreeTierUser bool
 }
 
 func newStartCommand(cli labcli.CLI) *cobra.Command {
@@ -118,6 +120,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`INSECURE: Forward the SSH agent to the playground VM (use at your own risk)`,
 	)
+	flags.BoolVar(
+		&opts.asFreeTierUser,
+		"as-free-tier-user",
+		false,
+		`Run this playground as a free tier user (handy for testing that the playground works on all tiers)`,
+	)
 
 	return cmd
 }
@@ -139,6 +147,7 @@ func runStartTutorial(ctx context.Context, cli labcli.CLI, opts *startOptions) e
 
 	tut, err := cli.Client().StartTutorial(ctx, opts.tutorial, api.StartTutorialOptions{
 		SafetyDisclaimerConsent: opts.safetyDisclaimerConsent,
+		AsFreeTierUser:          opts.asFreeTierUser,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start the tutorial: %w", err)
