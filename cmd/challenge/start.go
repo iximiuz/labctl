@@ -255,6 +255,9 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 						if err := <-errCh; err != nil {
 							slog.Debug("SSH session error: " + err.Error())
 						}
+					}()
+
+					go func() {
 
 						if err := sess.Wait(); err != nil {
 							slog.Debug("SSH session said: " + err.Error())
@@ -309,8 +312,6 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				if !opts.keepAlive {
 					if sess != nil {
 						sess.Close()
-						sess = nil
-						eventCh <- EventSSHConnEnded
 					}
 
 					cli.PrintAux("\r\n\r\nStopping the playground...\r\n")
