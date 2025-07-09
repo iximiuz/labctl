@@ -51,18 +51,60 @@ func NewPlayConn(
 	}
 }
 
+var (
+	playConnDialer = &websocket.Dialer{
+		Proxy: http.ProxyFromEnvironment,
+
+		// Smaller timeout than in the default dialer, but we'll do more attempts.
+		HandshakeTimeout: 30 * time.Second,
+	}
+)
+
 func (pc *PlayConn) Start() error {
 	hconn, err := pc.client.RequestPlayConn(pc.ctx, pc.play.ID)
 	if err != nil {
 		return fmt.Errorf("couldn't create a connection to the challenge playground: %w", err)
 	}
 
-	conn, _, err := websocket.DefaultDialer.DialContext(pc.ctx, hconn.URL, http.Header{
-		"Origin": {pc.origin},
-	})
-	if err != nil {
-		return fmt.Errorf("couldn't connect to play connection WebSocket: %w", err)
+	// Retry connection with exponential backoff
+	var conn *websocket.Conn
+	maxRetries := 10
+	baseDelay := 500 * time.Millisecond
+	maxDelay := 5 * time.Second
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 500ms, 1s, 2s, 4s, 5s, 5s, 5s, 5s, 5s, 5s
+			delay := max(maxDelay, baseDelay*time.Duration(1<<uint(attempt-1)))
+			slog.Debug("Retrying WebSocket connection", "attempt", attempt+1, "delay", delay)
+
+			select {
+			case <-pc.ctx.Done():
+				return fmt.Errorf("context cancelled while retrying WebSocket connection: %w", pc.ctx.Err())
+			case <-time.After(delay):
+			}
+		}
+
+		conn, _, err = playConnDialer.DialContext(pc.ctx, hconn.URL, http.Header{
+			"Origin": {pc.origin},
+		})
+		if err == nil {
+			break // Success!
+		}
+
+		slog.Debug("WebSocket connection attempt failed", "attempt", attempt+1, "error", err)
+
+		// Don't retry on context cancellation/timeout
+		if pc.ctx.Err() != nil {
+			return fmt.Errorf("couldn't connect to play connection WebSocket: %w", err)
+		}
+
+		// If this is the last attempt, return the error
+		if attempt == maxRetries-1 {
+			return fmt.Errorf("couldn't connect to play connection WebSocket after %d attempts: %w", maxRetries, err)
+		}
 	}
+
 	pc.conn = conn
 
 	pc.msgCh = make(chan PlayConnMessage, 1024)
