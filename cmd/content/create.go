@@ -22,8 +22,6 @@ type createOptions struct {
 	name string
 
 	DirOptions
-
-	noSample bool
 }
 
 func newCreateCommand(cli labcli.CLI) *cobra.Command {
@@ -44,13 +42,6 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-
-	flags.BoolVar(
-		&opts.noSample,
-		"no-sample",
-		false,
-		`Don't create a sample piece of content`,
-	)
 
 	opts.AddDirFlag(flags, "Local directory with content files (default: $CWD/<content-name>)")
 
@@ -147,8 +138,7 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 func createChallenge(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	ch, err := cli.Client().CreateChallenge(ctx, api.CreateChallengeRequest{
-		Name:   opts.name,
-		Sample: !opts.noSample,
+		Name: opts.name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create challenge: %w", err)
@@ -161,7 +151,6 @@ func createCourse(ctx context.Context, cli labcli.CLI, opts *createOptions) (con
 	c, err := cli.Client().CreateCourse(ctx, api.CreateCourseRequest{
 		Name:    opts.name,
 		Variant: api.CourseVariantModular,
-		Sample:  !opts.noSample,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create course: %w", err)
@@ -172,8 +161,7 @@ func createCourse(ctx context.Context, cli labcli.CLI, opts *createOptions) (con
 
 func createRoadmap(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	r, err := cli.Client().CreateRoadmap(ctx, api.CreateRoadmapRequest{
-		Name:   opts.name,
-		Sample: !opts.noSample,
+		Name: opts.name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create roadmap: %w", err)
@@ -184,8 +172,7 @@ func createRoadmap(ctx context.Context, cli labcli.CLI, opts *createOptions) (co
 
 func createSkillPath(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	sp, err := cli.Client().CreateSkillPath(ctx, api.CreateSkillPathRequest{
-		Name:   opts.name,
-		Sample: !opts.noSample,
+		Name: opts.name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create skill path: %w", err)
@@ -196,8 +183,7 @@ func createSkillPath(ctx context.Context, cli labcli.CLI, opts *createOptions) (
 
 func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	t, err := cli.Client().CreateTutorial(ctx, api.CreateTutorialRequest{
-		Name:   opts.name,
-		Sample: !opts.noSample,
+		Name: opts.name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create tutorial: %w", err)
@@ -208,8 +194,7 @@ func createTutorial(ctx context.Context, cli labcli.CLI, opts *createOptions) (c
 
 func createTraining(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
 	t, err := cli.Client().CreateTraining(ctx, api.CreateTrainingRequest{
-		Name:   opts.name,
-		Sample: !opts.noSample,
+		Name: opts.name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create training: %w", err)

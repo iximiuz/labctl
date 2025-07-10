@@ -62,8 +62,7 @@ func (ch *Challenge) IsAuthoredBy(userID string) bool {
 }
 
 type CreateChallengeRequest struct {
-	Name   string `json:"name"`
-	Sample bool   `json:"sample"`
+	Name string `json:"name"`
 }
 
 func (c *Client) CreateChallenge(ctx context.Context, req CreateChallengeRequest) (*Challenge, error) {

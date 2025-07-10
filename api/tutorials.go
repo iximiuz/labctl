@@ -60,8 +60,7 @@ func (t *Tutorial) IsAuthoredBy(userID string) bool {
 }
 
 type CreateTutorialRequest struct {
-	Name   string `json:"name"`
-	Sample bool   `json:"sample"`
+	Name string `json:"name"`
 }
 
 func (c *Client) CreateTutorial(ctx context.Context, req CreateTutorialRequest) (*Tutorial, error) {

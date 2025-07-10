@@ -51,8 +51,7 @@ func (t *SkillPath) IsAuthoredBy(userID string) bool {
 }
 
 type CreateSkillPathRequest struct {
-	Name   string `json:"name"`
-	Sample bool   `json:"sample"`
+	Name string `json:"name"`
 }
 
 func (c *Client) CreateSkillPath(ctx context.Context, req CreateSkillPathRequest) (*SkillPath, error) {

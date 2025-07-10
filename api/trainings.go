@@ -51,8 +51,7 @@ func (t *Training) IsAuthoredBy(userID string) bool {
 }
 
 type CreateTrainingRequest struct {
-	Name   string `json:"name"`
-	Sample bool   `json:"sample"`
+	Name string `json:"name"`
 }
 
 func (c *Client) CreateTraining(ctx context.Context, req CreateTrainingRequest) (*Training, error) {

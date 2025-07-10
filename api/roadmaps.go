@@ -51,8 +51,7 @@ func (t *Roadmap) IsAuthoredBy(userID string) bool {
 }
 
 type CreateRoadmapRequest struct {
-	Name   string `json:"name"`
-	Sample bool   `json:"sample"`
+	Name string `json:"name"`
 }
 
 func (c *Client) CreateRoadmap(ctx context.Context, req CreateRoadmapRequest) (*Roadmap, error) {
