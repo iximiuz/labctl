@@ -178,9 +178,6 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		if len(manifest.Playground.InitTasks) > 0 {
 			req.InitTasks = manifest.Playground.InitTasks
 		}
-		if len(manifest.Playground.InitConditions.Values) > 0 {
-			req.InitConditions = &manifest.Playground.InitConditions
-		}
 	}
 
 	play, err := cli.Client().CreatePlay(ctx, req)
