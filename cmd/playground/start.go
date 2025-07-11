@@ -37,6 +37,8 @@ type startOptions struct {
 
 	asFreeTierUser bool
 
+	initConditions map[string]string
+
 	quiet bool
 }
 
@@ -143,6 +145,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`INSECURE: Forward the SSH agent to the playground VM (use at your own risk)`,
 	)
+	flags.StringToStringVar(
+		&opts.initConditions,
+		"init-condition",
+		nil,
+		`Set init conditions as key-value pairs (can be used multiple times)`,
+	)
 
 	return cmd
 }
@@ -166,6 +174,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	// Build CreatePlay request
 	req := api.CreatePlayRequest{
 		Playground:              opts.playground,
+		InitConditions:          opts.initConditions,
 		SafetyDisclaimerConsent: opts.safetyDisclaimerConsent,
 		AsFreeTierUser:          opts.asFreeTierUser,
 	}
