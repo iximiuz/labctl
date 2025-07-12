@@ -149,7 +149,7 @@ type CreatePlayRequest struct {
 	Networks                []PlaygroundNetwork `json:"networks,omitempty"`
 	Machines                []PlaygroundMachine `json:"machines,omitempty"`
 	InitTasks               map[string]InitTask `json:"initTasks,omitempty"`
-	InitConditions          *InitConditions     `json:"initConditions,omitempty"`
+	InitConditions          map[string]string   `json:"initConditions,omitempty"`
 	SafetyDisclaimerConsent bool                `json:"safetyDisclaimerConsent"`
 	AsFreeTierUser          bool                `json:"asFreeTierUser,omitempty"`
 }
