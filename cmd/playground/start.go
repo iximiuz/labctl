@@ -145,9 +145,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`INSECURE: Forward the SSH agent to the playground VM (use at your own risk)`,
 	)
-	flags.StringToStringVar(
+	flags.StringToStringVarP(
 		&opts.initConditions,
 		"init-condition",
+		"i",
 		nil,
 		`Set init conditions as key-value pairs (can be used multiple times)`,
 	)
