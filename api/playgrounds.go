@@ -117,6 +117,7 @@ type PlaygroundTab struct {
 	Name        string `yaml:"name" json:"name"`
 	Machine     string `yaml:"machine,omitempty" json:"machine,omitempty"`
 	Number      int    `yaml:"number,omitempty" json:"number,omitempty"`
+	Access      string `yaml:"access,omitempty" json:"access,omitempty"`
 	Tls         bool   `yaml:"tls,omitempty" json:"tls,omitempty"`
 	HostRewrite string `yaml:"hostRewrite,omitempty" json:"hostRewrite,omitempty"`
 	PathRewrite string `yaml:"pathRewrite,omitempty" json:"pathRewrite,omitempty"`
