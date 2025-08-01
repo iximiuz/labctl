@@ -109,6 +109,7 @@ type PlaygroundMachine struct {
 	Network      *MachineNetwork      `yaml:"network,omitempty" json:"network,omitempty"`
 	Resources    *MachineResources    `yaml:"resources,omitempty" json:"resources,omitempty"`
 	StartupFiles []MachineStartupFile `yaml:"startupFiles,omitempty" json:"startupFiles,omitempty"`
+	NoSSH        bool                 `yaml:"noSSH,omitempty" json:"noSSH,omitempty"`
 }
 
 type PlaygroundTab struct {
