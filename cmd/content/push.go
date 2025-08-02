@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
@@ -235,7 +237,12 @@ func RunPushWatch(ctx context.Context, cli labcli.CLI, config PushConfig) error 
 }
 
 func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfig, state pushState) error {
-	var merr error
+	// Arbitrary max goroutines to not overload the server
+	const concurrency = 7
+
+	p := pool.New().WithMaxGoroutines(concurrency).WithErrors().WithContext(ctx)
+
+	var mu sync.Mutex
 
 	// Upload new and update existing files.
 	for _, file := range state.toUpload() {
@@ -253,36 +260,46 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 			}
 		}
 
-		if filepath.Ext(file) == ".md" {
-			content, err := os.ReadFile(filepath.Join(state.dir, file))
-			if err != nil {
-				merr = errors.Join(merr, fmt.Errorf("couldn't read content markdown file %q: %w", file, err))
-				continue
+		p.Go(func(ctx context.Context) error {
+			if filepath.Ext(file) == ".md" {
+				content, err := os.ReadFile(filepath.Join(state.dir, file))
+				if err != nil {
+					return fmt.Errorf("couldn't read content markdown file %q: %w", file, err)
+				}
+
+				if err := cli.Client().PutContentMarkdown(
+					ctx,
+					config.Kind,
+					config.Name,
+					file,
+					string(content),
+				); err != nil {
+					return fmt.Errorf("couldn't upload content markdown file %q: %w", file, err)
+				}
+			} else {
+				if err := cli.Client().UploadContentFile(
+					ctx,
+					config.Kind,
+					config.Name,
+					file,
+					filepath.Join(state.dir, file),
+				); err != nil {
+					return fmt.Errorf("couldn't upload content file %q: %w", file, err)
+				}
 			}
 
-			if err := cli.Client().PutContentMarkdown(
-				ctx,
-				config.Kind,
-				config.Name,
-				file,
-				string(content),
-			); err != nil {
-				merr = errors.Join(merr, fmt.Errorf("couldn't upload content markdown file %q: %w", file, err))
-			}
-		} else {
-			if err := cli.Client().UploadContentFile(
-				ctx,
-				config.Kind,
-				config.Name,
-				file,
-				filepath.Join(state.dir, file),
-			); err != nil {
-				merr = errors.Join(merr, fmt.Errorf("couldn't upload content file %q: %w", file, err))
-			}
-		}
+			mu.Lock()
+			state.remoteFiles[file] = state.localFiles[file]
+			mu.Unlock()
 
-		state.remoteFiles[file] = state.localFiles[file]
+			return nil
+		})
 	}
+
+	uploadErr := p.Wait()
+
+	// Reset pool for delete
+	p = pool.New().WithMaxGoroutines(concurrency).WithErrors().WithContext(ctx)
 
 	// Delete remote files that don't exist locally.
 	for _, file := range state.toDelete() {
@@ -298,15 +315,24 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 			continue
 		}
 
-		if err := cli.Client().DeleteContentFile(ctx, config.Kind, config.Name, file); err != nil {
-			merr = errors.Join(merr, fmt.Errorf("couldn't delete remote content file %q: %w", file, err))
-			continue
-		}
+		p.Go(func(ctx context.Context) error {
+			err := cli.Client().DeleteContentFile(ctx, config.Kind, config.Name, file)
 
-		delete(state.remoteFiles, file)
+			if err != nil {
+				return fmt.Errorf("couldn't delete remote content file %q: %w", file, err)
+			}
+
+			mu.Lock()
+			delete(state.remoteFiles, file)
+			mu.Unlock()
+
+			return nil
+		})
 	}
 
-	return merr
+	deleteErr := p.Wait()
+
+	return errors.Join(uploadErr, deleteErr)
 }
 
 func listContentFilesRemote(ctx context.Context, client *api.Client, kind content.ContentKind, name string) (map[string]string, error) {
