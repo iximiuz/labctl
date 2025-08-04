@@ -6,6 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/briandowns/spinner v1.23.2
+	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/charmbracelet/huh v0.7.0
 	github.com/docker/cli v28.3.2+incompatible
 	github.com/dustin/go-humanize v1.0.1
