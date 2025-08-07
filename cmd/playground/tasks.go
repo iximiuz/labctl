@@ -22,8 +22,8 @@ type tasksOptions struct {
 }
 
 func (opts *tasksOptions) validate() error {
-	if opts.output != "table" && opts.output != "json" && opts.output != "name" {
-		return fmt.Errorf("invalid output format: %s (supported formats: table, json, name)", opts.output)
+	if opts.output != "table" && opts.output != "json" && opts.output != "name" && opts.output != "none" {
+		return fmt.Errorf("invalid output format: %s (supported formats: table, json, name, none)", opts.output)
 	}
 
 	return nil
@@ -51,7 +51,7 @@ func newTasksCommand(cli labcli.CLI) *cobra.Command {
 		"output",
 		"o",
 		"table",
-		"Output format: table, json, name",
+		"Output format: table, json, name, none",
 	)
 
 	flags.BoolVar(
@@ -128,12 +128,14 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 		return err
 	}
 
-	printer := newPrinter(cli.OutputStream(), opts.output)
+	if opts.output != "none" {
+		printer := newPrinter(cli.OutputStream(), opts.output)
 
-	if err := printer.Print(play.Tasks); err != nil {
-		return err
+		if err := printer.Print(play.Tasks); err != nil {
+			return err
+		}
+		defer printer.Flush()
 	}
-	defer printer.Flush()
 
 	if err != nil {
 		return labcli.NewStatusError(2, err.Error())
