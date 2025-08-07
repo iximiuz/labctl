@@ -2,9 +2,12 @@ package playground
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
@@ -12,7 +15,10 @@ import (
 )
 
 type tasksOptions struct {
-	output string
+	output   string
+	wait     bool
+	failFast bool
+	timeout  time.Duration
 }
 
 func (opts *tasksOptions) validate() error {
@@ -48,22 +54,90 @@ func newTasksCommand(cli labcli.CLI) *cobra.Command {
 		"Output format: table, json, name",
 	)
 
+	flags.BoolVar(
+		&opts.wait,
+		"wait",
+		false,
+		"Wait for each task to reach its final state",
+	)
+
+	flags.BoolVar(
+		&opts.failFast,
+		"fail-fast",
+		false,
+		"If any of the tasks fail while waiting, exit with an error immediately",
+	)
+
+	flags.DurationVar(
+		&opts.timeout,
+		"timeout",
+		30*time.Second,
+		"Timeout to wait for tasks to finish",
+	)
+
 	return cmd
 }
 
 func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts *tasksOptions) error {
-	play, err := cli.Client().GetPlay(ctx, playgroundID)
-	if err != nil {
-		return fmt.Errorf("couldn't get playground: %w", err)
+	var (
+		errFailed     = errors.New("some tasks failed")
+		errUnfinished = errors.New("timed out waiting for tasks to finish")
+	)
+	operation := func() (*api.Play, error) {
+		play, err := cli.Client().GetPlay(ctx, playgroundID)
+		if err != nil {
+			return nil, backoff.Permanent(fmt.Errorf("couldn't get playground: %w", err))
+		}
+
+		if !opts.wait {
+			return play, nil
+		}
+
+		var failed, unfinished bool
+
+		for _, task := range play.Tasks {
+			if task.Status == api.PlayTaskStatusFailed {
+				failed = true
+
+				break
+			}
+
+			if !taskIsFinished(task) {
+				unfinished = true
+			}
+		}
+
+		if failed && opts.failFast {
+			return play, backoff.Permanent(errFailed)
+		} else if failed {
+			return play, errFailed
+		} else if unfinished {
+			return play, errUnfinished
+		}
+
+		return play, nil
+	}
+
+	play, err := backoff.Retry(
+		ctx,
+		operation,
+		backoff.WithMaxElapsedTime(opts.timeout),
+		backoff.WithBackOff(backoff.NewExponentialBackOff()),
+	)
+	if err != nil && !errors.Is(err, errFailed) && !errors.Is(err, errUnfinished) {
+		return err
 	}
 
 	printer := newPrinter(cli.OutputStream(), opts.output)
 
-	err = printer.Print(play.Tasks)
-	if err != nil {
+	if err := printer.Print(play.Tasks); err != nil {
 		return err
 	}
 	defer printer.Flush()
+
+	if err != nil {
+		return labcli.NewStatusError(2, err.Error())
+	}
 
 	return nil
 }
@@ -119,4 +193,8 @@ func formatTaskStatus(status api.PlayTaskStatus) string {
 	default:
 		return "unknown"
 	}
+}
+
+func taskIsFinished(task api.PlayTask) bool {
+	return task.Status == api.PlayTaskStatusCompleted || task.Status == api.PlayTaskStatusFailed
 }
