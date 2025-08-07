@@ -29,6 +29,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newManifestCommand(cli),
 		newUpdateCommand(cli),
 		newRemoveCommand(cli),
+		newTasksCommand(cli),
 	)
 
 	return cmd
