@@ -11,13 +11,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/cenkalti/backoff/v5"
 )
 
 var (
 	ErrAuthenticationRequired = errors.New("authentication required")
 	ErrGatewayTimeout         = errors.New("gateway timeout")
 	ErrNotFound               = errors.New("not found")
+	ErrRateLimitExceeded      = errors.New("rate limit exceeded")
 )
 
 func isAuthenticationRequiredResponse(resp *http.Response) bool {
@@ -30,6 +35,10 @@ func isGatewayTimeoutResponse(resp *http.Response) bool {
 
 func isNotFoundResponse(resp *http.Response) bool {
 	return resp.StatusCode == http.StatusNotFound
+}
+
+func isRateLimitExceededResponse(resp *http.Response) bool {
+	return resp.StatusCode == http.StatusTooManyRequests
 }
 
 type Client struct {
@@ -356,29 +365,52 @@ func (c *Client) newRequest(
 }
 
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
+	operation := func() (*http.Response, error) {
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			switch resp.StatusCode {
+			case http.StatusUnauthorized:
+				return nil, backoff.Permanent(ErrAuthenticationRequired)
+
+			case http.StatusNotFound:
+				return nil, backoff.Permanent(ErrNotFound)
+
+			case http.StatusGatewayTimeout:
+				return nil, ErrGatewayTimeout
+
+			case http.StatusTooManyRequests:
+				if reset, e := strconv.ParseInt(resp.Header.Get("X-Ratelimit-Reset"), 10, 0); e == nil && reset > 0 {
+					return nil, backoff.RetryAfter(int(time.Until(time.Unix(int64(reset), 0)).Seconds()))
+				}
+
+				return nil, ErrRateLimitExceeded
+			}
+
+			return nil, backoff.Permanent(fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body))
+		}
+
+		return resp, nil
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if isAuthenticationRequiredResponse(resp) {
-			return nil, ErrAuthenticationRequired
-		}
-		if isGatewayTimeoutResponse(resp) {
-			return nil, ErrGatewayTimeout
-		}
-		if isNotFoundResponse(resp) {
-			return nil, ErrNotFound
-		}
-
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body)
+	maxRetries := uint(5)
+	if req.Body != nil && req.GetBody == nil { // Body cannot be reset, so we can only read it once
+		maxRetries = 1
 	}
 
-	return resp, nil
+	return backoff.Retry(
+		req.Context(),
+		operation,
+		backoff.WithMaxTries(maxRetries),
+		backoff.WithMaxElapsedTime(10*time.Second),
+		backoff.WithBackOff(backoff.NewExponentialBackOff()),
+	)
 }
 
 func base64Encode(s string) string {
