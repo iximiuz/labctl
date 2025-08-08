@@ -122,11 +122,14 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 		return play, nil
 	}
 
+	b := backoff.NewExponentialBackOff()
+	b.MaxInterval = 30 * time.Second
+
 	play, err := backoff.Retry(
 		ctx,
 		operation,
 		backoff.WithMaxElapsedTime(opts.timeout),
-		backoff.WithBackOff(backoff.NewExponentialBackOff()),
+		backoff.WithBackOff(b),
 	)
 	if err != nil && !errors.Is(err, errFailed) && !errors.Is(err, errUnfinished) {
 		return err
