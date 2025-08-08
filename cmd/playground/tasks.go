@@ -71,7 +71,7 @@ func newTasksCommand(cli labcli.CLI) *cobra.Command {
 	flags.DurationVar(
 		&opts.timeout,
 		"timeout",
-		30*time.Second,
+		-1,
 		"Timeout to wait for tasks to finish",
 	)
 
