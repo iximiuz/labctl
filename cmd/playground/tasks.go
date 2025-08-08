@@ -89,6 +89,10 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 			return nil, backoff.Permanent(fmt.Errorf("couldn't get playground: %w", err))
 		}
 
+		if !play.Active {
+			return play, backoff.Permanent(errors.New("play has been terminated"))
+		}
+
 		if !opts.wait {
 			return play, nil
 		}
