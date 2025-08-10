@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/docker/cli/cli/streams"
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/config"
-	"github.com/sirupsen/logrus"
 )
 
 type Streams interface {
@@ -129,7 +129,7 @@ func (c *cli) Confirm(title, affirmative, negative string) bool {
 	var confirm bool
 
 	if err := huh.NewConfirm().Title(title).Affirmative(affirmative).Negative(negative).Value(&confirm).Run(); err != nil {
-		logrus.WithError(err).Warn("Confirmation prompt failed")
+		slog.Warn("Confirmation prompt failed", "error", err.Error())
 		return false
 	}
 
