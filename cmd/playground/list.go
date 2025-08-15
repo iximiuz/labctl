@@ -2,11 +2,9 @@ package playground
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -97,80 +95,62 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		}
 	}
 
-	if opts.output == "json" {
-		return printJSON(cli.OutputStream(), filteredPlays)
+	if opts.quiet {
+		for _, play := range filteredPlays {
+			fmt.Fprintln(cli.OutputStream(), play.ID)
+		}
+		return nil
 	}
 
-	printer := newListPrinter(cli.OutputStream(), opts.quiet)
-	defer printer.flush()
+	printer := newListPrinter(cli.OutputStream(), opts.output)
 
-	printer.printHeader()
-
-	for _, play := range filteredPlays {
-		printer.printOne(play)
+	if err := printer.Print(filteredPlays); err != nil {
+		return err
 	}
+	defer printer.Flush()
 
 	return nil
 }
 
-type listPrinter struct {
-	quiet  bool
-	header []string
-	writer *tabwriter.Writer
+type listPrinter interface {
+	Print([]*api.Play) error
+	Flush()
 }
 
-func newListPrinter(outStream io.Writer, quiet bool) *listPrinter {
-	header := []string{
-		"PLAYGROUND ID",
-		"NAME",
-		"CREATED",
-		"STATUS",
-		"LINK",
+func newListPrinter(w io.Writer, output string) listPrinter {
+	switch output {
+	case "table":
+		header := []string{
+			"PLAYGROUND ID",
+			"NAME",
+			"CREATED",
+			"STATUS",
+			"LINK",
+		}
+
+		rowFunc := func(play *api.Play) []string {
+			var link string
+			if play.Active || play.TutorialName+play.ChallengeName+play.CourseName != "" {
+				link = play.PageURL
+			}
+
+			return []string{
+				play.ID,
+				play.Playground.Name,
+				humanize.Time(safeParseTime(play.CreatedAt)),
+				playStatus(play),
+				link,
+			}
+		}
+
+		return labcli.NewSliceTablePrinter[*api.Play](w, header, rowFunc)
+	case "json":
+		return labcli.NewJSONPrinter[*api.Play, []*api.Play](w)
+	// case "id":
+	default:
+		// This should never happen
+		panic(fmt.Errorf("invalid output format: %s (supported formats: table, json)", output))
 	}
-
-	return &listPrinter{
-		quiet:  quiet,
-		header: header,
-		writer: tabwriter.NewWriter(outStream, 0, 4, 2, ' ', 0),
-	}
-}
-
-func (p *listPrinter) printHeader() {
-	if !p.quiet {
-		fmt.Fprintln(p.writer, strings.Join(p.header, "\t"))
-	}
-}
-
-func (p *listPrinter) printOne(play *api.Play) {
-	if p.quiet {
-		fmt.Fprintln(p.writer, play.ID)
-		return
-	}
-
-	var link string
-	if play.Active || play.TutorialName+play.ChallengeName+play.CourseName != "" {
-		link = play.PageURL
-	}
-
-	fields := []string{
-		play.ID,
-		play.Playground.Name,
-		humanize.Time(safeParseTime(play.CreatedAt)),
-		playStatus(play),
-		link,
-	}
-
-	fmt.Fprintln(p.writer, strings.Join(fields, "\t"))
-}
-
-func (p *listPrinter) flush() {
-	p.writer.Flush()
-}
-
-func printJSON(outStream io.Writer, plays []*api.Play) error {
-	encoder := json.NewEncoder(outStream)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(plays)
 }
 
 func playStatus(play *api.Play) string {

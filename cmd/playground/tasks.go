@@ -136,7 +136,7 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 	}
 
 	if opts.output != "none" {
-		printer := newPrinter(cli.OutputStream(), opts.output)
+		printer := newTaskListPrinter(cli.OutputStream(), opts.output)
 
 		if err := printer.Print(play.Tasks); err != nil {
 			return err
@@ -151,12 +151,12 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 	return nil
 }
 
-type printer interface {
+type taskListPrinter interface {
 	Print(map[string]api.PlayTask) error
 	Flush()
 }
 
-func newPrinter(w io.Writer, output string) printer {
+func newTaskListPrinter(w io.Writer, output string) taskListPrinter {
 	switch output {
 	case "table":
 		header := []string{
