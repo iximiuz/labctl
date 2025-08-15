@@ -114,6 +114,26 @@ func (p *Play) IsCompletable() bool {
 	return true
 }
 
+func (p *Play) CountTasks() int {
+	count := 0
+	for _, task := range p.Tasks {
+		if !task.Helper && !task.Init {
+			count++
+		}
+	}
+	return count
+}
+
+func (p *Play) CountCompletedTasks() int {
+	count := 0
+	for _, task := range p.Tasks {
+		if !task.Helper && !task.Init && task.Status == PlayTaskStatusCompleted {
+			count++
+		}
+	}
+	return count
+}
+
 type Machine struct {
 	Name      string           `json:"name"`
 	Users     []MachineUser    `json:"users"`

@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/cenkalti/backoff/v5"
 	"github.com/spf13/cobra"
 
@@ -83,6 +84,10 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 		errFailed     = errors.New("some tasks failed")
 		errUnfinished = errors.New("timed out waiting for tasks to finish")
 	)
+
+	spin := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
+	spin.Writer = cli.AuxStream()
+
 	operation := func() (*api.Play, error) {
 		play, err := cli.Client().GetPlay(ctx, playgroundID)
 		if err != nil {
@@ -96,6 +101,20 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 		if !opts.wait {
 			return play, nil
 		}
+
+		if play.IsInitialized() {
+			spin.Prefix = fmt.Sprintf(
+				"Waiting for tasks to complete: %d/%d ",
+				play.CountCompletedTasks(), play.CountTasks(),
+			)
+		} else {
+			spin.Prefix = fmt.Sprintf(
+				"Warming up playground... Init tasks completed: %d/%d ",
+				play.CountCompletedInitTasks(), play.CountInitTasks(),
+			)
+		}
+
+		spin.Start()
 
 		var failed, unfinished bool
 
@@ -123,7 +142,8 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 	}
 
 	b := backoff.NewExponentialBackOff()
-	b.MaxInterval = 30 * time.Second
+	b.Multiplier = 1.3
+	b.MaxInterval = 10 * time.Second
 
 	play, err := backoff.Retry(
 		ctx,
@@ -131,6 +151,7 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 		backoff.WithMaxElapsedTime(opts.timeout),
 		backoff.WithBackOff(b),
 	)
+	spin.Stop()
 	if err != nil && !errors.Is(err, errFailed) && !errors.Is(err, errUnfinished) {
 		return err
 	}
