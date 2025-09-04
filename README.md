@@ -180,7 +180,7 @@ labctl playground list
 And stop a running playground with:
 
 ```sh
-labctl playground stop <playground-id>
+labctl playground stop <playground-ids>
 ```
 
 ### Signing out and deleting the CLI
