@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 	"text/tabwriter"
+
 	"github.com/spf13/cobra"
+
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 func newMachinesCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "machines [Playground ID]",
-		Short: `List machines of a specific playground by Playground ID`,
+		Use:   "machines <playground-id>",
+		Short: `List machines of a specific playground session`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			playgroundID := args[0]

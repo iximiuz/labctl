@@ -47,7 +47,7 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "start [flags] <playground-name>",
-		Short: `Start a new playground, possibly open it in a browser`,
+		Short: `Start a new playground session, possibly opening it in a browser`,
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)

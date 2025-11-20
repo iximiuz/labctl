@@ -51,7 +51,7 @@ func runListChallenges(ctx context.Context, cli labcli.CLI, opts *listOptions) e
 
 	var challenges []*api.Challenge
 	for _, play := range plays {
-		if !play.Active || play.ChallengeName == "" {
+		if !play.IsActive() || play.ChallengeName == "" {
 			continue
 		}
 

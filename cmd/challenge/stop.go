@@ -57,7 +57,7 @@ func runStopChallenge(ctx context.Context, cli labcli.CLI, opts *stopOptions) er
 		return fmt.Errorf("couldn't get the challenge: %w", err)
 	}
 
-	if chal.Play == nil || !chal.Play.Active {
+	if chal.Play == nil || !chal.Play.IsActive() {
 		cli.PrintErr("Challenge is not being attempted - nothing to stop.\n")
 		return nil
 	}

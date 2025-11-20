@@ -7,6 +7,31 @@ import (
 	"time"
 )
 
+type PlayState string
+
+const (
+	StateCreated    PlayState = "CREATED"
+	StateWarmingUp  PlayState = "WARMING_UP"
+	StateWarmedUp   PlayState = "WARMED_UP"
+	StateStarting   PlayState = "STARTING"
+	StateRunning    PlayState = "RUNNING"
+	StateStopping   PlayState = "STOPPING"
+	StateStopped    PlayState = "STOPPED"
+	StateDestroying PlayState = "DESTROYING"
+	StateDestroyed  PlayState = "DESTROYED"
+	StateFailed     PlayState = "FAILED"
+)
+
+type StateEvent struct {
+	State PlayState `json:"state" yaml:"state"`
+	Error bool      `json:"error,omitempty" yaml:"error,omitempty"`
+	At    string    `json:"at" yaml:"at"`
+}
+
+type PlayStatus struct {
+	StateEvents []StateEvent `json:"stateEvents" yaml:"stateEvents"`
+}
+
 type Play struct {
 	ID string `json:"id" yaml:"id"`
 
@@ -15,6 +40,8 @@ type Play struct {
 	LastStateAt string `json:"lastStateAt" yaml:"lastStateAt"`
 
 	ExpiresIn int `json:"expiresIn" yaml:"expiresIn"`
+
+	Status *PlayStatus `json:"status,omitempty" yaml:"status,omitempty"`
 
 	Playground Playground `json:"playground" yaml:"playground"`
 
@@ -48,11 +75,6 @@ type Play struct {
 
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
 
-	Active    bool `json:"active" yaml:"active"`
-	Running   bool `json:"running" yaml:"running"`
-	Destroyed bool `json:"destroyed" yaml:"destroyed"`
-	Failed    bool `json:"failed" yaml:"failed"`
-
 	Machines []Machine `json:"machines" yaml:"machines"`
 
 	Tasks map[string]PlayTask `json:"tasks,omitempty" yaml:"tasks,omitempty"`
@@ -65,6 +87,24 @@ func (p *Play) GetMachine(name string) *Machine {
 		}
 	}
 	return nil
+}
+
+func (p *Play) StateIs(state PlayState) bool {
+	// Older plays don't have a status
+	if p.Status == nil {
+		return false
+	}
+
+	if len(p.Status.StateEvents) == 0 {
+		return false
+	}
+
+	return p.Status.StateEvents[len(p.Status.StateEvents)-1].State == state
+}
+
+func (p *Play) IsActive() bool {
+	// All but the terminal states
+	return !p.StateIs(StateStopped) && !p.StateIs(StateDestroyed)
 }
 
 func (p *Play) IsInitialized() bool {
@@ -194,6 +234,37 @@ func (c *Client) ListPlays(ctx context.Context) ([]*Play, error) {
 	return plays, c.GetInto(ctx, "/plays", nil, nil, &plays)
 }
 
+func (c *Client) StopPlay(ctx context.Context, id string) (*Play, error) {
+	body, err := toJSONBody(map[string]any{"action": "stop"})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+func (c *Client) RestartPlay(ctx context.Context, id string) (*Play, error) {
+	body, err := toJSONBody(map[string]any{"action": "restart"})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+func (c *Client) DestroyPlay(ctx context.Context, id string) error {
+	body, err := toJSONBody(map[string]any{"action": "destroy"})
+	if err != nil {
+		return err
+	}
+
+	var p Play
+	return c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+// Deprecated: Use DestroyPlay instead
 func (c *Client) DeletePlay(ctx context.Context, id string) error {
 	resp, err := c.Delete(ctx, "/plays/"+id, nil, nil)
 	if err != nil {

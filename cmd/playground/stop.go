@@ -24,7 +24,7 @@ func newStopCommand(cli labcli.CLI) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "stop [flags] <playground-id>",
-		Short: `Stop one or more playgrounds`,
+		Short: `Stop a running playground session, preserving its state for future use`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
@@ -51,21 +51,21 @@ func newStopCommand(cli labcli.CLI) *cobra.Command {
 func runStopPlayground(ctx context.Context, cli labcli.CLI, opts *stopOptions) error {
 	cli.PrintAux("Stopping playground %s...\n", opts.playID)
 
-	if err := cli.Client().DeletePlay(ctx, opts.playID); err != nil {
-		return fmt.Errorf("couldn't delete the playground: %w", err)
+	if _, err := cli.Client().StopPlay(ctx, opts.playID); err != nil {
+		return fmt.Errorf("couldn't stop the playground: %w", err)
 	}
 
 	s := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
 	s.Writer = cli.AuxStream()
-	s.Prefix = "Waiting for playground to terminate... "
+	s.Prefix = "Waiting for playground to stop... "
 	s.Start()
 
 	ctx, cancel := context.WithTimeout(ctx, stopCommandTimeout)
 	defer cancel()
 
 	for ctx.Err() == nil {
-		if play, err := cli.Client().GetPlay(ctx, opts.playID); err == nil && !play.Active {
-			s.FinalMSG = "Waiting for playground to terminate... Done.\n"
+		if play, err := cli.Client().GetPlay(ctx, opts.playID); err == nil && !play.IsActive() {
+			s.FinalMSG = "Waiting for playground to stop... Done.\n"
 			s.Stop()
 
 			return nil

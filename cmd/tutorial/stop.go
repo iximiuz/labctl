@@ -57,7 +57,7 @@ func runStopTutorial(ctx context.Context, cli labcli.CLI, opts *stopOptions) err
 		return fmt.Errorf("couldn't get the tutorial: %w", err)
 	}
 
-	if tut.Play == nil || !tut.Play.Active {
+	if tut.Play == nil || !tut.Play.IsActive() {
 		cli.PrintErr("Tutorial is not running - nothing to stop.\n")
 		return nil
 	}

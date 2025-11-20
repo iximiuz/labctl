@@ -34,7 +34,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list [flags]",
 		Aliases: []string{"ls"},
-		Short:   `List current or recently run playgrounds (up to 50)`,
+		Short:   `List recent playground sessions`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return opts.validate()
 		},
@@ -50,7 +50,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 		"all",
 		"a",
 		false,
-		`List all playgrounds (including terminated)`,
+		`List all playgrounds (including stopped and recently terminated)`,
 	)
 	flags.BoolVarP(
 		&opts.quiet,
@@ -90,7 +90,7 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 
 	var filteredPlays []*api.Play
 	for _, play := range plays {
-		if (opts.all || play.Active) && filter.matches(play) {
+		if (opts.all || play.IsActive() || play.StateIs(api.StateStopped)) && filter.matches(play) {
 			filteredPlays = append(filteredPlays, play)
 		}
 	}
@@ -130,7 +130,7 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 
 		rowFunc := func(play *api.Play) []string {
 			var link string
-			if play.Active || play.TutorialName+play.ChallengeName+play.CourseName != "" {
+			if play.IsActive() || play.TutorialName+play.ChallengeName+play.CourseName != "" {
 				link = play.PageURL
 			}
 
@@ -154,20 +154,16 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 }
 
 func playStatus(play *api.Play) string {
-	if play.Running {
-		return fmt.Sprintf("running (expires in %s)",
-			humanize.Time(time.Now().Add(time.Duration(play.ExpiresIn)*time.Millisecond)))
-	}
-	if play.Destroyed {
-		return fmt.Sprintf("terminated %s",
-			humanize.Time(safeParseTime(play.LastStateAt)))
-	}
-	if play.Failed {
-		return fmt.Sprintf("failed %s",
-			humanize.Time(safeParseTime(play.LastStateAt)))
+	if play.Status == nil || len(play.Status.StateEvents) == 0 {
+		return "UNKNOWN"
 	}
 
-	return "unknown"
+	if play.StateIs(api.StateRunning) {
+		return fmt.Sprintf("RUNNING (expires in %s)",
+			humanize.Time(time.Now().Add(time.Duration(play.ExpiresIn)*time.Millisecond)))
+	}
+
+	return string(play.Status.StateEvents[len(play.Status.StateEvents)-1].State)
 }
 
 func safeParseTime(s string) time.Time {

@@ -318,7 +318,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 
 					if chal, err := cli.Client().StopChallenge(ctx, chal.Name); err != nil {
 						cli.PrintErr("Error stopping the challenge: %v\n", err)
-					} else if chal.Play == nil || !chal.Play.Active {
+					} else if chal.Play == nil || !chal.Play.IsActive() {
 						cli.PrintAux("Playground stopped.\r\n")
 					}
 				}

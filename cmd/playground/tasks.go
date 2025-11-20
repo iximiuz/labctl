@@ -40,7 +40,7 @@ func newTasksCommand(cli labcli.CLI) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "tasks <play-id>",
-		Short: "List tasks of a running playground",
+		Short: "List tasks of a playground session",
 		Args:  cobra.ExactArgs(1),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return opts.validate()
@@ -104,10 +104,6 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 		play, err := cli.Client().GetPlay(ctx, playgroundID)
 		if err != nil {
 			return nil, backoff.Permanent(fmt.Errorf("couldn't get playground: %w", err))
-		}
-
-		if !play.Active {
-			return play, backoff.Permanent(errors.New("play has been terminated"))
 		}
 
 		if !opts.wait {

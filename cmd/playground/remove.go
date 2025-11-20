@@ -19,7 +19,7 @@ func newRemoveCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "remove [flags] <name>",
 		Aliases: []string{"rm"},
-		Short:   "Remove a playground you authored.",
+		Short:   "Remove a playground you authored",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.name = args[0]
