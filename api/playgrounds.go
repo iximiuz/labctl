@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/url"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Playground struct {
@@ -71,12 +73,25 @@ type MachineUser struct {
 	Welcome string `yaml:"welcome,omitempty" json:"welcome,omitempty"`
 }
 
+type RemoteSnapshot struct {
+	ID      string `yaml:"id" json:"id"`
+	LeaseID string `yaml:"leaseId" json:"leaseId"`
+}
+
 type MachineDrive struct {
 	Source     string `yaml:"source,omitempty" json:"source,omitempty"`
 	Mount      string `yaml:"mount,omitempty" json:"mount,omitempty"`
 	Size       string `yaml:"size,omitempty" json:"size,omitempty"`
 	Filesystem string `yaml:"filesystem,omitempty" json:"filesystem,omitempty"`
 	ReadOnly   bool   `yaml:"readOnly,omitempty" json:"readOnly,omitempty"`
+	Persistent bool   `yaml:"persistent,omitempty" json:"persistent,omitempty"`
+
+	Snapshot *RemoteSnapshot `yaml:"snapshot,omitempty" json:"snapshot,omitempty"`
+}
+
+type MachineKernel struct {
+	Source   string          `yaml:"source,omitempty" json:"source,omitempty"`
+	Snapshot *RemoteSnapshot `yaml:"snapshot,omitempty" json:"snapshot,omitempty"`
 }
 
 type MachineNetworkInterface struct {
@@ -104,12 +119,70 @@ type MachineStartupFile struct {
 type PlaygroundMachine struct {
 	Name         string               `yaml:"name" json:"name"`
 	Users        []MachineUser        `yaml:"users,omitempty" json:"users,omitempty"`
-	Kernel       string               `yaml:"kernel,omitempty" json:"kernel,omitempty"`
+	Kernel       *MachineKernel       `yaml:"kernel,omitempty" json:"kernel,omitempty"`
 	Drives       []MachineDrive       `yaml:"drives,omitempty" json:"drives,omitempty"`
 	Network      *MachineNetwork      `yaml:"network,omitempty" json:"network,omitempty"`
 	Resources    *MachineResources    `yaml:"resources,omitempty" json:"resources,omitempty"`
 	StartupFiles []MachineStartupFile `yaml:"startupFiles,omitempty" json:"startupFiles,omitempty"`
 	NoSSH        bool                 `yaml:"noSSH,omitempty" json:"noSSH,omitempty"`
+}
+
+// UnmarshalYAML implements custom unmarshaling to support both legacy (kernel as string)
+// and current (kernel as struct) manifest formats.
+func (m *PlaygroundMachine) UnmarshalYAML(node *yaml.Node) error {
+	type legacyMachine struct {
+		Name         string               `yaml:"name"`
+		Users        []MachineUser        `yaml:"users,omitempty"`
+		Kernel       string               `yaml:"kernel,omitempty"`
+		Drives       []MachineDrive       `yaml:"drives,omitempty"`
+		Network      *MachineNetwork      `yaml:"network,omitempty"`
+		Resources    *MachineResources    `yaml:"resources,omitempty"`
+		StartupFiles []MachineStartupFile `yaml:"startupFiles,omitempty"`
+		NoSSH        bool                 `yaml:"noSSH,omitempty"`
+	}
+
+	// Inspect the YAML node to detect if kernel is a string (legacy format)
+	isLegacyFormat := false
+	for i := 0; i < len(node.Content); i += 2 {
+		if i+1 < len(node.Content) && node.Content[i].Value == "kernel" {
+			kernelNode := node.Content[i+1]
+			// If kernel is a scalar (string), it's the legacy format
+			if kernelNode.Kind == yaml.ScalarNode {
+				isLegacyFormat = true
+			}
+			break
+		}
+	}
+
+	if isLegacyFormat {
+		var legacy legacyMachine
+		if err := node.Decode(&legacy); err != nil {
+			return err
+		}
+
+		// Convert legacy format to current format
+		m.Name = legacy.Name
+		m.Users = legacy.Users
+		if legacy.Kernel != "" {
+			m.Kernel = &MachineKernel{Source: legacy.Kernel}
+		}
+		m.Drives = legacy.Drives
+		m.Network = legacy.Network
+		m.Resources = legacy.Resources
+		m.StartupFiles = legacy.StartupFiles
+		m.NoSSH = legacy.NoSSH
+
+		return nil
+	}
+
+	// Current format - use type alias to avoid infinite recursion
+	type playgroundMachineAlias PlaygroundMachine
+	var alias playgroundMachineAlias
+	if err := node.Decode(&alias); err != nil {
+		return err
+	}
+	*m = PlaygroundMachine(alias)
+	return nil
 }
 
 type PlaygroundTab struct {
