@@ -246,7 +246,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 
 					var errCh <-chan error
 
-					sess, errCh, err = ssh.StartSSHSession(ctx, cli, chal.Play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
+					sess, errCh, err = ssh.StartSSHSession(ctx, cli, chal.Play, opts.machine, opts.user, nil, opts.forwardAgent)
 					if err != nil {
 						return fmt.Errorf("couldn't start SSH session: %w", err) // critical error
 					}

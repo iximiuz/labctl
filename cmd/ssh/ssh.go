@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 	"github.com/iximiuz/labctl/internal/retry"
@@ -102,7 +103,7 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
 	}
 
-	sess, errCh, err := StartSSHSession(ctx, cli, opts.playID, opts.machine, opts.user, opts.command, opts.forwardAgent)
+	sess, errCh, err := StartSSHSession(ctx, cli, p, opts.machine, opts.user, opts.command, opts.forwardAgent)
 	if err != nil {
 		return fmt.Errorf("couldn't start SSH session: %w", err)
 	}
@@ -121,14 +122,15 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 func StartSSHSession(
 	ctx context.Context,
 	cli labcli.CLI,
-	playID string,
+	play *api.Play,
 	machine string,
 	user string,
 	command []string,
 	forwardAgent bool,
 ) (*ssh.Session, <-chan error, error) {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
-		PlayID:          playID,
+		PlayID:          play.ID,
+		FactoryID:       play.FactoryID(),
 		Machine:         machine,
 		PlaysDir:        cli.Config().PlaysDir,
 		SSHUser:         user,

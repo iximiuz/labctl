@@ -29,6 +29,7 @@ type StateEvent struct {
 }
 
 type PlayStatus struct {
+	FactoryID   string       `json:"factoryId" yaml:"factoryId"`
 	StateEvents []StateEvent `json:"stateEvents" yaml:"stateEvents"`
 }
 
@@ -89,17 +90,23 @@ func (p *Play) GetMachine(name string) *Machine {
 	return nil
 }
 
-func (p *Play) StateIs(state PlayState) bool {
+func (p *Play) FactoryID() string {
+	if p.Status == nil {
+		return ""
+	}
+	return p.Status.FactoryID
+}
+
+func (p *Play) State() PlayState {
 	// Older plays don't have a status
 	if p.Status == nil {
-		return false
+		return ""
 	}
+	return p.Status.StateEvents[len(p.Status.StateEvents)-1].State
+}
 
-	if len(p.Status.StateEvents) == 0 {
-		return false
-	}
-
-	return p.Status.StateEvents[len(p.Status.StateEvents)-1].State == state
+func (p *Play) StateIs(state PlayState) bool {
+	return p.State() == state
 }
 
 func (p *Play) IsActive() bool {
@@ -310,7 +317,7 @@ func (c *Client) StartTunnel(ctx context.Context, id string, req StartTunnelRequ
 	// doesn't check for playground readiness before establishing
 	// a tunnel.
 	backoff := 200 * time.Millisecond
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := range 5 {
 		body, err := toJSONBody(req)
 		if err != nil {
 			return nil, err

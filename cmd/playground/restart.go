@@ -10,6 +10,7 @@ import (
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/labcli"
@@ -125,11 +126,14 @@ func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOpti
 	defer cancel()
 
 	for ctx.Err() == nil {
-		if play, err := cli.Client().GetPlay(ctx, opts.playID); err == nil && !play.IsActive() {
-			s.FinalMSG = "Waiting for playground to restart... Done.\n"
-			s.Stop()
+		if play, err := cli.Client().GetPlay(ctx, opts.playID); err == nil {
+			if play.StateIs(api.StateRunning) {
+				s.FinalMSG = "Waiting for playground to restart... Done.\n"
+				s.Stop()
+				break
+			}
 
-			return nil
+			s.Prefix = fmt.Sprintf("Waiting for playground to restart... (%s) ", play.State())
 		}
 
 		time.Sleep(2 * time.Second)
@@ -176,7 +180,7 @@ func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOpti
 	if opts.ssh {
 		cli.PrintAux("SSH-ing into %s machine...\n", opts.machine)
 
-		sess, errCh, err := ssh.StartSSHSession(ctx, cli, play.ID, opts.machine, opts.user, nil, opts.forwardAgent)
+		sess, errCh, err := ssh.StartSSHSession(ctx, cli, play, opts.machine, opts.user, nil, opts.forwardAgent)
 		if err != nil {
 			return fmt.Errorf("couldn't start SSH session: %w", err)
 		}

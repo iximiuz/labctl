@@ -3,6 +3,7 @@ package portforward
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -24,6 +25,7 @@ const (
 
 type TunnelOptions struct {
 	PlayID          string
+	FactoryID       string
 	Machine         string
 	PlaysDir        string
 	SSHUser         string
@@ -31,8 +33,9 @@ type TunnelOptions struct {
 }
 
 type Tunnel struct {
-	url   string
-	token string
+	url       string
+	token     string
+	factoryID string
 }
 
 func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*Tunnel, error) {
@@ -41,7 +44,7 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 		uniq += "-" + opts.SSHUser
 	}
 	tunnelFile := filepath.Join(opts.PlaysDir, uniq, "tunnel.json")
-	if t, err := loadTunnel(tunnelFile); err == nil {
+	if t, err := loadTunnel(tunnelFile, opts.FactoryID); err == nil {
 		return t, nil
 	}
 
@@ -76,8 +79,9 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 	}
 
 	t := &Tunnel{
-		url:   resp.URL,
-		token: token,
+		url:       resp.URL,
+		token:     token,
+		factoryID: opts.FactoryID,
 	}
 
 	if err := saveTunnel(tunnelFile, t); err != nil {
@@ -98,8 +102,9 @@ func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan er
 
 func (t *Tunnel) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{
-		"url":   t.url,
-		"token": t.token,
+		"url":       t.url,
+		"token":     t.token,
+		"factoryId": t.factoryID,
 	})
 }
 
@@ -111,6 +116,7 @@ func (t *Tunnel) UnmarshalJSON(data []byte) error {
 
 	t.url = m["url"]
 	t.token = m["token"]
+	t.factoryID = m["factoryId"]
 	return nil
 }
 
@@ -135,7 +141,7 @@ func authenticate(ctx context.Context, url string, name string) (string, error) 
 	return "", fmt.Errorf("session cookie not found: %s", name)
 }
 
-func loadTunnel(file string) (*Tunnel, error) {
+func loadTunnel(file string, factoryID string) (*Tunnel, error) {
 	bytes, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
@@ -144,6 +150,10 @@ func loadTunnel(file string) (*Tunnel, error) {
 	var t Tunnel
 	if err := json.Unmarshal(bytes, &t); err != nil {
 		return nil, err
+	}
+
+	if t.factoryID != factoryID {
+		return nil, errors.New("factory ID mismatch")
 	}
 
 	return &t, nil
