@@ -1,8 +1,8 @@
 # iximiuz Labs control - Start Remote microVM Playgrounds From The Command Line
 
-This is a command line tool for [iximiuz Labs](https://labs.iximiuz.com).
+This is a command-line client for [iximiuz Labs](https://labs.iximiuz.com).
 You can use it to start and access Linux, Docker, Kubernetes, networking, and other types of DevOps playgrounds.
-Playgrounds are ephemeral, disposable, and secure enough for happy experimentation.
+Playgrounds are ephemeral, disposable, and secure enough for most learning, experimentation, and research use cases.
 
 Some popular playgrounds:
 
@@ -26,7 +26,7 @@ Check out this short recording on YouTube to get started:
 
 ## Installation
 
-The below command will download the latest release to `~/.iximiuz/labctl/bin`, adding it to your PATH.
+The command below will download the latest release to `~/.iximiuz/labctl/bin`, adding it to your PATH.
 
 ```sh
 curl -sf https://labs.iximiuz.com/cli/install.sh | sh
@@ -37,7 +37,7 @@ curl -sf https://labs.iximiuz.com/cli/install.sh | sh
 ### Authentication
 
 First, you need to authenticate the CLI session with iximiuz Labs.
-The below command will open a browser page with a one-time use URL.
+The command below will open a browser page with a one-time use URL.
 
 ```sh
 labctl auth login
@@ -82,7 +82,7 @@ labctl ssh <playground-id> -- ls -la /
 You can start a playground and open it in your IDE with:
 
 ```sh
-labctl playground start docker --ide
+labctl playground start docker --ide cursor
 ```
 
 You can use the **SSH proxy mode** to access playgrounds from your IDE:
@@ -169,7 +169,7 @@ ssh -i ~/.ssh/iximiuz_labs_user \
   ssh://root@<local-proxy-address>
 ```
 
-### Listing and stopping playgrounds
+### Listing, stopping, restarting, and destroying playgrounds
 
 You can list recent playgrounds with:
 
@@ -181,6 +181,19 @@ And stop a running playground with:
 
 ```sh
 labctl playground stop <playground-id>
+```
+
+Stopping a playground shuts down its virtual machines, preserving the playground state and the VM disks in a remote storage.
+You can restart a stopped playground later on using the following command:
+
+```sh
+labctl playground restart <playground-id>
+```
+
+To dispose of a running or stopped playground, completely erasing its data, use the `labctl destroy` command:
+
+```sh
+labctl playground destroy <playground-id>
 ```
 
 ### Signing out and deleting the CLI
