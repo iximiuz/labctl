@@ -26,6 +26,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newStopCommand(cli),
 		newRestartCommand(cli),
 		newDestroyCommand(cli),
+		newPersistCommand(cli),
 		newMachinesCommand(cli),
 		newCreateCommand(cli),
 		newManifestCommand(cli),
