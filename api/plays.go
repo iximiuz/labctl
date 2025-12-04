@@ -271,6 +271,16 @@ func (c *Client) DestroyPlay(ctx context.Context, id string) error {
 	return c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
 }
 
+func (c *Client) PersistPlay(ctx context.Context, id string) error {
+	body, err := toJSONBody(map[string]any{"action": "make_persistent"})
+	if err != nil {
+		return err
+	}
+
+	var p Play
+	return c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
 // Deprecated: Use DestroyPlay instead
 func (c *Client) DeletePlay(ctx context.Context, id string) error {
 	resp, err := c.Delete(ctx, "/plays/"+id, nil, nil)
