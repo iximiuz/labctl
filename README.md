@@ -34,7 +34,7 @@ curl -sf https://labs.iximiuz.com/cli/install.sh | sh
 
 `labctl` is also available via Homebrew on macOS and linux:
 
-```bash
+```sh
 brew install labctl
 ```
 
