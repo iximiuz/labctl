@@ -32,6 +32,12 @@ The command below will download the latest release to `~/.iximiuz/labctl/bin`, a
 curl -sf https://labs.iximiuz.com/cli/install.sh | sh
 ```
 
+`labctl` is also available via Homebrew on macOS and Linux:
+
+```sh
+brew install labctl
+```
+
 ## Usage
 
 ### Authentication
