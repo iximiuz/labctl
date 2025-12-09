@@ -238,7 +238,7 @@ func RunPushWatch(ctx context.Context, cli labcli.CLI, config PushConfig) error 
 
 func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfig, state pushState) error {
 	// Arbitrary max goroutines to not overload the server
-	const concurrency = 7
+	const concurrency = 3
 
 	p := pool.New().WithMaxGoroutines(concurrency).WithErrors().WithContext(ctx)
 
