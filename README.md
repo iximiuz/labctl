@@ -103,19 +103,21 @@ Example output:
 SSH proxy is running on 58279
 
 # Connect from the terminal:
-ssh -i ~/.ssh/iximiuz_labs_user ssh://root@127.0.0.1:58279
+ssh -i ~/.ssh/iximiuz_labs_user ssh://laborant@127.0.0.1:58279
 
-# Or add the following to your ~/.ssh/config:
-Host 65ea1e10f6af43783e69fe68-docker-01
-  HostName 127.0.0.1
-  Port 58279
-  User root
+# For better experience, add the following to your ~/.ssh/config:
+Host localhost 127.0.0.1 ::1
   IdentityFile ~/.ssh/iximiuz_labs_user
+  AddKeysToAgent yes
+  UseKeychain yes
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
 
 # To access the playground in Visual Studio Code:
-code --folder-uri vscode-remote://ssh-remote+127.0.0.1:58279/root
+code --folder-uri vscode-remote://ssh-remote+laborant@127.0.0.1:58279/home/laborant
+
+# To access the playground in Cursor:
+cursor --folder-uri vscode-remote://ssh-remote+laborant@127.0.0.1:58279/home/laborant
 
 
 Press Ctrl+C to stop

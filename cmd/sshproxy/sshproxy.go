@@ -205,12 +205,11 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 			cli.Config().SSHIdentityFile, localPort, opts.User, localHost,
 		)
 
-		cli.PrintAux("\n# Or add the following to your ~/.ssh/config:\n")
-		cli.PrintAux("Host %s\n", opts.PlayID+"-"+opts.Machine)
-		cli.PrintAux("  HostName %s\n", localHost)
-		cli.PrintAux("  Port %s\n", localPort)
-		cli.PrintAux("  User %s\n", opts.User)
+		cli.PrintAux("\n# For better experience, add the following to your ~/.ssh/config:\n")
+		cli.PrintAux("Host localhost 127.0.0.1 ::1\n")
 		cli.PrintAux("  IdentityFile %s\n", cli.Config().SSHIdentityFile)
+		cli.PrintAux("  AddKeysToAgent yes\n")
+		cli.PrintAux("  UseKeychain yes\n")
 		cli.PrintAux("  StrictHostKeyChecking no\n")
 		cli.PrintAux("  UserKnownHostsFile /dev/null\n\n")
 
