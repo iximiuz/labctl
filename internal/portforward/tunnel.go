@@ -59,14 +59,18 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 		}
 	}
 
-	resp, err := client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
-		Machine:          opts.Machine,
-		Access:           api.PortAccessPrivate,
-		GenerateLoginURL: true,
-		SSHUser:          opts.SSHUser,
-		SSHPubKey:        sshPubKey,
-	})
-	if err != nil {
+	var resp *api.StartTunnelResponse
+	if err := retry.UntilSuccess(ctx, func() error {
+		var err error
+		resp, err = client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
+			Machine:          opts.Machine,
+			Access:           api.PortAccessPrivate,
+			GenerateLoginURL: true,
+			SSHUser:          opts.SSHUser,
+			SSHPubKey:        sshPubKey,
+		})
+		return err
+	}, 10, 1*time.Second); err != nil {
 		return nil, fmt.Errorf("client.StartTunnel(): %w", err)
 	}
 
