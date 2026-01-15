@@ -221,7 +221,7 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 		if err != nil {
 			return fmt.Errorf("couldn't convert port forwarding spec to API port forward model: %w", err)
 		}
-		if _, err := cli.Client().AddPortForward(ctx, p.ID, *pf); err != nil {
+		if err := cli.Client().AddPortForward(ctx, p.ID, *pf); err != nil {
 			cli.PrintErr("Warning: couldn't save port forward: %v\n", err)
 		}
 	}

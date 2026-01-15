@@ -19,14 +19,14 @@ func (c *Client) ListPortForwards(ctx context.Context, playID string) ([]*PortFo
 	return resp, c.GetInto(ctx, "/plays/"+playID+"/port-forwards", nil, nil, &resp)
 }
 
-func (c *Client) AddPortForward(ctx context.Context, playID string, pf PortForward) (*PortForward, error) {
+func (c *Client) AddPortForward(ctx context.Context, playID string, pf PortForward) error {
 	body, err := toJSONBody(pf)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var resp PortForward
-	return &resp, c.PostInto(ctx, "/plays/"+playID+"/port-forwards", nil, nil, body, &resp)
+	_, err = c.Post(ctx, "/plays/"+playID+"/port-forwards", nil, nil, body)
+	return err
 }
 
 func (c *Client) RemovePortForward(ctx context.Context, playID string, index int) error {
