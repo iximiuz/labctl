@@ -55,6 +55,7 @@ func runManifest(ctx context.Context, cli labcli.CLI, opts *manifestOptions) err
 			InitTasks:      playground.InitTasks,
 			InitConditions: playground.InitConditions,
 			RegistryAuth:   playground.RegistryAuth,
+			PortForwards:   playground.PortForwards,
 			AccessControl:  playground.AccessControl,
 		},
 	}

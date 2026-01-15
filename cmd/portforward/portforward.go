@@ -3,6 +3,7 @@ package portforward
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -10,6 +11,16 @@ import (
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 )
+
+// runRestorePortForwards restores saved port forwards and blocks until done.
+func runRestorePortForwards(ctx context.Context, cli labcli.CLI, opts *options) error {
+	resultCh, err := portforward.RestoreSavedForwards(ctx, cli.Client(), opts.playID, cli)
+	if err != nil {
+		return err
+	}
+
+	return <-resultCh
+}
 
 type options struct {
 	playID  string
@@ -21,6 +32,11 @@ type options struct {
 	remotes []string
 
 	quiet bool
+
+	// New flags
+	list    bool
+	restore bool
+	remove  int
 }
 
 // Local port forwarding's possible modes (kinda sorta as in ssh -L):
@@ -32,18 +48,48 @@ type options struct {
 //   - LOCAL_HOST:LOCAL_PORT:REMOTE_HOST:REMOTE_PORT  # the most explicit form
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
-	var opts options
+	opts := options{
+		remove: -1, // -1 means not set
+	}
 
 	cmd := &cobra.Command{
-		Use:   "port-forward <playground> [-m machine] -L [LOCAL:]REMOTE [-L ...] | -R [REMOTE:]:LOCAL [-R ...]",
+		Use:   "port-forward <playground> [-m machine] -L [LOCAL:]REMOTE [-L ...] | --list | --restore | --remove <index>",
 		Short: `Forward one or more local or remote ports to a running playground`,
-		Long: `While the implementation for sure differs, the behavior and semantic of the command
+		Long: `Forward one or more local or remote ports to a running playground.
+
+While the implementation differs significantly, the behavior and semantic of the command
 are meant to be similar to SSH local (-L) and remote (-R) port forwarding. The word "local" always
-refers to the labctl side. The word "remote" always refers to the target playground side.`,
+refers to the labctl side. The word "remote" always refers to the target playground side.
+
+The command also supports managing "saved" port forwards:
+  --list     List all "should be forwarded" ports for the playground
+  --restore  Forward all "should be forwarded" ports (handy after a persistent playground restart)
+  --remove   Remove a "should be forwarded" port from the playground's config by its index (0-based)
+
+When using -L|-R flags, port forwards are automatically saved to the playground's config for later restoration.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.playID = args[0]
+			cli.SetQuiet(opts.quiet)
+
+			// Handle list mode
+			if opts.list {
+				return labcli.WrapStatusError(runListPortForwards(cmd.Context(), cli, &opts))
+			}
+
+			// Handle remove mode
+			if opts.remove >= 0 {
+				return labcli.WrapStatusError(runRemovePortForward(cmd.Context(), cli, &opts))
+			}
+
+			// Handle restore mode
+			if opts.restore {
+				return labcli.WrapStatusError(runRestorePortForwards(cmd.Context(), cli, &opts))
+			}
+
+			// Regular port forwarding mode
 			if len(opts.locals)+len(opts.remotes) == 0 {
-				return labcli.NewStatusError(1, "at least one -L or -R flag must be provided")
+				return labcli.NewStatusError(1, "at least one -L or -R flag must be provided (or use --list, --restore, --remove)")
 			}
 			if len(opts.remotes) > 0 {
 				// TODO: Implement me!
@@ -57,10 +103,6 @@ refers to the labctl side. The word "remote" always refers to the target playgro
 				}
 				opts.localsParsed = append(opts.localsParsed, parsed)
 			}
-
-			cli.SetQuiet(opts.quiet)
-
-			opts.playID = args[0]
 
 			return labcli.WrapStatusError(runPortForward(cmd.Context(), cli, &opts))
 		},
@@ -97,7 +139,66 @@ refers to the labctl side. The word "remote" always refers to the target playgro
 		`Suppress verbose output`,
 	)
 
+	flags.BoolVar(&opts.list, "list", false, `List saved port forwards ("saved" means "should be forwarded")`)
+	flags.BoolVar(&opts.restore, "restore", false, `Forward all "should be forwarded" ports for the playground`)
+	flags.IntVar(&opts.remove, "remove", -1, `Remove a "should be forwarded" port from the playground's config by index (0-based)`)
+
 	return cmd
+}
+
+func runListPortForwards(ctx context.Context, cli labcli.CLI, opts *options) error {
+	forwards, err := cli.Client().ListPortForwards(ctx, opts.playID)
+	if err != nil {
+		return fmt.Errorf("couldn't list port forwards: %w", err)
+	}
+
+	if len(forwards) == 0 {
+		cli.PrintAux("No saved port forwards found.\n")
+		return nil
+	}
+
+	cli.PrintAux("Saved port forwards:\n")
+	for i, pf := range forwards {
+		localPart := ""
+		if pf.LocalHost != "" || pf.LocalPort > 0 {
+			if pf.LocalHost != "" {
+				localPart = pf.LocalHost
+			}
+			if pf.LocalPort > 0 {
+				if localPart != "" {
+					localPart += ":"
+				}
+				localPart += strconv.Itoa(pf.LocalPort)
+			}
+			localPart += " -> "
+		}
+
+		remotePart := ""
+		if pf.RemoteHost != "" {
+			remotePart = pf.RemoteHost + ":"
+		}
+		if pf.RemotePort > 0 {
+			remotePart += strconv.Itoa(pf.RemotePort)
+		}
+
+		kindLabel := pf.Kind
+		if kindLabel == "" {
+			kindLabel = "local"
+		}
+
+		cli.PrintAux("  [%d] %s (%s): %s%s\n", i, pf.Machine, kindLabel, localPart, remotePart)
+	}
+
+	return nil
+}
+
+func runRemovePortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
+	if err := cli.Client().RemovePortForward(ctx, opts.playID, opts.remove); err != nil {
+		return fmt.Errorf("couldn't remove port forward: %w", err)
+	}
+
+	cli.PrintAux("Port forward at index %d removed.\n", opts.remove)
+	return nil
 }
 
 func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
@@ -114,11 +215,20 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 		}
 	}
 
+	// Save port forwards to play's config
+	for _, spec := range opts.localsParsed {
+		pf, err := spec.ToPortForward(opts.machine)
+		if err != nil {
+			return fmt.Errorf("couldn't convert port forwarding spec to API port forward model: %w", err)
+		}
+		if _, err := cli.Client().AddPortForward(ctx, p.ID, *pf); err != nil {
+			cli.PrintErr("Warning: couldn't save port forward: %v\n", err)
+		}
+	}
+
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
-		PlayID:    p.ID,
-		FactoryID: p.FactoryID(),
-		Machine:   opts.machine,
-		PlaysDir:  cli.Config().PlaysDir,
+		PlayID:  p.ID,
+		Machine: opts.machine,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start tunnel: %w", err)

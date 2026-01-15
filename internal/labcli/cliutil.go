@@ -20,6 +20,12 @@ type Streams interface {
 	ErrorStream() io.Writer
 }
 
+type Outputer interface {
+	PrintOut(string, ...any)
+	PrintErr(string, ...any)
+	PrintAux(string, ...any)
+}
+
 type CLI interface {
 	Streams
 
@@ -61,7 +67,10 @@ type cli struct {
 	version string
 }
 
-var _ CLI = &cli{}
+var (
+	_ CLI      = &cli{}
+	_ Outputer = &cli{}
+)
 
 func NewCLI(cin io.ReadCloser, cout io.Writer, cerr io.Writer, version string) CLI {
 	return &cli{

@@ -128,9 +128,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:          p.ID,
-		FactoryID:       p.FactoryID(),
 		Machine:         opts.Machine,
-		PlaysDir:        cli.Config().PlaysDir,
 		SSHUser:         opts.User,
 		SSHIdentityFile: cli.Config().SSHIdentityFile,
 	})

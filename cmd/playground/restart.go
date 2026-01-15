@@ -14,6 +14,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/labcli"
+	"github.com/iximiuz/labctl/internal/portforward"
 )
 
 const restartCommandTimeout = 5 * time.Minute
@@ -29,6 +30,8 @@ type restartOptions struct {
 	ssh  bool
 
 	forwardAgent bool
+
+	restorePortForwards bool
 
 	quiet bool
 }
@@ -105,6 +108,12 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		`Do not print any diagnostic messages`,
 	)
+	flags.BoolVar(
+		&opts.restorePortForwards,
+		"restore-port-forwards",
+		false,
+		`Automatically restore all forwarded ports from previous session`,
+	)
 
 	return cmd
 }
@@ -168,6 +177,17 @@ func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOpti
 		}
 	}
 
+	// Start port forwarding if requested.
+	// If combined with --ide or --ssh, run in background; otherwise block.
+	var portForwardErrCh <-chan error
+	if opts.restorePortForwards {
+		var err error
+		portForwardErrCh, err = portforward.RestoreSavedForwards(ctx, cli.Client(), play.ID, cli)
+		if err != nil {
+			return err
+		}
+	}
+
 	if opts.ide != "" {
 		return sshproxy.RunSSHProxy(ctx, cli, &sshproxy.Options{
 			PlayID:  play.ID,
@@ -197,5 +217,11 @@ func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOpti
 	}
 
 	cli.PrintOut("%s\n", play.ID)
+
+	// If only --port-forward was provided (no --ide or --ssh), wait for it
+	if portForwardErrCh != nil {
+		return <-portForwardErrCh
+	}
+
 	return nil
 }

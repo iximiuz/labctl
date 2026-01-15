@@ -3,10 +3,14 @@ package portforward
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
+
+	"github.com/iximiuz/labctl/api"
 )
 
 type ForwardingSpec struct {
+	Kind       string // "local" or "remote"
 	LocalHost  string // Defaults to "127.0.0.1" if not specified
 	LocalPort  string // Empty if a random port is to be used
 	RemoteHost string // Defaults to ""
@@ -23,6 +27,8 @@ func (f ForwardingSpec) RemoteAddr() string {
 
 func ParseLocal(s string) (ForwardingSpec, error) {
 	var cfg ForwardingSpec
+
+	cfg.Kind = "local" // Local port forwarding
 
 	parts := strings.Split(s, ":")
 
@@ -74,6 +80,54 @@ func ParseLocal(s string) (ForwardingSpec, error) {
 	}
 
 	return cfg, nil
+}
+
+func (f ForwardingSpec) ToPortForward(machine string) (*api.PortForward, error) {
+	pf := api.PortForward{
+		Kind:       f.Kind,
+		Machine:    machine,
+		LocalHost:  f.LocalHost,
+		RemoteHost: f.RemoteHost,
+	}
+
+	if f.LocalPort != "" {
+		if port, err := strconv.Atoi(f.LocalPort); err == nil {
+			pf.LocalPort = port
+		}
+	}
+	if f.RemotePort != "" {
+		if port, err := strconv.Atoi(f.RemotePort); err == nil {
+			pf.RemotePort = port
+		}
+	}
+
+	return &pf, nil
+}
+
+// PortForwardToSpec converts an API PortForward to a ForwardingSpec.
+func PortForwardToSpec(pf *api.PortForward) ForwardingSpec {
+	spec := ForwardingSpec{
+		Kind:      pf.Kind,
+		LocalHost: "127.0.0.1",
+	}
+
+	if pf.LocalHost != "" {
+		spec.LocalHost = pf.LocalHost
+	}
+	if pf.LocalPort > 0 {
+		spec.LocalPort = strconv.Itoa(pf.LocalPort)
+	} else {
+		// Use a random port if not specified
+		spec.LocalPort = RandomLocalPort()
+	}
+	if pf.RemoteHost != "" {
+		spec.RemoteHost = pf.RemoteHost
+	}
+	if pf.RemotePort > 0 {
+		spec.RemotePort = strconv.Itoa(pf.RemotePort)
+	}
+
+	return spec
 }
 
 func RandomLocalPort() string {

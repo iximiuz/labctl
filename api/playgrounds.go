@@ -25,6 +25,7 @@ type Playground struct {
 	InitTasks      map[string]InitTask `yaml:"initTasks,omitempty" json:"initTasks,omitempty"`
 	InitConditions InitConditions      `yaml:"initConditions,omitempty" json:"initConditions,omitempty"`
 	RegistryAuth   string              `yaml:"registryAuth,omitempty" json:"registryAuth,omitempty"`
+	PortForwards   []PortForward       `yaml:"portForwards,omitempty" json:"portForwards,omitempty"`
 
 	AccessControl PlaygroundAccessControl `yaml:"accessControl" json:"accessControl"`
 	UserAccess    PlaygroundUserAccess    `yaml:"userAccess,omitempty" json:"userAccess,omitempty"`
@@ -251,6 +252,7 @@ type PlaygroundSpec struct {
 	InitTasks      map[string]InitTask `yaml:"initTasks,omitempty" json:"initTasks,omitempty"`
 	InitConditions InitConditions      `yaml:"initConditions,omitempty" json:"initConditions,omitempty"`
 	RegistryAuth   string              `yaml:"registryAuth,omitempty" json:"registryAuth,omitempty"`
+	PortForwards   []PortForward       `yaml:"portForwards,omitempty" json:"portForwards,omitempty"`
 
 	// Deprecated: Use PlaygroundAccessControl instead
 	Access *PlaygroundAccess `yaml:"access,omitempty" json:"access,omitempty"`
@@ -289,6 +291,7 @@ type CreatePlaygroundRequest struct {
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
 	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
 	RegistryAuth   string              `yaml:"registryAuth" json:"registryAuth"`
+	PortForwards   []PortForward       `yaml:"portForwards,omitempty" json:"portForwards,omitempty"`
 
 	AccessControl PlaygroundAccessControl `yaml:"accessControl" json:"accessControl"`
 }
@@ -315,6 +318,7 @@ type UpdatePlaygroundRequest struct {
 	InitTasks      map[string]InitTask `yaml:"initTasks" json:"initTasks"`
 	InitConditions InitConditions      `yaml:"initConditions" json:"initConditions"`
 	RegistryAuth   string              `yaml:"registryAuth" json:"registryAuth"`
+	PortForwards   []PortForward       `yaml:"portForwards,omitempty" json:"portForwards,omitempty"`
 
 	AccessControl PlaygroundAccessControl `yaml:"accessControl" json:"accessControl"`
 }

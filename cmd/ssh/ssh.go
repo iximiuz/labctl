@@ -130,9 +130,7 @@ func StartSSHSession(
 ) (*ssh.Session, <-chan error, error) {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:          play.ID,
-		FactoryID:       play.FactoryID(),
 		Machine:         machine,
-		PlaysDir:        cli.Config().PlaysDir,
 		SSHUser:         user,
 		SSHIdentityFile: cli.Config().SSHIdentityFile,
 	})

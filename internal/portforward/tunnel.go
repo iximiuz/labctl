@@ -2,13 +2,8 @@ package portforward
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,29 +20,17 @@ const (
 
 type TunnelOptions struct {
 	PlayID          string
-	FactoryID       string
 	Machine         string
-	PlaysDir        string
 	SSHUser         string
 	SSHIdentityFile string
 }
 
 type Tunnel struct {
-	url       string
-	token     string
-	factoryID string
+	url   string
+	token string
 }
 
 func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*Tunnel, error) {
-	uniq := opts.PlayID + "-" + opts.Machine
-	if opts.SSHUser != "" {
-		uniq += "-" + opts.SSHUser
-	}
-	tunnelFile := filepath.Join(opts.PlaysDir, uniq, "tunnel.json")
-	if t, err := loadTunnel(tunnelFile, opts.FactoryID); err == nil {
-		return t, nil
-	}
-
 	var (
 		sshPubKey string
 		err       error
@@ -82,17 +65,10 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 		return nil, fmt.Errorf("authenticate(): %w", err)
 	}
 
-	t := &Tunnel{
-		url:       resp.URL,
-		token:     token,
-		factoryID: opts.FactoryID,
-	}
-
-	if err := saveTunnel(tunnelFile, t); err != nil {
-		slog.Warn("Couldn't save tunnel info to file", "error", err.Error())
-	}
-
-	return t, nil
+	return &Tunnel{
+		url:   resp.URL,
+		token: token,
+	}, nil
 }
 
 func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan error) error {
@@ -102,26 +78,6 @@ func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan er
 	wsmux.SetHeader("Cookie", conductorSessionCookieName+"="+t.token)
 
 	return wsmux.ListenAndServe()
-}
-
-func (t *Tunnel) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"url":       t.url,
-		"token":     t.token,
-		"factoryId": t.factoryID,
-	})
-}
-
-func (t *Tunnel) UnmarshalJSON(data []byte) error {
-	var m map[string]string
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-
-	t.url = m["url"]
-	t.token = m["token"]
-	t.factoryID = m["factoryId"]
-	return nil
 }
 
 func authenticate(ctx context.Context, url string, name string) (string, error) {
@@ -143,35 +99,4 @@ func authenticate(ctx context.Context, url string, name string) (string, error) 
 	}
 
 	return "", fmt.Errorf("session cookie not found: %s", name)
-}
-
-func loadTunnel(file string, factoryID string) (*Tunnel, error) {
-	bytes, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-
-	var t Tunnel
-	if err := json.Unmarshal(bytes, &t); err != nil {
-		return nil, err
-	}
-
-	if t.factoryID != factoryID {
-		return nil, errors.New("factory ID mismatch")
-	}
-
-	return &t, nil
-}
-
-func saveTunnel(file string, t *Tunnel) error {
-	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
-		return err
-	}
-
-	bytes, err := json.Marshal(t)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(file, bytes, 0644)
 }
