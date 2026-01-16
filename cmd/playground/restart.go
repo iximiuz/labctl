@@ -31,7 +31,7 @@ type restartOptions struct {
 
 	forwardAgent bool
 
-	restorePortForwards bool
+	withPortForwards bool
 
 	quiet bool
 }
@@ -109,10 +109,10 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 		`Do not print any diagnostic messages`,
 	)
 	flags.BoolVar(
-		&opts.restorePortForwards,
-		"restore-port-forwards",
+		&opts.withPortForwards,
+		"with-port-forwards",
 		false,
-		`Automatically restore all forwarded ports from previous session`,
+		`Automatically forward ports specified in the playground's config or forwarded during the previous run(s)`,
 	)
 
 	return cmd
@@ -180,7 +180,7 @@ func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOpti
 	// Start port forwarding if requested.
 	// If combined with --ide or --ssh, run in background; otherwise block.
 	var portForwardErrCh <-chan error
-	if opts.restorePortForwards {
+	if opts.withPortForwards {
 		var err error
 		portForwardErrCh, err = portforward.RestoreSavedForwards(ctx, cli.Client(), play.ID, cli)
 		if err != nil {

@@ -55,15 +55,15 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "port-forward <playground> [-m machine] -L [LOCAL:]REMOTE [-L ...] | --list | --restore | --remove <index>",
 		Short: `Forward one or more local or remote ports to a running playground`,
-		Long: `Forward one or more local or remote ports to a running playground.
+		Long: `Forward one or more local or remote ports to / from a running playground.
 
 While the implementation differs significantly, the behavior and semantic of the command
-are meant to be similar to SSH local (-L) and remote (-R) port forwarding. The word "local" always
+are similar to SSH local (-L) and remote (-R) port forwarding. The word "local" always
 refers to the labctl side. The word "remote" always refers to the target playground side.
 
-The command also supports managing "saved" port forwards:
-  --list     List all "should be forwarded" ports for the playground
-  --restore  Forward all "should be forwarded" ports (handy after a persistent playground restart)
+The command also supports managing "should be forwarded" ports:
+  --list     List all "should be forwarded" ports (from the playground's config and previous forward attempts)
+  --restore  Forward all "should be forwarded" ports (from the playground's config and previous forward attempts)
   --remove   Remove a "should be forwarded" port from the playground's config by its index (0-based)
 
 When using -L|-R flags, port forwards are automatically saved to the playground's config for later restoration.`,
@@ -138,10 +138,24 @@ When using -L|-R flags, port forwards are automatically saved to the playground'
 		false,
 		`Suppress verbose output`,
 	)
-
-	flags.BoolVar(&opts.list, "list", false, `List saved port forwards ("saved" means "should be forwarded")`)
-	flags.BoolVar(&opts.restore, "restore", false, `Forward all "should be forwarded" ports for the playground`)
-	flags.IntVar(&opts.remove, "remove", -1, `Remove a "should be forwarded" port from the playground's config by index (0-based)`)
+	flags.BoolVar(
+		&opts.list,
+		"list",
+		false,
+		`List the "should be forwarded" ports (from the playground's config and previous forward attempts)`,
+	)
+	flags.BoolVar(
+		&opts.restore,
+		"restore",
+		false,
+		`Forward all "should be forwarded" ports (from the playground's config and previous forward attempts)`,
+	)
+	flags.IntVar(
+		&opts.remove,
+		"remove",
+		-1,
+		`Remove a "should be forwarded" port from the playground's config by index (0-based)`,
+	)
 
 	return cmd
 }
