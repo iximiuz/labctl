@@ -15,6 +15,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/labcli"
+	"github.com/iximiuz/labctl/internal/portforward"
 	"github.com/iximiuz/labctl/internal/safety"
 )
 
@@ -30,8 +31,9 @@ type startOptions struct {
 	ssh  bool
 	ide  string
 
-	forwardAgent bool
-	skipWaitInit bool
+	forwardAgent     bool
+	skipWaitInit     bool
+	withPortForwards bool
 
 	safetyDisclaimerConsent bool
 
@@ -152,6 +154,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		nil,
 		`Set init conditions as key-value pairs (can be used multiple times)`,
 	)
+	flags.BoolVar(
+		&opts.withPortForwards,
+		"with-port-forwards",
+		false,
+		`Automatically forward ports specified in the playground's config`,
+	)
 
 	return cmd
 }
@@ -248,6 +256,17 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		}
 	}
 
+	// Start port forwarding if requested.
+	// If combined with --ide or --ssh, run in background; otherwise block.
+	var portForwardErrCh <-chan error
+	if opts.withPortForwards {
+		var err error
+		portForwardErrCh, err = portforward.RestoreSavedForwards(ctx, cli.Client(), play.ID, cli)
+		if err != nil {
+			return err
+		}
+	}
+
 	if opts.ssh {
 		cli.PrintAux("SSH-ing into %s machine...\n", opts.machine)
 
@@ -268,6 +287,11 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	}
 
 	cli.PrintOut("%s\n", play.ID)
+
+	// If only --with-port-forwards was provided (no --ide or --ssh), wait for it
+	if portForwardErrCh != nil {
+		return <-portForwardErrCh
+	}
 
 	return nil
 }
