@@ -32,6 +32,8 @@ type pushOptions struct {
 	watch bool
 
 	force bool
+
+	files []string
 }
 
 func (opts *pushOptions) toConfig() (PushConfig, error) {
@@ -39,6 +41,7 @@ func (opts *pushOptions) toConfig() (PushConfig, error) {
 		Kind:  opts.kind,
 		Name:  opts.name,
 		Force: opts.force,
+		Files: opts.files,
 	}
 
 	dir, err := opts.ContentDir(opts.name)
@@ -71,6 +74,9 @@ func newPushCommand(cli labcli.CLI) *cobra.Command {
 			if opts.watch && !opts.force {
 				return labcli.WrapStatusError(errors.New("watch mode requires --force flag"))
 			}
+			if opts.watch && len(opts.files) > 0 {
+				return labcli.WrapStatusError(errors.New("watch mode doesn't support specifying individual files"))
+			}
 
 			return labcli.WrapStatusError(runPushContent(cmd.Context(), cli, &opts))
 		},
@@ -93,6 +99,12 @@ func newPushCommand(cli labcli.CLI) *cobra.Command {
 		"f",
 		false,
 		"Overwrite existing remote files with the local ones and delete remote files that don't exist locally without confirmation",
+	)
+	flags.StringSliceVar(
+		&opts.files,
+		"file",
+		nil,
+		"Push only the specified file(s) instead of the entire directory (can be specified multiple times)",
 	)
 
 	return cmd
@@ -122,6 +134,7 @@ type PushConfig struct {
 	Name  string
 	Dir   string
 	Force bool
+	Files []string
 }
 
 type pushState struct {
@@ -168,6 +181,30 @@ func RunPushOnce(ctx context.Context, cli labcli.CLI, config PushConfig) error {
 	state.localFiles, err = listContentFilesLocal(config.Dir)
 	if err != nil {
 		return fmt.Errorf("couldn't list local content files: %w", err)
+	}
+
+	if len(config.Files) > 0 {
+		for _, f := range config.Files {
+			if _, ok := state.localFiles[f]; !ok {
+				return fmt.Errorf("file %q not found in %s", f, config.Dir)
+			}
+		}
+
+		filtered := make(map[string]string, len(config.Files))
+		for _, f := range config.Files {
+			filtered[f] = state.localFiles[f]
+		}
+		state.localFiles = filtered
+
+		// Filter remote files to the same subset so that toDelete()
+		// won't flag unrelated remote files for deletion.
+		filteredRemote := make(map[string]string, len(config.Files))
+		for _, f := range config.Files {
+			if digest, ok := state.remoteFiles[f]; ok {
+				filteredRemote[f] = digest
+			}
+		}
+		state.remoteFiles = filteredRemote
 	}
 
 	return reconcileContentState(ctx, cli, config, state)
