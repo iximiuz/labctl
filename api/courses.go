@@ -188,12 +188,14 @@ func (c *Client) DeleteCourse(ctx context.Context, name string) error {
 }
 
 type StartCourseLessonOptions struct {
-	AsFreeTierUser bool
+	SafetyDisclaimerConsent bool
+	AsFreeTierUser          bool
 }
 
 func (c *Client) StartCourseLesson(ctx context.Context, courseName, moduleName, lessonName string, opts StartCourseLessonOptions) (*Course, error) {
 	req := map[string]any{
-		"asFreeTierUser": opts.AsFreeTierUser,
+		"safetyDisclaimerConsent": opts.SafetyDisclaimerConsent,
+		"asFreeTierUser":          opts.AsFreeTierUser,
 		"modules": map[string]any{
 			moduleName: map[string]any{
 				"lessons": map[string]any{
