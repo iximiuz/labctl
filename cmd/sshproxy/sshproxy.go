@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+  "runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -207,7 +208,9 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		cli.PrintAux("Host localhost 127.0.0.1 ::1\n")
 		cli.PrintAux("  IdentityFile %s\n", cli.Config().SSHIdentityFile)
 		cli.PrintAux("  AddKeysToAgent yes\n")
-		cli.PrintAux("  UseKeychain yes\n")
+		if runtime.GOOS == "darwin" {
+			cli.PrintAux("  UseKeychain yes\n")
+		}
 		cli.PrintAux("  StrictHostKeyChecking no\n")
 		cli.PrintAux("  UserKnownHostsFile /dev/null\n\n")
 

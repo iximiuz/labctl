@@ -109,7 +109,7 @@ ssh -i ~/.ssh/iximiuz_labs_user ssh://laborant@127.0.0.1:58279
 Host localhost 127.0.0.1 ::1
   IdentityFile ~/.ssh/iximiuz_labs_user
   AddKeysToAgent yes
-  UseKeychain yes
+  # UseKeychain yes # macOS only
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
 
