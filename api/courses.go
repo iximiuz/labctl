@@ -2,9 +2,46 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/iximiuz/labctl/content"
 )
+
+type CourseModule struct {
+	Name    string         `json:"name" yaml:"name"`
+	Title   string         `json:"title" yaml:"title"`
+	Slug    string         `json:"slug" yaml:"slug"`
+	Path    string         `json:"path" yaml:"path"`
+	Lessons []CourseLesson `json:"lessons" yaml:"lessons"`
+}
+
+type CourseLesson struct {
+	Name       string              `json:"name" yaml:"name"`
+	Title      string              `json:"title" yaml:"title"`
+	Slug       string              `json:"slug" yaml:"slug"`
+	Path       string              `json:"path" yaml:"path"`
+	Playground *CoursePlayground   `json:"playground" yaml:"playground"`
+	Tasks      map[string]PlayTask `json:"tasks,omitempty" yaml:"tasks,omitempty"`
+}
+
+type CoursePlayground struct {
+	Name string `json:"name" yaml:"name"`
+}
+
+type CourseLearning struct {
+	Modules map[string]CourseLearningModule `json:"modules" yaml:"modules"`
+}
+
+type CourseLearningModule struct {
+	Lessons map[string]CourseLearningLesson `json:"lessons" yaml:"lessons"`
+	Started bool                            `json:"started" yaml:"started"`
+}
+
+type CourseLearningLesson struct {
+	Started bool   `json:"started" yaml:"started"`
+	Play    string `json:"play,omitempty" yaml:"play,omitempty"`
+}
 
 type Course struct {
 	CreatedAt string `json:"createdAt" yaml:"createdAt"`
@@ -16,6 +53,9 @@ type Course struct {
 	PageURL string `json:"pageUrl" yaml:"pageUrl"`
 
 	Authors []Author `json:"authors" yaml:"authors"`
+
+	Modules  []CourseModule  `json:"modules,omitempty" yaml:"modules,omitempty"`
+	Learning *CourseLearning `json:"learning,omitempty" yaml:"learning,omitempty"`
 }
 
 var _ content.Content = (*Course)(nil)
@@ -48,6 +88,56 @@ func (c *Course) IsAuthoredBy(userID string) bool {
 		}
 	}
 	return false
+}
+
+// FindLesson resolves a lesson by module hint and lesson hint (name or slug).
+// If moduleHint is empty, all modules are searched. Returns the resolved module name,
+// lesson name, and lesson pointer, or an error if not found or ambiguous.
+func (c *Course) FindLesson(moduleHint, lessonHint string) (string, string, *CourseLesson, error) {
+	type match struct {
+		moduleName string
+		lessonName string
+		lesson     *CourseLesson
+	}
+
+	var matches []match
+
+	for i := range c.Modules {
+		mod := &c.Modules[i]
+
+		if moduleHint != "" && mod.Name != moduleHint && mod.Slug != moduleHint {
+			continue
+		}
+
+		for j := range mod.Lessons {
+			les := &mod.Lessons[j]
+
+			if les.Name == lessonHint || les.Slug == lessonHint {
+				matches = append(matches, match{
+					moduleName: mod.Name,
+					lessonName: les.Name,
+					lesson:     les,
+				})
+			}
+		}
+	}
+
+	if len(matches) == 0 {
+		if moduleHint != "" {
+			return "", "", nil, fmt.Errorf("lesson %q not found in module %q", lessonHint, moduleHint)
+		}
+		return "", "", nil, fmt.Errorf("lesson %q not found in any module", lessonHint)
+	}
+
+	if len(matches) > 1 {
+		var desc []string
+		for _, m := range matches {
+			desc = append(desc, fmt.Sprintf("  - module %q, lesson %q", m.moduleName, m.lessonName))
+		}
+		return "", "", nil, fmt.Errorf("ambiguous lesson %q, found in multiple modules:\n%s\n\nUse --module to disambiguate", lessonHint, strings.Join(desc, "\n"))
+	}
+
+	return matches[0].moduleName, matches[0].lessonName, matches[0].lesson, nil
 }
 
 type CourseVariant string
@@ -95,4 +185,55 @@ func (c *Client) DeleteCourse(ctx context.Context, name string) error {
 	}
 	resp.Body.Close()
 	return nil
+}
+
+type StartCourseLessonOptions struct {
+	SafetyDisclaimerConsent bool
+	AsFreeTierUser          bool
+}
+
+func (c *Client) StartCourseLesson(ctx context.Context, courseName, moduleName, lessonName string, opts StartCourseLessonOptions) (*Course, error) {
+	req := map[string]any{
+		"safetyDisclaimerConsent": opts.SafetyDisclaimerConsent,
+		"asFreeTierUser":          opts.AsFreeTierUser,
+		"modules": map[string]any{
+			moduleName: map[string]any{
+				"lessons": map[string]any{
+					lessonName: map[string]any{
+						"started": true,
+					},
+				},
+			},
+		},
+	}
+
+	body, err := toJSONBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var course Course
+	return &course, c.PatchInto(ctx, "/courses/"+courseName+"/learning", nil, nil, body, &course)
+}
+
+func (c *Client) StopCourseLesson(ctx context.Context, courseName, moduleName, lessonName string) (*Course, error) {
+	req := map[string]any{
+		"modules": map[string]any{
+			moduleName: map[string]any{
+				"lessons": map[string]any{
+					lessonName: map[string]any{
+						"started": false,
+					},
+				},
+			},
+		},
+	}
+
+	body, err := toJSONBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var course Course
+	return &course, c.PatchInto(ctx, "/courses/"+courseName+"/learning", nil, nil, body, &course)
 }
