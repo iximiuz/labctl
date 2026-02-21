@@ -127,6 +127,26 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		return fmt.Errorf("user %q not found in the machine %q", opts.User, opts.Machine)
 	}
 
+	var (
+		localPort  = portStr(opts.Address)
+		localHost  = hostStr(opts.Address)
+		remotePort = "22"
+		errCh      = make(chan error, 100)
+	)
+
+	pf, err := portforward.ForwardingSpec{
+		Kind:       "local",
+		LocalHost:  localHost,
+		LocalPort:  localPort,
+		RemotePort: remotePort,
+	}.ToPortForward(opts.Machine)
+	if err != nil {
+		return fmt.Errorf("couldn't convert port forwarding spec to API port forward model: %w", err)
+	}
+	if err := cli.Client().AddPortForward(ctx, p.ID, *pf); err != nil {
+		cli.PrintErr("Warning: couldn't save port forward: %v\n", err)
+	}
+
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:          p.ID,
 		Machine:         opts.Machine,
@@ -137,12 +157,6 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		return fmt.Errorf("couldn't start tunnel: %w", err)
 	}
 
-	var (
-		localPort = portStr(opts.Address)
-		localHost = hostStr(opts.Address)
-		errCh     = make(chan error, 100)
-	)
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -150,7 +164,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		if err := tunnel.Forward(ctx, portforward.ForwardingSpec{
 			LocalPort:  localPort,
 			LocalHost:  localHost,
-			RemotePort: "22",
+			RemotePort: remotePort,
 		}, errCh); err != nil {
 			errCh <- err
 		}
