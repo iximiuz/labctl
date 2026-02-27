@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
+	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 	"github.com/iximiuz/labctl/internal/safety"
@@ -225,11 +225,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	cli.PrintAux("New %s playground started with ID %s\n", opts.playground, play.ID)
 
 	if opts.open {
-		cli.PrintAux("Opening %s in your browser...\n", play.PageURL)
-
-		if err := open.Run(play.PageURL); err != nil {
-			cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually to access the playground.\n")
-		}
+		browser.OpenWithFallbackMessage(cli, play.PageURL)
 	}
 
 	if opts.ide != "" {

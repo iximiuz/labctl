@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -100,11 +100,7 @@ func runShell(ctx context.Context, cli labcli.CLI, opts *shellOptions) error {
 	cli.PrintAux("Shell session %s@%s exposed as %s\n", resp.User, resp.Machine, resp.URL)
 
 	if opts.open {
-		cli.PrintAux("Opening %s in your browser...\n", resp.URL)
-
-		if err := open.Run(resp.URL); err != nil {
-			cli.PrintAux("Couldn't open the browser. Copy the URL into a browser manually to access the shell.\n")
-		}
+		browser.OpenWithFallbackMessage(cli, resp.URL)
 	}
 
 	cli.PrintOut("%s\n", resp.URL)
