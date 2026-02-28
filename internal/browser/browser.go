@@ -57,7 +57,7 @@ func openWSL(url string) error {
 	}
 
 	// The empty "" arg prevents cmd.exe from interpreting the URL as a window title.
-	if tryExec("cmd.exe", "/c", "start", "", url) {
+	if tryExec("cmd.exe", "/c", "start", "", `"`+url+`"`) {
 		return nil
 	}
 
