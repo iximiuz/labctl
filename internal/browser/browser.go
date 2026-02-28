@@ -41,14 +41,14 @@ func Open(url string) error {
 	return open.Run(url)
 }
 
-// tryExec looks up a command by name and starts it with the given args.
-// Returns true if the command was found and started successfully.
+// tryExec looks up a command by name and runs it with the given args.
+// Returns true if the command was found and completed successfully (exit 0).
 func tryExec(name string, args ...string) bool {
 	path, err := exec.LookPath(name)
 	if err != nil {
 		return false
 	}
-	return exec.Command(path, args...).Start() == nil
+	return exec.Command(path, args...).Run() == nil
 }
 
 func openWSL(url string) error {
