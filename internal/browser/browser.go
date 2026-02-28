@@ -64,12 +64,17 @@ func openWSL(url string) error {
 	return open.Run(url)
 }
 
+// openFunc is the function used by OpenWithFallbackMessage to open URLs.
+// It defaults to Open and can be overridden in tests to avoid spawning
+// real browser processes.
+var openFunc = Open
+
 // OpenWithFallbackMessage opens the URL and prints a prominent, copy-friendly
 // fallback message if the browser cannot be opened.
 func OpenWithFallbackMessage(out Printer, url string) {
 	out.PrintAux("Opening %s in your browser...\n", url)
 
-	if err := Open(url); err != nil {
+	if err := openFunc(url); err != nil {
 		out.PrintAux("\nCould not open browser automatically.\n")
 		out.PrintAux("Please open this URL in your browser:\n\n")
 		out.PrintAux("  %s\n\n", url)

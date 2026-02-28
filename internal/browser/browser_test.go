@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -68,21 +69,30 @@ func (m *mockPrinter) PrintAux(format string, a ...any) {
 	fmt.Fprintf(&m.buf, format, a...)
 }
 
+// stubOpen replaces openFunc for the duration of a test and restores it on cleanup.
+func stubOpen(t *testing.T, fn func(string) error) {
+	t.Helper()
+	orig := openFunc
+	openFunc = fn
+	t.Cleanup(func() { openFunc = orig })
+}
+
 func TestOpenWithFallbackMessage_Success(t *testing.T) {
-	// We can't easily test actual browser opening, but we can verify
-	// that the "Opening..." message is always printed.
+	stubOpen(t, func(string) error { return nil })
+
 	p := &mockPrinter{}
 	url := "https://example.com/test"
 
-	// This will attempt to open a real browser, which will likely fail in CI.
-	// The important thing is the output format.
 	OpenWithFallbackMessage(p, url)
 
 	output := p.buf.String()
 	require.Contains(t, output, "Opening https://example.com/test in your browser...")
+	assert.NotContains(t, output, "Could not open browser automatically")
 }
 
 func TestOpenWithFallbackMessage_FallbackContainsURL(t *testing.T) {
+	stubOpen(t, func(string) error { return errors.New("no browser") })
+
 	p := &mockPrinter{}
 	url := "https://example.com/auth/sessions/abc123"
 
@@ -90,14 +100,9 @@ func TestOpenWithFallbackMessage_FallbackContainsURL(t *testing.T) {
 
 	output := p.buf.String()
 
-	// Regardless of whether browser opened, the URL must appear at least once
-	// (in the "Opening..." line). If it failed, it appears again in the fallback.
-	assert.Contains(t, output, url)
-
-	// If the browser failed to open (likely in CI/testing), verify the fallback format.
-	if strings.Contains(output, "Could not open browser automatically") {
-		assert.Contains(t, output, "Please open this URL in your browser:")
-		// The URL should appear on its own indented line for easy copying.
-		assert.Contains(t, output, "  "+url)
-	}
+	assert.Contains(t, output, "Opening "+url+" in your browser...")
+	assert.Contains(t, output, "Could not open browser automatically")
+	assert.Contains(t, output, "Please open this URL in your browser:")
+	// The URL should appear on its own indented line for easy copying.
+	assert.Contains(t, output, "  "+url)
 }
