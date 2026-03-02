@@ -177,6 +177,16 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 	}
 }
 
+func (s *Session) RunOutput(ctx context.Context, cmd string) ([]byte, error) {
+	sess, err := s.client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("create SSH session: %w", err)
+	}
+	defer sess.Close()
+
+	return sess.CombinedOutput(cmd)
+}
+
 func (s *Session) Close() error {
 	return s.client.Close()
 }

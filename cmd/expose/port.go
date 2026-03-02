@@ -26,6 +26,11 @@ type portOptions struct {
 	public bool
 
 	open bool
+
+	auto        bool
+	k8s         bool
+	allMachines bool
+	namespace   string
 }
 
 func (o *portOptions) access() api.AccessMode {
@@ -46,13 +51,45 @@ func NewPortCommand(cli labcli.CLI) *cobra.Command {
 	var opts portOptions
 
 	cmd := &cobra.Command{
-		Use:   "port <playground> <port>",
+		Use:   "port <playground> [port]",
 		Short: "Expose an HTTP(s) service running in the playground",
-		Args:  cobra.ExactArgs(2),
+		Long: `Expose an HTTP(s) service running in the playground.
+
+By default, requires a specific port number. Use --auto to discover all
+listening ports via ss, or --k8s to discover Kubernetes NodePort services.`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if opts.auto || opts.k8s {
+				if len(args) != 1 {
+					return fmt.Errorf("requires exactly 1 arg (playground ID) when using --auto or --k8s")
+				}
+				return nil
+			}
+			if len(args) != 2 {
+				return fmt.Errorf("requires exactly 2 args: <playground> <port>")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.playID = args[0]
-			opts.port = args[1]
 
+			if opts.auto && opts.k8s {
+				return fmt.Errorf("--auto and --k8s are mutually exclusive")
+			}
+			if opts.allMachines && !opts.auto {
+				return fmt.Errorf("--all-machines can only be used with --auto")
+			}
+			if opts.namespace != "" && !opts.k8s {
+				return fmt.Errorf("--namespace can only be used with --k8s")
+			}
+
+			if opts.auto {
+				return labcli.WrapStatusError(runAutoExpose(cmd.Context(), cli, &opts))
+			}
+			if opts.k8s {
+				return labcli.WrapStatusError(runK8sExpose(cmd.Context(), cli, &opts))
+			}
+
+			opts.port = args[1]
 			return labcli.WrapStatusError(runPort(cmd.Context(), cli, &opts))
 		},
 	}
@@ -96,6 +133,31 @@ func NewPortCommand(cli labcli.CLI) *cobra.Command {
 		"o",
 		false,
 		"Open the exposed service in browser",
+	)
+	flags.BoolVar(
+		&opts.auto,
+		"auto",
+		false,
+		"Auto-discover listening ports via ss -lntp and expose them all",
+	)
+	flags.BoolVar(
+		&opts.k8s,
+		"k8s",
+		false,
+		"Auto-discover Kubernetes NodePort services and expose them",
+	)
+	flags.BoolVar(
+		&opts.allMachines,
+		"all-machines",
+		false,
+		"Discover and expose ports on all machines (only with --auto)",
+	)
+	flags.StringVarP(
+		&opts.namespace,
+		"namespace",
+		"n",
+		"",
+		"Kubernetes namespace to discover NodePort services from (default: all namespaces, only with --k8s)",
 	)
 
 	return cmd
