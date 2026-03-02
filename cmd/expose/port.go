@@ -58,6 +58,16 @@ func NewPortCommand(cli labcli.CLI) *cobra.Command {
 By default, requires a specific port number. Use --auto to discover all
 listening ports via ss, or --k8s to discover Kubernetes NodePort services.`,
 		Args: func(cmd *cobra.Command, args []string) error {
+			if opts.auto && opts.k8s {
+				return fmt.Errorf("--auto and --k8s are mutually exclusive")
+			}
+			if opts.allMachines && !opts.auto {
+				return fmt.Errorf("--all-machines can only be used with --auto")
+			}
+			if opts.namespace != "" && !opts.k8s {
+				return fmt.Errorf("--namespace can only be used with --k8s")
+			}
+
 			if opts.auto || opts.k8s {
 				if len(args) != 1 {
 					return fmt.Errorf("requires exactly 1 arg (playground ID) when using --auto or --k8s")
@@ -71,16 +81,6 @@ listening ports via ss, or --k8s to discover Kubernetes NodePort services.`,
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.playID = args[0]
-
-			if opts.auto && opts.k8s {
-				return fmt.Errorf("--auto and --k8s are mutually exclusive")
-			}
-			if opts.allMachines && !opts.auto {
-				return fmt.Errorf("--all-machines can only be used with --auto")
-			}
-			if opts.namespace != "" && !opts.k8s {
-				return fmt.Errorf("--namespace can only be used with --k8s")
-			}
 
 			if opts.auto {
 				return labcli.WrapStatusError(runAutoExpose(cmd.Context(), cli, &opts))
