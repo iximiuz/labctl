@@ -107,10 +107,77 @@ func connectSSH(
 	return sess, cancel, nil
 }
 
+var skipPorts = map[int]bool{
+	22: true, // SSH
+	53: true, // DNS
+}
+
+var skipProcesses = map[string]bool{
+	"systemd":          true,
+	"systemd-resolve":  true,
+	"systemd-resolved": true,
+	"examiner":         true,
+}
+
+type ssEntry struct {
+	port      int
+	host      string
+	processes string
+}
+
+// isLoopback returns true if the address is bound to localhost only.
+func (e ssEntry) isLoopback() bool {
+	return strings.HasPrefix(e.host, "127.") ||
+		e.host == "[::1]"
+}
+
+// hasOnlySkippedProcesses returns true if every process name in the
+// ss users:(...) column is in the skip list.
+// Format: users:(("name",pid=N,fd=N),("name2",pid=N,fd=N))
+func (e ssEntry) hasOnlySkippedProcesses() bool {
+	if e.processes == "" {
+		return false
+	}
+	names := extractProcessNames(e.processes)
+	if len(names) == 0 {
+		return false
+	}
+	for _, name := range names {
+		if !skipProcesses[name] {
+			return false
+		}
+	}
+	return true
+}
+
+// extractProcessNames pulls process names from ss users:(...) format.
+// e.g. users:(("sshd",pid=936,fd=3),("systemd",pid=1,fd=63)) -> ["sshd", "systemd"]
+func extractProcessNames(usersField string) []string {
+	var names []string
+	s := usersField
+	for {
+		start := strings.Index(s, "(\"")
+		if start < 0 {
+			break
+		}
+		s = s[start+2:]
+		end := strings.Index(s, "\"")
+		if end < 0 {
+			break
+		}
+		names = append(names, s[:end])
+		s = s[end+1:]
+	}
+	return names
+}
+
 // parseSSOutput parses the output of `ss -lntp` and returns a deduplicated,
-// sorted list of listening TCP port numbers.
+// sorted list of listening TCP port numbers, filtering out:
+//   - well-known system ports (SSH, DNS)
+//   - localhost-only bindings (127.x.x.x, [::1])
+//   - known system processes (systemd, systemd-resolve, examiner)
 func parseSSOutput(output string) ([]int, error) {
-	seen := make(map[int]bool)
+	entries := make(map[int]ssEntry)
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || !strings.HasPrefix(line, "LISTEN") {
@@ -123,43 +190,71 @@ func parseSSOutput(output string) ([]int, error) {
 		}
 
 		addr := fields[3]
-		port, err := extractPortFromAddr(addr)
+		host, port, err := extractHostPort(addr)
 		if err != nil {
 			slog.Debug("Skipping unparseable address in ss output", "addr", addr, "error", err)
 			continue
 		}
 
-		if port == 22 {
+		var processes string
+		if len(fields) >= 6 {
+			processes = fields[5]
+		}
+
+		entry := ssEntry{port: port, host: host, processes: processes}
+
+		if skipPorts[port] {
+			slog.Debug("Skipping system port", "port", port)
 			continue
 		}
-		seen[port] = true
+
+		if existing, ok := entries[port]; ok {
+			if !existing.isLoopback() {
+				continue
+			}
+			if entry.isLoopback() {
+				continue
+			}
+		}
+		entries[port] = entry
 	}
 
-	ports := make([]int, 0, len(seen))
-	for p := range seen {
-		ports = append(ports, p)
+	var ports []int
+	for _, e := range entries {
+		if e.isLoopback() {
+			slog.Debug("Skipping loopback-only port", "port", e.port, "host", e.host)
+			continue
+		}
+		if e.hasOnlySkippedProcesses() {
+			slog.Debug("Skipping system process port", "port", e.port, "processes", e.processes)
+			continue
+		}
+		ports = append(ports, e.port)
 	}
+
 	sort.Ints(ports)
 	return ports, nil
 }
 
-// extractPortFromAddr handles both IPv4 (0.0.0.0:PORT, 127.0.0.1:PORT)
-// and IPv6 ([::]:PORT, [::1]:PORT) address formats from ss output.
-func extractPortFromAddr(addr string) (int, error) {
+// extractHostPort splits an ss local address into the host part and port number.
+// Handles IPv4 (0.0.0.0:PORT), IPv6 ([::]:PORT), and wildcard (*:PORT).
+func extractHostPort(addr string) (string, int, error) {
 	if strings.HasPrefix(addr, "[") {
-		// IPv6: [::]:PORT or [::1]:PORT
 		idx := strings.LastIndex(addr, "]:")
 		if idx < 0 {
-			return 0, fmt.Errorf("no port separator in IPv6 address %q", addr)
+			return "", 0, fmt.Errorf("no port separator in IPv6 address %q", addr)
 		}
-		return strconv.Atoi(addr[idx+2:])
+		host := addr[:idx+1]
+		port, err := strconv.Atoi(addr[idx+2:])
+		return host, port, err
 	}
-	// IPv4: 0.0.0.0:PORT or 127.0.0.1:PORT or *:PORT
 	idx := strings.LastIndex(addr, ":")
 	if idx < 0 {
-		return 0, fmt.Errorf("no port separator in address %q", addr)
+		return "", 0, fmt.Errorf("no port separator in address %q", addr)
 	}
-	return strconv.Atoi(addr[idx+1:])
+	host := addr[:idx]
+	port, err := strconv.Atoi(addr[idx+1:])
+	return host, port, err
 }
 
 // kubeServiceList represents the minimal structure of `kubectl get svc -A -o json`.
@@ -289,7 +384,7 @@ func runAutoExpose(ctx context.Context, cli labcli.CLI, opts *portOptions) error
 			continue
 		}
 
-		output, err := sess.RunOutput(ctx, "ss -lntp")
+		output, err := sess.RunOutput(ctx, "sudo ss -lntp")
 		sess.Close()
 		cancel()
 		if err != nil {
