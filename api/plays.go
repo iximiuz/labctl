@@ -187,6 +187,37 @@ type Machine struct {
 	Resources MachineResources `json:"resources"`
 }
 
+// ResolveMachine returns the given machine name if it exists in the playground,
+// or defaults to the first machine's name if name is empty.
+func (p *Play) ResolveMachine(name string) (string, error) {
+	if name == "" {
+		return p.Machines[0].Name, nil
+	}
+	if p.GetMachine(name) == nil {
+		return "", fmt.Errorf("machine %q not found in the playground", name)
+	}
+	return name, nil
+}
+
+// ResolveUser returns the given user if it exists on the machine,
+// or defaults to the machine's default user (or "root") if user is empty.
+func (p *Play) ResolveUser(machine, user string) (string, error) {
+	m := p.GetMachine(machine)
+	if m == nil {
+		return "", fmt.Errorf("machine %q not found in the playground", machine)
+	}
+	if user == "" {
+		if u := m.DefaultUser(); u != nil {
+			return u.Name, nil
+		}
+		return "root", nil
+	}
+	if !m.HasUser(user) {
+		return "", fmt.Errorf("user %q not found in the machine %q", user, machine)
+	}
+	return user, nil
+}
+
 func (m *Machine) DefaultUser() *MachineUser {
 	for _, u := range m.Users {
 		if u.Default {

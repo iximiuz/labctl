@@ -157,23 +157,11 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 		return fmt.Errorf("couldn't start solving the challenge: %w", err)
 	}
 
-	if opts.machine == "" {
-		opts.machine = chal.Play.Machines[0].Name
-	} else {
-		if chal.Play.GetMachine(opts.machine) == nil {
-			return fmt.Errorf("machine %q not found in the challenge playground", opts.machine)
-		}
+	if opts.machine, err = chal.Play.ResolveMachine(opts.machine); err != nil {
+		return err
 	}
-
-	if opts.user == "" {
-		if u := chal.Play.GetMachine(opts.machine).DefaultUser(); u != nil {
-			opts.user = u.Name
-		} else {
-			opts.user = "root"
-		}
-	}
-	if !chal.Play.GetMachine(opts.machine).HasUser(opts.user) {
-		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
+	if opts.user, err = chal.Play.ResolveUser(opts.machine, opts.user); err != nil {
+		return err
 	}
 
 	if !opts.noOpen {

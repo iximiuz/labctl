@@ -221,12 +221,8 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("couldn't get playground: %w", err)
 	}
 
-	if opts.machine == "" {
-		opts.machine = p.Machines[0].Name
-	} else {
-		if p.GetMachine(opts.machine) == nil {
-			return fmt.Errorf("machine %q not found in the playground", opts.machine)
-		}
+	if opts.machine, err = p.ResolveMachine(opts.machine); err != nil {
+		return err
 	}
 
 	// Save port forwards to play's config
@@ -253,8 +249,6 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 		errCh = make(chan error, 100)
 	)
 	for _, spec := range opts.localsParsed {
-		spec := spec
-
 		g.Go(func() error {
 			cli.PrintAux("Forwarding %s -> %s\n", spec.LocalAddr(), spec.RemoteAddr())
 

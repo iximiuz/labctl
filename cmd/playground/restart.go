@@ -150,23 +150,11 @@ func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOpti
 
 	cli.PrintAux("Playground has been restarted.\n")
 
-	if opts.machine == "" {
-		opts.machine = play.Machines[0].Name
-	} else {
-		if play.GetMachine(opts.machine) == nil {
-			return fmt.Errorf("machine %q not found in the playground", opts.machine)
-		}
+	if opts.machine, err = play.ResolveMachine(opts.machine); err != nil {
+		return err
 	}
-
-	if opts.user == "" {
-		if u := play.GetMachine(opts.machine).DefaultUser(); u != nil {
-			opts.user = u.Name
-		} else {
-			opts.user = "root"
-		}
-	}
-	if !play.GetMachine(opts.machine).HasUser(opts.user) {
-		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
+	if opts.user, err = play.ResolveUser(opts.machine, opts.user); err != nil {
+		return err
 	}
 
 	if opts.open {

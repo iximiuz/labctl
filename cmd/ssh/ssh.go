@@ -84,23 +84,11 @@ func runSSHSession(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("couldn't get playground: %w", err)
 	}
 
-	if opts.machine == "" {
-		opts.machine = p.Machines[0].Name
-	} else {
-		if p.GetMachine(opts.machine) == nil {
-			return fmt.Errorf("machine %q not found in the playground", opts.machine)
-		}
+	if opts.machine, err = p.ResolveMachine(opts.machine); err != nil {
+		return err
 	}
-
-	if opts.user == "" {
-		if u := p.GetMachine(opts.machine).DefaultUser(); u != nil {
-			opts.user = u.Name
-		} else {
-			opts.user = "root"
-		}
-	}
-	if !p.GetMachine(opts.machine).HasUser(opts.user) {
-		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
+	if opts.user, err = p.ResolveUser(opts.machine, opts.user); err != nil {
+		return err
 	}
 
 	sess, errCh, err := StartSSHSession(ctx, cli, p, opts.machine, opts.user, opts.command, opts.forwardAgent)

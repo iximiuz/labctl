@@ -157,23 +157,11 @@ func runStartTutorial(ctx context.Context, cli labcli.CLI, opts *startOptions) e
 		return fmt.Errorf("tutorial doesn't have a playground associated with it")
 	}
 
-	if opts.machine == "" {
-		opts.machine = tut.Play.Machines[0].Name
-	} else {
-		if tut.Play.GetMachine(opts.machine) == nil {
-			return fmt.Errorf("machine %q not found in the tutorial playground", opts.machine)
-		}
+	if opts.machine, err = tut.Play.ResolveMachine(opts.machine); err != nil {
+		return err
 	}
-
-	if opts.user == "" {
-		if u := tut.Play.GetMachine(opts.machine).DefaultUser(); u != nil {
-			opts.user = u.Name
-		} else {
-			opts.user = "root"
-		}
-	}
-	if !tut.Play.GetMachine(opts.machine).HasUser(opts.user) {
-		return fmt.Errorf("user %q not found in the machine %q", opts.user, opts.machine)
+	if opts.user, err = tut.Play.ResolveUser(opts.machine, opts.user); err != nil {
+		return err
 	}
 
 	if !opts.noOpen {

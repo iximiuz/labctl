@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
-  "runtime"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -108,23 +108,11 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		return fmt.Errorf("couldn't get playground: %w", err)
 	}
 
-	if opts.Machine == "" {
-		opts.Machine = p.Machines[0].Name
-	} else {
-		if p.GetMachine(opts.Machine) == nil {
-			return fmt.Errorf("machine %q not found in the playground", opts.Machine)
-		}
+	if opts.Machine, err = p.ResolveMachine(opts.Machine); err != nil {
+		return err
 	}
-
-	if opts.User == "" {
-		if u := p.GetMachine(opts.Machine).DefaultUser(); u != nil {
-			opts.User = u.Name
-		} else {
-			opts.User = "root"
-		}
-	}
-	if !p.GetMachine(opts.Machine).HasUser(opts.User) {
-		return fmt.Errorf("user %q not found in the machine %q", opts.User, opts.Machine)
+	if opts.User, err = p.ResolveUser(opts.Machine, opts.User); err != nil {
+		return err
 	}
 
 	var (
