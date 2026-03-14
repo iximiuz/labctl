@@ -191,10 +191,10 @@ func WrapStatusError(err error) error {
 
 	var exitErr ExitError
 	if errors.As(err, &exitErr) {
-		return NewStatusError(exitErr.ExitStatus(), err.Error())
+		return NewStatusError(exitErr.ExitStatus(), "%s", err.Error())
 	}
 
-	return NewStatusError(1, err.Error())
+	return NewStatusError(1, "%s", err.Error())
 }
 
 func (e StatusError) Error() string {

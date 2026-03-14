@@ -188,7 +188,7 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 	}
 
 	if err != nil {
-		return labcli.NewStatusError(2, err.Error())
+		return labcli.NewStatusError(2, "%s", err.Error())
 	}
 
 	return nil

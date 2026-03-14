@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
+	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/safety"
 	issh "github.com/iximiuz/labctl/internal/ssh"
@@ -177,11 +177,7 @@ func runStartTutorial(ctx context.Context, cli labcli.CLI, opts *startOptions) e
 	}
 
 	if !opts.noOpen {
-		cli.PrintAux("Opening %s in your browser...\n", tut.PageURL)
-
-		if err := open.Run(tut.PageURL); err != nil {
-			cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually to access the playground.\n")
-		}
+		browser.OpenWithFallbackMessage(cli, tut.PageURL)
 	}
 
 	playConn := api.NewPlayConn(ctx, tut.Play, cli.Client(), cli.Config().WebSocketOrigin())

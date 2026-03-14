@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/ssh"
 )
@@ -135,11 +135,7 @@ func runLogin(ctx context.Context, cli labcli.CLI, opts loginOptions) error {
 	accessToken := ses.AccessToken
 	cli.Client().SetCredentials(ses.ID, accessToken)
 
-	cli.PrintAux("Opening %s in your browser...\n", ses.AuthURL)
-
-	if err := open.Run(ses.AuthURL); err != nil {
-		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually and follow the instructions on the page.\n")
-	}
+	browser.OpenWithFallbackMessage(cli, ses.AuthURL)
 
 	cli.PrintAux("\n")
 

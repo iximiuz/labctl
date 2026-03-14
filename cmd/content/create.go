@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/content"
+	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -91,9 +91,7 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 	}
 
 	cli.PrintAux("Created a new %s %s\n", cont.GetKind(), cont.GetPageURL())
-	if err := open.Run(cont.GetPageURL()); err != nil {
-		cli.PrintAux("Couldn't open the browser. Copy the above URL into a browser manually.\n")
-	}
+	browser.OpenWithFallbackMessage(cli, cont.GetPageURL())
 
 	dir, err := opts.ContentDir(cont.GetName())
 	if err != nil {
