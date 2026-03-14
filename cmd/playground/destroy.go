@@ -8,6 +8,7 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -23,9 +24,10 @@ func newDestroyCommand(cli labcli.CLI) *cobra.Command {
 	var opts destroyOptions
 
 	cmd := &cobra.Command{
-		Use:   "destroy [flags] <playground-id>",
-		Short: `Destroy an active or stopped playground session, completely deleting its data`,
-		Args:  cobra.ExactArgs(1),
+		Use:               "destroy [flags] <playground-id>",
+		Short:             `Destroy an active or stopped playground session, completely deleting its data`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.NonDestroyedPlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 

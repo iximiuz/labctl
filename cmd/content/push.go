@@ -20,6 +20,7 @@ import (
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/content"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -62,9 +63,10 @@ func newPushCommand(cli labcli.CLI) *cobra.Command {
 	var opts pushOptions
 
 	cmd := &cobra.Command{
-		Use:   "push [flags] <challenge|tutorial|skill-path|course|training> <name>",
-		Short: `Push content files from the local directory to the remote content repository (the "inner author loop").`,
-		Args:  cobra.ExactArgs(2),
+		Use:               "push [flags] <challenge|tutorial|skill-path|course|training> <name>",
+		Short:             `Push content files from the local directory to the remote content repository (the "inner author loop").`,
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completion.ContentArgs(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := opts.kind.Set(args[0]); err != nil {
 				return labcli.WrapStatusError(err)

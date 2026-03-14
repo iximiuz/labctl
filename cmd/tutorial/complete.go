@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -19,10 +20,11 @@ func newCompleteCommand(cli labcli.CLI) *cobra.Command {
 	var opts completeOptions
 
 	cmd := &cobra.Command{
-		Use:    "complete [flags] <tutorial-name>",
-		Short:  `Mark a tutorial as completed`,
-		Hidden: true,
-		Args:   cobra.ExactArgs(1),
+		Use:               "complete [flags] <tutorial-name>",
+		Short:             `Mark a tutorial as completed`,
+		Hidden:            true,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.StartedTutorialNames(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 

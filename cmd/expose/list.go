@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -21,10 +22,11 @@ func NewListCommand(cli labcli.CLI) *cobra.Command {
 	var opts listOptions
 
 	cmd := &cobra.Command{
-		Use:     "list <playground>",
-		Aliases: []string{"ls"},
-		Short:   "List all exposed HTTP(s) ports and web terminals",
-		Args:    cobra.ExactArgs(1),
+		Use:               "list <playground>",
+		Aliases:           []string{"ls"},
+		Short:             "List all exposed HTTP(s) ports and web terminals",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			playID := args[0]
 			return labcli.WrapStatusError(runList(cmd.Context(), cli, playID, &opts))

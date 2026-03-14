@@ -14,6 +14,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/browser"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/safety"
 	issh "github.com/iximiuz/labctl/internal/ssh"
@@ -43,9 +44,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	var opts startOptions
 
 	cmd := &cobra.Command{
-		Use:   "start [flags] <tutorial-url|tutorial-name>",
-		Short: `Learn with a tutorial from the comfort of your local command line`,
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "start [flags] <tutorial-url|tutorial-name>",
+		Short:             `Learn with a tutorial from the comfort of your local command line`,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completion.TutorialNames(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return labcli.NewStatusError(1,

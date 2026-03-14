@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 	"github.com/iximiuz/labctl/internal/retry"
@@ -40,10 +41,11 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	var opts options
 
 	cmd := &cobra.Command{
-		Use:     "ssh [flags] <playground-id>",
-		Short:   `Start SSH session to the target playground`,
-		Example: example,
-		Args:    cobra.MinimumNArgs(1),
+		Use:               "ssh [flags] <playground-id>",
+		Short:             `Start SSH session to the target playground`,
+		Example:           example,
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.playID = args[0]
 			opts.command = cmd.Flags().Args()[1:]

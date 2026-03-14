@@ -14,6 +14,7 @@ import (
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/browser"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -28,9 +29,10 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	var opts createOptions
 
 	cmd := &cobra.Command{
-		Use:   "create [flags] <challenge|tutorial|skill-path|course|training> <name>",
-		Short: "Create a new piece of content (visible only to the author)",
-		Args:  cobra.ExactArgs(2),
+		Use:               "create [flags] <challenge|tutorial|skill-path|course|training> <name>",
+		Short:             "Create a new piece of content (visible only to the author)",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completion.ContentCreateArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := opts.kind.Set(args[0]); err != nil {
 				return labcli.WrapStatusError(err)

@@ -6,15 +6,17 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 func NewRemoveCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "remove <playground> <id>",
-		Aliases: []string{"rm"},
-		Short:   "Un-expose a previously exposed port or shell by ID",
-		Args:    cobra.ExactArgs(2),
+		Use:               "remove <playground> <id>",
+		Aliases:           []string{"rm"},
+		Short:             "Un-expose a previously exposed port or shell by ID",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			playID := args[0]
 			exposeID := args[1]

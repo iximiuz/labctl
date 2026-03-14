@@ -8,6 +8,7 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -23,9 +24,10 @@ func newStopCommand(cli labcli.CLI) *cobra.Command {
 	var opts stopOptions
 
 	cmd := &cobra.Command{
-		Use:   "stop [flags] <playground-id>",
-		Short: `Stop a running playground session, preserving its state for future use`,
-		Args:  cobra.ExactArgs(1),
+		Use:               "stop [flags] <playground-id>",
+		Short:             `Stop a running playground session, preserving its state for future use`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 

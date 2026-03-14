@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -39,9 +40,10 @@ func newTasksCommand(cli labcli.CLI) *cobra.Command {
 	var opts tasksOptions
 
 	cmd := &cobra.Command{
-		Use:   "tasks <play-id>",
-		Short: "List tasks of a playground session",
-		Args:  cobra.ExactArgs(1),
+		Use:               "tasks <play-id>",
+		Short:             "List tasks of a playground session",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.NonDestroyedPlays(cli),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return opts.validate()
 		},

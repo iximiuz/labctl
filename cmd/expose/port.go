@@ -9,6 +9,7 @@ import (
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/browser"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -46,9 +47,10 @@ func NewPortCommand(cli labcli.CLI) *cobra.Command {
 	var opts portOptions
 
 	cmd := &cobra.Command{
-		Use:   "port <playground> <port>",
-		Short: "Expose an HTTP(s) service running in the playground",
-		Args:  cobra.ExactArgs(2),
+		Use:               "port <playground> <port>",
+		Short:             "Expose an HTTP(s) service running in the playground",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.playID = args[0]
 			opts.port = args[1]

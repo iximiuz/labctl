@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/content"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -21,10 +22,11 @@ func newRemoveCommand(cli labcli.CLI) *cobra.Command {
 	var opts removeOptions
 
 	cmd := &cobra.Command{
-		Use:     "remove [flags] <challenge|tutorial|skill-path|course|training> <name>",
-		Aliases: []string{"rm"},
-		Short:   "Remove a piece of content you authored.",
-		Args:    cobra.ExactArgs(2),
+		Use:               "remove [flags] <challenge|tutorial|skill-path|course|training> <name>",
+		Aliases:           []string{"rm"},
+		Short:             "Remove a piece of content you authored.",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completion.ContentArgs(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := opts.kind.Set(args[0]); err != nil {
 				return labcli.WrapStatusError(err)

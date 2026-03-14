@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -20,9 +21,10 @@ func newStopCommand(cli labcli.CLI) *cobra.Command {
 	var opts stopOptions
 
 	cmd := &cobra.Command{
-		Use:   "stop [flags] <tutorial-url|tutorial-name>",
-		Short: `Stop the current tutorial session`,
-		Args:  cobra.ExactArgs(1),
+		Use:               "stop [flags] <tutorial-url|tutorial-name>",
+		Short:             `Stop the current tutorial session`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.StartedTutorialNames(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 

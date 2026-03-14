@@ -7,14 +7,16 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
 func newMachinesCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "machines <playground-id>",
-		Short: `List machines of a specific playground session`,
-		Args:  cobra.ExactArgs(1),
+		Use:               "machines <playground-id>",
+		Short:             `List machines of a specific playground session`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.NonDestroyedPlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			playgroundID := args[0]
 			return labcli.WrapStatusError(runListMachines(cmd.Context(), cli, playgroundID))

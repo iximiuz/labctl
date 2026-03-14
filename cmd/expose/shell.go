@@ -8,6 +8,7 @@ import (
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/browser"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -30,9 +31,10 @@ func NewShellCommand(cli labcli.CLI) *cobra.Command {
 	var opts shellOptions
 
 	cmd := &cobra.Command{
-		Use:   "shell <playground>",
-		Short: "Expose a web terminal session with a handy URL",
-		Args:  cobra.ExactArgs(1),
+		Use:               "shell <playground>",
+		Short:             "Expose a web terminal session with a handy URL",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.playID = args[0]
 			return labcli.WrapStatusError(runShell(cmd.Context(), cli, &opts))

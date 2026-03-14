@@ -14,6 +14,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/browser"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/safety"
 	issh "github.com/iximiuz/labctl/internal/ssh"
@@ -48,9 +49,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	var opts startOptions
 
 	cmd := &cobra.Command{
-		Use:   "start [flags] <course-name> <lesson>",
-		Short: `Start a course lesson`,
-		Args:  cobra.ExactArgs(2),
+		Use:               "start [flags] <course-name> <lesson>",
+		Short:             `Start a course lesson`,
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completion.CourseArgs(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 

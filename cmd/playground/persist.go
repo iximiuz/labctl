@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -20,9 +21,10 @@ func newPersistCommand(cli labcli.CLI) *cobra.Command {
 	var opts persistOptions
 
 	cmd := &cobra.Command{
-		Use:   "persist [flags] <playground-id>",
-		Short: `Makes an active playground session persistent`,
-		Args:  cobra.ExactArgs(1),
+		Use:               "persist [flags] <playground-id>",
+		Short:             `Makes an active playground session persistent`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.playID = args[0]
 

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/content"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 )
 
@@ -25,9 +26,10 @@ func newPullCommand(cli labcli.CLI) *cobra.Command {
 	var opts pullOptions
 
 	cmd := &cobra.Command{
-		Use:   "pull [flags] <challenge|tutorial|skill-path|course|training> <name>",
-		Short: "Pull remote content files to the local directory for backup or editing",
-		Args:  cobra.ExactArgs(2),
+		Use:               "pull [flags] <challenge|tutorial|skill-path|course|training> <name>",
+		Short:             "Pull remote content files to the local directory for backup or editing",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completion.ContentArgs(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := opts.kind.Set(args[0]); err != nil {
 				return labcli.WrapStatusError(err)

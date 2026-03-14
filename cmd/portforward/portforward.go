@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 )
@@ -53,8 +54,9 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "port-forward <playground> [-m machine] -L [LOCAL:]REMOTE [-L ...] | --list | --restore | --remove <index>",
-		Short: `Forward one or more local or remote ports to a running playground`,
+		Use:               "port-forward <playground> [-m machine] -L [LOCAL:]REMOTE [-L ...] | --list | --restore | --remove <index>",
+		Short:             `Forward one or more local or remote ports to a running playground`,
+		ValidArgsFunction: completion.ActivePlays(cli),
 		Long: `Forward one or more local or remote ports to / from a running playground.
 
 While the implementation differs significantly, the behavior and semantic of the command

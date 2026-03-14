@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 )
@@ -36,9 +37,10 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	var opts Options
 
 	cmd := &cobra.Command{
-		Use:   "ssh-proxy [flags] <playground-id>",
-		Short: `Start SSH proxy to the playground's machine`,
-		Args:  cobra.ExactArgs(1),
+		Use:               "ssh-proxy [flags] <playground-id>",
+		Short:             `Start SSH proxy to the playground's machine`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.Quiet)
 

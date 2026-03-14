@@ -14,6 +14,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/browser"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 	"github.com/iximiuz/labctl/internal/safety"
@@ -48,9 +49,10 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 	var opts startOptions
 
 	cmd := &cobra.Command{
-		Use:   "start [flags] <playground-name>",
-		Short: `Start a new playground session, possibly opening it in a browser`,
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "start [flags] <playground-name>",
+		Short:             `Start a new playground session, possibly opening it in a browser`,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completion.PlaygroundNames(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 

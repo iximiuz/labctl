@@ -13,6 +13,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/browser"
+	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 )
@@ -40,9 +41,10 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 	var opts restartOptions
 
 	cmd := &cobra.Command{
-		Use:   "restart [flags] <playground-id>",
-		Short: `Restart a stopped playground session, resuming its state`,
-		Args:  cobra.ExactArgs(1),
+		Use:               "restart [flags] <playground-id>",
+		Short:             `Restart a stopped playground session, resuming its state`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completion.StoppedPlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 
