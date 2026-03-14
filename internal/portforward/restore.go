@@ -2,6 +2,7 @@ package portforward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"golang.org/x/sync/errgroup"
@@ -41,20 +42,6 @@ func RestoreSavedForwards(
 		machineForwards[pf.Machine] = append(machineForwards[pf.Machine], spec)
 	}
 
-	tunnelErrCh := make(chan error, 100)
-
-	// Log tunnel errors in background
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case err := <-tunnelErrCh:
-				out.PrintErr("Tunnel error: %v", err)
-			}
-		}
-	}()
-
 	// Start all port forwards in background
 	go func() {
 		var g errgroup.Group
@@ -69,15 +56,19 @@ func RestoreSavedForwards(
 					return fmt.Errorf("couldn't start tunnel for machine %s: %w", machine, err)
 				}
 
-				var innerG errgroup.Group
+				var doneChs []<-chan error
 				for _, spec := range specs {
-					innerG.Go(func() error {
-						out.PrintAux("Forwarding %s -> %s (machine: %s)\n", spec.LocalAddr(), spec.RemoteAddr(), machine)
-						return tunnel.Forward(ctx, spec, tunnelErrCh)
-					})
+					out.PrintAux("Forwarding %s -> %s (machine: %s)\n", spec.LocalAddr(), spec.RemoteAddr(), machine)
+					doneChs = append(doneChs, tunnel.StartForwarding(ctx, spec))
 				}
 
-				return innerG.Wait()
+				var exitErr error
+				for _, ch := range doneChs {
+					if err := <-ch; err != nil {
+						exitErr = errors.Join(exitErr, err)
+					}
+				}
+				return exitErr
 			})
 		}
 

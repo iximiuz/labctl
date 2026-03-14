@@ -2,11 +2,11 @@ package portforward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
@@ -244,33 +244,19 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 		return fmt.Errorf("couldn't start tunnel: %w", err)
 	}
 
-	var (
-		g     errgroup.Group
-		errCh = make(chan error, 100)
-	)
+	var doneChs []<-chan error
 	for _, spec := range opts.localsParsed {
-		g.Go(func() error {
-			cli.PrintAux("Forwarding %s -> %s\n", spec.LocalAddr(), spec.RemoteAddr())
-
-			return tunnel.Forward(ctx, spec, errCh)
-		})
+		cli.PrintAux("Forwarding %s -> %s\n", spec.LocalAddr(), spec.RemoteAddr())
+		doneChs = append(doneChs, tunnel.StartForwarding(ctx, spec))
 	}
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-
-			case err := <-errCh:
-				cli.PrintErr("Tunnel error: %v", err)
-			}
+	var exitErr error
+	for _, ch := range doneChs {
+		if err := <-ch; err != nil {
+			cli.PrintErr("Tunnel error: %v", err)
+			exitErr = errors.Join(exitErr, err)
 		}
-	}()
-
-	if err := g.Wait(); err != nil {
-		return err
 	}
 
-	return nil
+	return exitErr
 }

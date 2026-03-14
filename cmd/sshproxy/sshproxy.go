@@ -119,7 +119,6 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		localPort  = portStr(opts.Address)
 		localHost  = hostStr(opts.Address)
 		remotePort = "22"
-		errCh      = make(chan error, 100)
 	)
 
 	pf, err := portforward.ForwardingSpec{
@@ -149,24 +148,13 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 	defer cancel()
 
 	go func() {
-		if err := tunnel.Forward(ctx, portforward.ForwardingSpec{
+		status := tunnel.StartForwarding(ctx, portforward.ForwardingSpec{
 			LocalPort:  localPort,
 			LocalHost:  localHost,
 			RemotePort: remotePort,
-		}, errCh); err != nil {
-			errCh <- err
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-
-			case err := <-errCh:
-				slog.Debug("Tunnel borked", "error", err.Error())
-			}
+		})
+		if err := <-status; err != nil {
+			slog.Debug("Tunnel forwarding exited with error", "error", err.Error())
 		}
 	}()
 

@@ -126,33 +126,17 @@ func StartSSHSession(
 		return nil, nil, fmt.Errorf("couldn't start tunnel: %w", err)
 	}
 
-	var (
-		localPort = portforward.RandomLocalPort()
-		errCh     = make(chan error, 100)
-	)
+	localPort := portforward.RandomLocalPort()
 
 	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
-		if err := tunnel.Forward(ctx, portforward.ForwardingSpec{
+		status := tunnel.StartForwarding(ctx, portforward.ForwardingSpec{
 			LocalPort:  localPort,
 			RemotePort: "22",
-		}, errCh); err != nil {
-			errCh <- err
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-
-			case err := <-errCh:
-				if err != nil {
-					slog.Debug("Tunnel borked", "error", err.Error())
-				}
-			}
+		})
+		if err := <-status; err != nil {
+			slog.Debug("Tunnel forwarding exited with error", "error", err.Error())
 		}
 	}()
 

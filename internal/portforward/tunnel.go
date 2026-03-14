@@ -3,6 +3,7 @@ package portforward
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -78,6 +79,37 @@ func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan er
 	wsmux.SetHeader("Cookie", conductorSessionCookieName+"="+t.token)
 
 	return wsmux.ListenAndServe()
+}
+
+// StartForwarding starts port forwarding in the background and logs transient
+// errors. It returns a channel that receives the final result (nil or error)
+// when the forwarding stops.
+func (t *Tunnel) StartForwarding(ctx context.Context, spec ForwardingSpec) <-chan error {
+	errCh := make(chan error, 100)
+	doneCh := make(chan error, 1)
+
+	go func() {
+		doneCh <- t.Forward(ctx, spec, errCh)
+		close(doneCh)
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err, ok := <-errCh:
+				if !ok {
+					return
+				}
+				if err != nil {
+					slog.Debug("Tunnel forwarding error", "error", err.Error())
+				}
+			}
+		}
+	}()
+
+	return doneCh
 }
 
 func authenticate(ctx context.Context, url string, name string) (string, error) {
