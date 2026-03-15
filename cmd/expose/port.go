@@ -27,6 +27,8 @@ type portOptions struct {
 	public bool
 
 	open bool
+
+	scanned bool
 }
 
 func (o *portOptions) access() api.AccessMode {
@@ -47,11 +49,29 @@ func NewPortCommand(cli labcli.CLI) *cobra.Command {
 	var opts portOptions
 
 	cmd := &cobra.Command{
-		Use:               "port <playground> <port>",
+		Use:               "port <playground> [port]",
 		Short:             "Expose an HTTP(s) service running in the playground",
-		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if opts.scanned {
+				if len(args) != 1 {
+					return fmt.Errorf("exactly 1 argument (playground ID) is required when using --scanned")
+				}
+
+				for _, flag := range []string{"https", "host-rewrite", "path-rewrite"} {
+					if cmd.Flags().Changed(flag) {
+						return fmt.Errorf("flag --%s cannot be used with --scanned", flag)
+					}
+				}
+
+				opts.playID = args[0]
+				return labcli.WrapStatusError(runPortScanned(cmd.Context(), cli, &opts))
+			}
+
+			if len(args) != 2 {
+				return fmt.Errorf("exactly 2 arguments (playground ID and port) are required")
+			}
+
 			opts.playID = args[0]
 			opts.port = args[1]
 
@@ -99,6 +119,12 @@ func NewPortCommand(cli labcli.CLI) *cobra.Command {
 		false,
 		"Open the exposed service in browser",
 	)
+	flags.BoolVar(
+		&opts.scanned,
+		"scanned",
+		false,
+		"Scan and expose all detected HTTP(S) ports (only --open and --public flags are allowed)",
+	)
 
 	return cmd
 }
@@ -137,5 +163,50 @@ func runPort(ctx context.Context, cli labcli.CLI, opts *portOptions) error {
 	}
 
 	cli.PrintOut("%s\n", resp.URL)
+	return nil
+}
+
+func runPortScanned(ctx context.Context, cli labcli.CLI, opts *portOptions) error {
+	if _, err := cli.Client().GetPlay(ctx, opts.playID); err != nil {
+		return fmt.Errorf("couldn't get playground: %w", err)
+	}
+
+	cli.PrintAux("Scanning for open HTTP(S) ports...\n")
+
+	scanned, err := cli.Client().ScanPorts(ctx, opts.playID, opts.machine)
+	if err != nil {
+		return fmt.Errorf("couldn't scan ports: %w", err)
+	}
+
+	httpPorts := filterHTTPPorts(scanned)
+
+	if len(httpPorts) == 0 {
+		cli.PrintAux("No open HTTP(S) ports detected.\n")
+		return nil
+	}
+
+	cli.PrintAux("Detected %d open HTTP(S) port(s). Exposing...\n", len(httpPorts))
+
+	for _, sp := range httpPorts {
+		resp, err := cli.Client().ExposePort(ctx, opts.playID, api.ExposePortRequest{
+			Machine: sp.Machine,
+			Number:  sp.Number,
+			Access:  opts.access(),
+			TLS:     sp.Protocol == "HTTPS",
+		})
+		if err != nil {
+			cli.PrintErr("Couldn't expose port %s:%d: %s\n", sp.Machine, sp.Number, err)
+			continue
+		}
+
+		cli.PrintAux("%s port %s:%d exposed as %s\n", sp.Protocol, resp.Machine, resp.Number, resp.URL)
+
+		if opts.open {
+			browser.OpenWithFallbackMessage(cli, resp.URL)
+		}
+
+		cli.PrintOut("%s\n", resp.URL)
+	}
+
 	return nil
 }

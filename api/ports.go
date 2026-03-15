@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"net/url"
 )
 
 type AccessMode string
@@ -60,4 +61,20 @@ func (c *Client) ListPorts(ctx context.Context, id string) ([]*Port, error) {
 func (c *Client) UnexposePort(ctx context.Context, id string, portID string) error {
 	_, err := c.Delete(ctx, "/plays/"+id+"/ports/"+portID, nil, nil)
 	return err
+}
+
+type ScannedPort struct {
+	Machine  string `json:"machine"`
+	Number   int    `json:"number"`
+	Protocol string `json:"protocol"`
+}
+
+func (c *Client) ScanPorts(ctx context.Context, id string, machine string) ([]*ScannedPort, error) {
+	var query url.Values
+	if machine != "" {
+		query = url.Values{"machine": []string{machine}}
+	}
+
+	var resp []*ScannedPort
+	return resp, c.PostInto(ctx, "/plays/"+id+"/ports/scan", query, nil, nil, &resp)
 }
