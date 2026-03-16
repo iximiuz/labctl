@@ -83,7 +83,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		&opts.IDE,
 		"ide",
 		"",
-		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
+		`[DEPRECATED: Use the "labctl ide" command instead] Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
 	)
 	flags.BoolVarP(
 		&opts.Quiet,
@@ -205,14 +205,6 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}
 		cli.PrintAux("  StrictHostKeyChecking no\n")
 		cli.PrintAux("  UserKnownHostsFile /dev/null\n\n")
-
-		cli.PrintAux("# To access the playground in Visual Studio Code:\n")
-		cli.PrintAux("code --folder-uri vscode-remote://ssh-remote+%s@%s:%s%s\n\n",
-			opts.User, localHost, localPort, userHomeDir(opts.User))
-
-		cli.PrintAux("# To access the playground in Cursor:\n")
-		cli.PrintAux("cursor --folder-uri vscode-remote://ssh-remote+%s@%s:%s%s\n\n",
-			opts.User, localHost, localPort, userHomeDir(opts.User))
 
 		cli.PrintAux("\nPress Ctrl+C to stop\n")
 	}

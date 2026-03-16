@@ -83,47 +83,39 @@ labctl ssh <playground-id>
 labctl ssh <playground-id> -- ls -la /
 ```
 
-### Using IDE (VSCode, JetBrains, etc) to access playgrounds
+### Using IDE (VS Code, Cursor, Windsurf) to access playgrounds
 
-You can start a playground and open it in your IDE with:
+The `labctl ide` command opens a playground directly in your local IDE:
 
 ```sh
-labctl playground start docker --ide cursor
+# Start a playground and open it in Cursor
+PLAY_ID=$(labctl playground start golang)
+labctl ide cursor $PLAY_ID
 ```
 
-You can use the **SSH proxy mode** to access playgrounds from your IDE:
+You can also clone one or more Git repositories into the playground:
+
+```sh
+labctl ide code $PLAY_ID --repo https://github.com/user/repo
+
+# or
+
+labctl ide code $PLAY_ID --workdir projects --repo https://github.com/foo/bar --repo https://github.com/baz/qux
+```
+
+[**INSECURE**] For private repositories, use `--forward-agent` to forward your local SSH keys:
+
+```sh
+labctl ide code $PLAY_ID --forward-agent --repo git@github.com:user/private-repo
+```
+
+Alternatively, you can use `labctl ssh-proxy` to start a raw SSH proxy and connect manually:
 
 ```sh
 labctl ssh-proxy <playground-id>
 ```
 
-Example output:
-
-```text
-SSH proxy is running on 58279
-
-# Connect from the terminal:
-ssh -i ~/.ssh/iximiuz_labs_user ssh://laborant@127.0.0.1:58279
-
-# For better experience, add the following to your ~/.ssh/config:
-Host localhost 127.0.0.1 ::1
-  IdentityFile ~/.ssh/iximiuz_labs_user
-  AddKeysToAgent yes
-  # UseKeychain yes # macOS only
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null
-
-# To access the playground in Visual Studio Code:
-code --folder-uri vscode-remote://ssh-remote+laborant@127.0.0.1:58279/home/laborant
-
-# To access the playground in Cursor:
-cursor --folder-uri vscode-remote://ssh-remote+laborant@127.0.0.1:58279/home/laborant
-
-
-Press Ctrl+C to stop
-```
-
-After adding the above piece to your SSH config,
+After adding the suggested SSH config entries to your `~/.ssh/config`,
 you'll be able to develop right on the playground machine using the [Visual Studio Code Remote - SSH extension](https://code.visualstudio.com/docs/remote/ssh) or its JetBrains counterpart.
 Check out this [short recording on YouTube](https://youtu.be/wah_yLoYk0M) demonstrating the use case.
 
