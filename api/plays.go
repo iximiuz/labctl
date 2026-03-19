@@ -99,7 +99,7 @@ func (p *Play) FactoryID() string {
 
 func (p *Play) State() PlayState {
 	// Older plays don't have a status
-	if p.Status == nil {
+	if p.Status == nil || len(p.Status.StateEvents) == 0 {
 		return ""
 	}
 	return p.Status.StateEvents[len(p.Status.StateEvents)-1].State
