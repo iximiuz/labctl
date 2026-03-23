@@ -39,6 +39,9 @@ type configOverrides struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == os.Args[0] {
+		os.Args = append(os.Args[:1], os.Args[2:]...)
+	}
 	stdin, stdout, stderr := term.StdStreams()
 	cli := labcli.NewCLI(
 		stdin, stdout, stderr,
