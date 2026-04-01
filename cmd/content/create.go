@@ -19,8 +19,9 @@ import (
 )
 
 type createOptions struct {
-	kind content.ContentKind
-	name string
+	kind  content.ContentKind
+	name  string
+	quiet bool
 
 	DirOptions
 }
@@ -34,6 +35,8 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completion.ContentCreateArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cli.SetQuiet(opts.quiet)
+
 			if err := opts.kind.Set(args[0]); err != nil {
 				return labcli.WrapStatusError(err)
 			}
@@ -44,6 +47,13 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
+	flags.BoolVarP(
+		&opts.quiet,
+		"quiet",
+		"q",
+		false,
+		`Only print the content name`,
+	)
 
 	opts.AddDirFlag(flags, "Local directory with content files (default: $CWD/<content-name>)")
 
@@ -93,7 +103,9 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 	}
 
 	cli.PrintAux("Created a new %s %s\n", cont.GetKind(), cont.GetPageURL())
-	browser.OpenWithFallbackMessage(cli, cont.GetPageURL())
+	if !opts.quiet {
+		browser.OpenWithFallbackMessage(cli, cont.GetPageURL())
+	}
 
 	dir, err := opts.ContentDir(cont.GetName())
 	if err != nil {
@@ -104,6 +116,7 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 		cli.PrintErr("WARNING: Directory %s already exists and not empty.\n", dir)
 		cli.PrintErr("Skipping pulling sample content to avoid overwriting existing local files.\n")
 		cli.PrintErr("Use `labctl pull %s %s --dir <some-other-dir>`\nto pull the sample content files manually.\n", cont.GetKind(), cont.GetName())
+		cli.PrintOut("%s\n", cont.GetName())
 		return nil
 	}
 
@@ -133,6 +146,7 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 	}
 
 	cli.PrintAux("Happy authoring!\n")
+	cli.PrintOut("%s\n", cont.GetName())
 	return nil
 }
 
