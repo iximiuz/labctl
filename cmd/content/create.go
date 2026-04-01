@@ -19,9 +19,10 @@ import (
 )
 
 type createOptions struct {
-	kind  content.ContentKind
-	name  string
-	quiet bool
+	kind   content.ContentKind
+	name   string
+	noOpen bool
+	quiet  bool
 
 	DirOptions
 }
@@ -47,6 +48,12 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
+	flags.BoolVar(
+		&opts.noOpen,
+		"no-open",
+		false,
+		`Don't open the content in the browser`,
+	)
 	flags.BoolVarP(
 		&opts.quiet,
 		"quiet",
@@ -103,7 +110,7 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 	}
 
 	cli.PrintAux("Created a new %s %s\n", cont.GetKind(), cont.GetPageURL())
-	if !opts.quiet {
+	if !opts.noOpen {
 		browser.OpenWithFallbackMessage(cli, cont.GetPageURL())
 	}
 
