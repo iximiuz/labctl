@@ -478,6 +478,11 @@ func listFiles(dir string) ([]string, error) {
 			continue
 		}
 
+		// Skip temporary backup files some editors create
+		if strings.HasSuffix(file.Name(), "~") {
+			continue
+		}
+
 		if file.IsDir() {
 			children, err := listFiles(filepath.Join(dir, file.Name()))
 			if err != nil {

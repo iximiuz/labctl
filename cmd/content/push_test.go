@@ -142,3 +142,24 @@ func TestListDirsEmptyDirectory(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result)
 }
+
+func TestListFilesIgnoreBackupFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a real file and a ~ temp file
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("content"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.md~"), []byte("unsaved content"), 0644))
+
+	result, err := listFiles(tmpDir)
+	require.NoError(t, err)
+
+	var relPaths []string
+	for _, path := range result {
+		relPath, err := filepath.Rel(tmpDir, path)
+		require.NoError(t, err)
+		relPaths = append(relPaths, relPath)
+	}
+
+	// assert: the temp file is not listed
+	assert.Equal(t, []string{"index.md"}, relPaths)
+}
