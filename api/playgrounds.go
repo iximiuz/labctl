@@ -120,6 +120,7 @@ type MachineStartupFile struct {
 type PlaygroundMachine struct {
 	Name         string               `yaml:"name" json:"name"`
 	Users        []MachineUser        `yaml:"users,omitempty" json:"users,omitempty"`
+	Backend      string               `yaml:"backend,omitempty" json:"backend,omitempty"`
 	Kernel       *MachineKernel       `yaml:"kernel,omitempty" json:"kernel,omitempty"`
 	Drives       []MachineDrive       `yaml:"drives,omitempty" json:"drives,omitempty"`
 	Network      *MachineNetwork      `yaml:"network,omitempty" json:"network,omitempty"`
