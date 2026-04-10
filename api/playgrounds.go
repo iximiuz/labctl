@@ -220,7 +220,7 @@ type InitConditionValue struct {
 	Key      string   `yaml:"key" json:"key"`
 	Default  string   `yaml:"default,omitempty" json:"default,omitempty"`
 	Nullable bool     `yaml:"nullable,omitempty" json:"nullable,omitempty"`
-	Options  []string `yaml:"options" json:"options"`
+	Options  []string `yaml:"options,omitempty" json:"options,omitempty"`
 }
 
 type InitConditions struct {
