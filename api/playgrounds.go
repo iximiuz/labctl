@@ -217,10 +217,12 @@ type InitTask struct {
 }
 
 type InitConditionValue struct {
-	Key      string   `yaml:"key" json:"key"`
-	Default  string   `yaml:"default,omitempty" json:"default,omitempty"`
-	Nullable bool     `yaml:"nullable,omitempty" json:"nullable,omitempty"`
-	Options  []string `yaml:"options,omitempty" json:"options,omitempty"`
+	Key             string   `yaml:"key" json:"key"`
+	Default         string   `yaml:"default,omitempty" json:"default,omitempty"`
+	Nullable        bool     `yaml:"nullable,omitempty" json:"nullable,omitempty"`
+	Options         []string `yaml:"options,omitempty" json:"options,omitempty"`
+	Placeholder     string   `yaml:"placeholder,omitempty" json:"placeholder,omitempty"`
+	ValidationRegex string   `yaml:"validationRegex,omitempty" json:"validationRegex,omitempty"`
 }
 
 type InitConditions struct {
