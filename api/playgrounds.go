@@ -117,10 +117,31 @@ type MachineStartupFile struct {
 	Append  bool   `json:"append,omitempty"`
 }
 
+type MachineBackend string
+
+const (
+	MachineBackendFirecracker     MachineBackend = "firecracker"
+	MachineBackendCloudHypervisor MachineBackend = "cloud-hypervisor"
+)
+
+var MachineBackends = []MachineBackend{
+	MachineBackendFirecracker,
+	MachineBackendCloudHypervisor,
+}
+
+func IsValidMachineBackend(b MachineBackend) bool {
+	for _, valid := range MachineBackends {
+		if b == valid {
+			return true
+		}
+	}
+	return false
+}
+
 type PlaygroundMachine struct {
 	Name         string               `yaml:"name" json:"name"`
 	Users        []MachineUser        `yaml:"users,omitempty" json:"users,omitempty"`
-	Backend      string               `yaml:"backend,omitempty" json:"backend,omitempty"`
+	Backend      MachineBackend       `yaml:"backend,omitempty" json:"backend,omitempty"`
 	Kernel       *MachineKernel       `yaml:"kernel,omitempty" json:"kernel,omitempty"`
 	Drives       []MachineDrive       `yaml:"drives,omitempty" json:"drives,omitempty"`
 	Network      *MachineNetwork      `yaml:"network,omitempty" json:"network,omitempty"`

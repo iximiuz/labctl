@@ -40,6 +40,8 @@ type startOptions struct {
 
 	asFreeTierUser bool
 
+	backend string
+
 	initConditions map[string]string
 
 	quiet bool
@@ -68,6 +70,14 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 
 			if opts.ide != "" && opts.ssh {
 				return labcli.NewStatusError(1, "can't use --ide and --ssh flags at the same time")
+			}
+
+			if opts.backend != "" && opts.file != "" {
+				return labcli.NewStatusError(1, "can't use --backend and --file flags at the same time")
+			}
+
+			if opts.backend != "" && !api.IsValidMachineBackend(api.MachineBackend(opts.backend)) {
+				return labcli.NewStatusError(1, "unsupported backend %q (supported: %v)", opts.backend, api.MachineBackends)
 			}
 
 			opts.playground = args[0]
@@ -156,6 +166,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		nil,
 		`Set init conditions as key-value pairs (can be used multiple times)`,
 	)
+	flags.StringVar(
+		&opts.backend,
+		"backend",
+		"",
+		fmt.Sprintf(`Use the specified backend for all playground VMs (supported: %v)`, api.MachineBackends),
+	)
 	flags.BoolVar(
 		&opts.withPortForwards,
 		"with-port-forwards",
@@ -198,6 +214,21 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		if len(manifest.Playground.InitTasks) > 0 {
 			req.InitTasks = manifest.Playground.InitTasks
 		}
+	}
+
+	// Override backend for all machines if requested
+	if opts.backend != "" {
+		playground, err := cli.Client().GetPlayground(ctx, opts.playground, nil)
+		if err != nil {
+			return fmt.Errorf("couldn't get the playground: %w", err)
+		}
+
+		machines := make([]api.PlaygroundMachine, len(playground.Machines))
+		copy(machines, playground.Machines)
+		for i := range machines {
+			machines[i].Backend = api.MachineBackend(opts.backend)
+		}
+		req.Machines = machines
 	}
 
 	play, err := cli.Client().CreatePlay(ctx, req)
