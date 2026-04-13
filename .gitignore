@@ -2,5 +2,6 @@
 *.swo
 
 labctl
+labctl.exe
 
 dist/
