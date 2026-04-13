@@ -25,6 +25,58 @@ func (f ForwardingSpec) RemoteAddr() string {
 	return f.RemoteHost + ":" + f.RemotePort
 }
 
+// ParseRemote parses a -R port forwarding spec, following SSH-like semantics
+// where the BIND address (on the playground) comes first and the TARGET address
+// (on the labctl side) comes second. Accepted forms:
+//
+//	REMOTE_PORT:LOCAL_PORT                         # bind 0.0.0.0:REMOTE_PORT on playground,
+//	                                               # dial 127.0.0.1:LOCAL_PORT on labctl
+//	REMOTE_PORT:LOCAL_HOST:LOCAL_PORT              # same, but dial LOCAL_HOST:LOCAL_PORT
+//	REMOTE_HOST:REMOTE_PORT:LOCAL_PORT             # bind REMOTE_HOST:REMOTE_PORT
+//	REMOTE_HOST:REMOTE_PORT:LOCAL_HOST:LOCAL_PORT  # most explicit form
+func ParseRemote(s string) (ForwardingSpec, error) {
+	var cfg ForwardingSpec
+
+	cfg.Kind = "remote"
+
+	parts := strings.Split(s, ":")
+
+	switch len(parts) {
+	case 2: // REMOTE_PORT:LOCAL_PORT
+		cfg.RemoteHost = "0.0.0.0"
+		cfg.RemotePort = parts[0]
+		cfg.LocalHost = "127.0.0.1"
+		cfg.LocalPort = parts[1]
+	case 3: // REMOTE_PORT:LOCAL_HOST:LOCAL_PORT  or  REMOTE_HOST:REMOTE_PORT:LOCAL_PORT
+		if _, err := strconv.Atoi(parts[1]); err == nil {
+			// Second part is a port, so REMOTE_HOST:REMOTE_PORT:LOCAL_PORT
+			cfg.RemoteHost = parts[0]
+			cfg.RemotePort = parts[1]
+			cfg.LocalHost = "127.0.0.1"
+			cfg.LocalPort = parts[2]
+		} else {
+			// Second part is a host, so REMOTE_PORT:LOCAL_HOST:LOCAL_PORT
+			cfg.RemoteHost = "0.0.0.0"
+			cfg.RemotePort = parts[0]
+			cfg.LocalHost = parts[1]
+			cfg.LocalPort = parts[2]
+		}
+	case 4: // REMOTE_HOST:REMOTE_PORT:LOCAL_HOST:LOCAL_PORT
+		cfg.RemoteHost = parts[0]
+		cfg.RemotePort = parts[1]
+		cfg.LocalHost = parts[2]
+		cfg.LocalPort = parts[3]
+	default:
+		return cfg, fmt.Errorf("invalid forwarding configuration format")
+	}
+
+	if cfg.LocalPort == "" || cfg.RemotePort == "" {
+		return cfg, fmt.Errorf("both remote (bind) and local (target) ports are required for -R")
+	}
+
+	return cfg, nil
+}
+
 func ParseLocal(s string) (ForwardingSpec, error) {
 	var cfg ForwardingSpec
 

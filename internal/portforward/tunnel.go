@@ -74,11 +74,17 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 
 func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan error) error {
 	wsUrl := "wss://" + strings.Split(t.url, "://")[1]
+	cookie := conductorSessionCookieName + "=" + t.token
 
-	wsmux := client.NewClient(ctx, spec.LocalAddr(), spec.RemoteAddr(), wsUrl, errCh)
-	wsmux.SetHeader("Cookie", conductorSessionCookieName+"="+t.token)
+	if spec.Kind == "remote" {
+		c := client.NewReverseClient(ctx, spec.RemoteAddr(), spec.LocalAddr(), wsUrl, errCh)
+		c.SetHeader("Cookie", cookie)
+		return c.ListenAndServe()
+	}
 
-	return wsmux.ListenAndServe()
+	c := client.NewClient(ctx, spec.LocalAddr(), spec.RemoteAddr(), wsUrl, errCh)
+	c.SetHeader("Cookie", cookie)
+	return c.ListenAndServe()
 }
 
 // StartForwarding starts port forwarding in the background and logs transient

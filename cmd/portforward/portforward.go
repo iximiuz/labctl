@@ -30,7 +30,8 @@ type options struct {
 	locals       []string
 	localsParsed []portforward.ForwardingSpec
 
-	remotes []string
+	remotes       []string
+	remotesParsed []portforward.ForwardingSpec
 
 	quiet bool
 
@@ -93,10 +94,6 @@ When using -L|-R flags, port forwards are automatically saved to the playground'
 			if len(opts.locals)+len(opts.remotes) == 0 {
 				return labcli.NewStatusError(1, "at least one -L or -R flag must be provided (or use --list, --restore, --remove)")
 			}
-			if len(opts.remotes) > 0 {
-				// TODO: Implement me!
-				return labcli.NewStatusError(1, "remote port forwarding is not implemented yet")
-			}
 
 			for _, local := range opts.locals {
 				parsed, err := portforward.ParseLocal(local)
@@ -104,6 +101,14 @@ When using -L|-R flags, port forwards are automatically saved to the playground'
 					return labcli.NewStatusError(1, "invalid local port forwarding spec: %s", local)
 				}
 				opts.localsParsed = append(opts.localsParsed, parsed)
+			}
+
+			for _, remote := range opts.remotes {
+				parsed, err := portforward.ParseRemote(remote)
+				if err != nil {
+					return labcli.NewStatusError(1, "invalid remote port forwarding spec: %s", remote)
+				}
+				opts.remotesParsed = append(opts.remotesParsed, parsed)
 			}
 
 			return labcli.WrapStatusError(runPortForward(cmd.Context(), cli, &opts))
@@ -228,7 +233,10 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 	}
 
 	// Save port forwards to play's config
-	for _, spec := range opts.localsParsed {
+	allSpecs := []portforward.ForwardingSpec{}
+	allSpecs = append(allSpecs, opts.localsParsed...)
+	allSpecs = append(allSpecs, opts.remotesParsed...)
+	for _, spec := range allSpecs {
 		pf, err := spec.ToPortForward(opts.machine)
 		if err != nil {
 			return fmt.Errorf("couldn't convert port forwarding spec to API port forward model: %w", err)
@@ -248,7 +256,11 @@ func runPortForward(ctx context.Context, cli labcli.CLI, opts *options) error {
 
 	var doneChs []<-chan error
 	for _, spec := range opts.localsParsed {
-		cli.PrintAux("Forwarding %s -> %s\n", spec.LocalAddr(), spec.RemoteAddr())
+		cli.PrintAux("Forwarding %s (local) -> %s (remote)\n", spec.LocalAddr(), spec.RemoteAddr())
+		doneChs = append(doneChs, tunnel.StartForwarding(ctx, spec))
+	}
+	for _, spec := range opts.remotesParsed {
+		cli.PrintAux("Forwarding %s (remote) -> %s (local)\n", spec.RemoteAddr(), spec.LocalAddr())
 		doneChs = append(doneChs, tunnel.StartForwarding(ctx, spec))
 	}
 
