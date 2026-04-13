@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -269,6 +271,11 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 		workDir = homeDir
 	}
 
+	// Normalize remote Linux paths on Windows.
+	if workDir != "" && !filepath.IsAbs(workDir) {
+		workDir = path.Join(homeDir, workDir)
+	}
+
 	// Workaround: SSH into the playground first - otherwise, the IDE may fail to connect.
 	warmup := exec.CommandContext(ctx, "ssh",
 		"-o", "UserKnownHostsFile=/dev/null",
@@ -276,7 +283,9 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 		"-o", "IdentitiesOnly=yes",
 		"-o", "PreferredAuthentications=publickey",
 		"-i", cli.Config().SSHIdentityFile,
-		fmt.Sprintf("ssh://%s@%s:%s", opts.user, localHost, localPort),
+		"-p", localPort,
+		fmt.Sprintf("%s@%s", opts.user, localHost),
+		"true",
 	)
 	warmup.Run()
 
@@ -301,10 +310,17 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 	cli.PrintAux("Opening %s...\n", opts.ide)
 	cli.PrintAux("Running: %s --folder-uri %s\n", opts.ide, folderURI)
 
-	cmd := exec.CommandContext(ctx, opts.ide, "--folder-uri", folderURI)
-	if err := cmd.Run(); err != nil {
+	codeCmd := exec.CommandContext(ctx, opts.ide, "--folder-uri", folderURI)
+	if runtime.GOOS == "windows" {
+		codeCmd = exec.CommandContext(ctx, "cmd", "/C", opts.ide, "--folder-uri", folderURI)
+	}
+	codeCmd.Stdout = os.Stdout
+	codeCmd.Stderr = os.Stderr
+	codeCmd.Stdin = os.Stdin
+	if err := codeCmd.Start(); err != nil {
 		return fmt.Errorf("couldn't open %s: %w", opts.ide, err)
 	}
+	cli.PrintAux("%s launched.\n", strings.Title(opts.ide))
 
 	cli.PrintAux("\n# If the IDE fails to connect, add the following to your ~/.ssh/config:\n")
 	cli.PrintAux("Host localhost 127.0.0.1 ::1\n")
@@ -389,11 +405,12 @@ func doRunRemoteCommand(ctx context.Context, identityFile, user, host, port, com
 		"-o", "IdentitiesOnly=yes",
 		"-o", "PreferredAuthentications=publickey",
 		"-i", identityFile,
+		"-p", port,
 	}
 	if forwardAgent {
 		args = append(args, "-o", "ForwardAgent=yes")
 	}
-	args = append(args, fmt.Sprintf("ssh://%s@%s:%s", user, host, port), command)
+	args = append(args, fmt.Sprintf("%s@%s", user, host), command)
 
 	cmd := exec.CommandContext(ctx, "ssh", args...)
 	out, err := cmd.CombinedOutput()
