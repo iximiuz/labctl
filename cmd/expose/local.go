@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +18,11 @@ import (
 	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
+)
+
+const (
+	tmpPlaygroundName   = "alpine"
+	tmpPlaygroundWaitTo = 10 * time.Minute
 )
 
 type localOptions struct {
@@ -50,22 +59,31 @@ func NewLocalCommand(cli labcli.CLI) *cobra.Command {
 	var opts localOptions
 
 	cmd := &cobra.Command{
-		Use:   "local <playground> <local_addr>:<local_port> [--remote-port <port>]",
+		Use:   "local [<playground>] <local_addr>:<local_port> [--remote-port <port>]",
 		Short: "Expose a local HTTP(s) endpoint as a public URL via a running playground",
 		Long: `Expose a local HTTP(s) endpoint (running on the labctl side) as a URL, by combining
 a remote port forward (labctl port-forward -R) with an HTTP(s) port exposure (labctl expose port).
 
+When <playground> is omitted, a temporary Alpine playground is started under the
+hood and destroyed when the command exits.
+
 If --remote-port is not specified, the remote port defaults to <local_port>.`,
-		Args:              cobra.ExactArgs(2),
+		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: completion.ActivePlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
 
-			opts.playID = args[0]
+			var addrArg string
+			if len(args) == 2 {
+				opts.playID = args[0]
+				addrArg = args[1]
+			} else {
+				addrArg = args[0]
+			}
 
-			host, port, err := parseLocalAddr(args[1])
+			host, port, err := parseLocalAddr(addrArg)
 			if err != nil {
-				return labcli.NewStatusError(1, "invalid local address %q: %s", args[1], err)
+				return labcli.NewStatusError(1, "invalid local address %q: %s", addrArg, err)
 			}
 			opts.localHost = host
 			opts.localPort = port
@@ -132,6 +150,18 @@ If --remote-port is not specified, the remote port defaults to <local_port>.`,
 }
 
 func runLocal(ctx context.Context, cli labcli.CLI, opts *localOptions) error {
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if opts.playID == "" {
+		play, cleanup, err := startTmpPlayground(ctx, cli)
+		if err != nil {
+			return fmt.Errorf("couldn't start temporary playground: %w", err)
+		}
+		defer cleanup()
+		opts.playID = play.ID
+	}
+
 	p, err := cli.Client().GetPlay(ctx, opts.playID)
 	if err != nil {
 		return fmt.Errorf("couldn't get playground: %w", err)
@@ -187,11 +217,46 @@ func runLocal(ctx context.Context, cli labcli.CLI, opts *localOptions) error {
 	cli.PrintOut("%s\n", resp.URL)
 
 	var exitErr error
-	if err := <-doneCh; err != nil {
-		cli.PrintErr("Tunnel error: %v", err)
-		exitErr = errors.Join(exitErr, err)
+	select {
+	case err := <-doneCh:
+		if err != nil {
+			cli.PrintErr("Tunnel error: %v\n", err)
+			exitErr = errors.Join(exitErr, err)
+		}
+	case <-ctx.Done():
+		cli.PrintAux("\nShutting down...\n")
+		if err := <-doneCh; err != nil && !errors.Is(err, context.Canceled) {
+			cli.PrintErr("Tunnel error: %v\n", err)
+			exitErr = errors.Join(exitErr, err)
+		}
 	}
 	return exitErr
+}
+
+// startTmpPlayground creates an on-the-fly Alpine playground, waits for it to be
+// ready, and returns a cleanup function that destroys it.
+func startTmpPlayground(ctx context.Context, cli labcli.CLI) (*api.Play, func(), error) {
+	cli.PrintAux("Starting a temporary %s playground...\n", tmpPlaygroundName)
+
+	play, err := cli.Client().CreatePlay(ctx, api.CreatePlayRequest{
+		Playground: tmpPlaygroundName,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("couldn't create playground: %w", err)
+	}
+
+	cleanup := func() {
+		cli.PrintAux("Destroying temporary playground %s...\n", play.ID)
+		// Use a fresh context so cleanup runs even after ctx cancellation.
+		destroyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := cli.Client().DestroyPlay(destroyCtx, play.ID); err != nil {
+			cli.PrintErr("Warning: couldn't destroy temporary playground %s: %v\n", play.ID, err)
+		}
+	}
+
+	cli.PrintAux("Temporary playground %s is ready\n", play.ID)
+	return play, cleanup, nil
 }
 
 // parseLocalAddr parses a <local_addr>:<local_port> string. The host part is
