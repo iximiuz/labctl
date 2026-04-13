@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
@@ -314,7 +316,7 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 	if err := codeCmd.Start(); err != nil {
 		return fmt.Errorf("couldn't open %s: %w", opts.ide, err)
 	}
-	cli.PrintAux("%s launched.\n", strings.Title(opts.ide))
+	cli.PrintAux("%s launched.\n", cases.Title(language.Und).String(opts.ide))
 
 	cli.PrintAux("\n# If the IDE fails to connect, add the following to your ~/.ssh/config:\n")
 	cli.PrintAux("Host localhost 127.0.0.1 ::1\n")
