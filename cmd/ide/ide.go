@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
@@ -260,14 +258,16 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 
 	// Resolve the working directory.
 	workDir := opts.workDir
+	cloneBaseDir := homeDir
 	switch {
 	case workDir != "":
 		if !remotePathIsAbs(workDir) {
 			workDir = remotePathJoin(homeDir, workDir)
 		}
+		cloneBaseDir = workDir
 	case len(repos) == 1:
 		// Default to the single repo's clone folder.
-		workDir = repos[0].cloneTarget(homeDir)
+		workDir = repos[0].cloneTarget(cloneBaseDir)
 	default:
 		workDir = homeDir
 	}
@@ -295,7 +295,7 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 	}
 
 	if len(repos) > 0 {
-		if err := cloneRepos(ctx, cli, opts, repos, localHost, localPort, homeDir); err != nil {
+		if err := cloneRepos(ctx, cli, opts, repos, localHost, localPort, cloneBaseDir); err != nil {
 			return err
 		}
 	}
@@ -306,17 +306,16 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 	cli.PrintAux("Opening %s...\n", opts.ide)
 	cli.PrintAux("Running: %s --folder-uri %s\n", opts.ide, folderURI)
 
-	codeCmd := exec.CommandContext(ctx, opts.ide, "--folder-uri", folderURI)
+	ideCmd := exec.CommandContext(ctx, opts.ide, "--folder-uri", folderURI)
 	if runtime.GOOS == "windows" {
-		codeCmd = exec.CommandContext(ctx, "cmd", "/C", opts.ide, "--folder-uri", folderURI)
+		ideCmd = exec.CommandContext(ctx, "cmd", "/C", opts.ide, "--folder-uri", folderURI)
 	}
-	codeCmd.Stdout = os.Stdout
-	codeCmd.Stderr = os.Stderr
-	codeCmd.Stdin = os.Stdin
-	if err := codeCmd.Start(); err != nil {
+	ideCmd.Stdout = os.Stdout
+	ideCmd.Stderr = os.Stderr
+	ideCmd.Stdin = os.Stdin
+	if err := ideCmd.Start(); err != nil {
 		return fmt.Errorf("couldn't open %s: %w", opts.ide, err)
 	}
-	cli.PrintAux("%s launched.\n", cases.Title(language.Und).String(opts.ide))
 
 	cli.PrintAux("\n# If the IDE fails to connect, add the following to your ~/.ssh/config:\n")
 	cli.PrintAux("Host localhost 127.0.0.1 ::1\n")
