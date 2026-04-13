@@ -4,14 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
@@ -76,12 +79,12 @@ func parseRepoSpec(spec string) (repoSpec, error) {
 // cloneTarget returns the absolute path where the repo should be cloned.
 func (r repoSpec) cloneTarget(baseDir string) string {
 	if r.cloneDir != "" {
-		if filepath.IsAbs(r.cloneDir) {
+		if remotePathIsAbs(r.cloneDir) {
 			return r.cloneDir
 		}
-		return filepath.Join(baseDir, r.cloneDir)
+		return remotePathJoin(baseDir, r.cloneDir)
 	}
-	return filepath.Join(baseDir, repoBaseName(r.url))
+	return remotePathJoin(baseDir, repoBaseName(r.url))
 }
 
 type options struct {
@@ -259,8 +262,8 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 	workDir := opts.workDir
 	switch {
 	case workDir != "":
-		if !filepath.IsAbs(workDir) {
-			workDir = filepath.Join(homeDir, workDir)
+		if !remotePathIsAbs(workDir) {
+			workDir = remotePathJoin(homeDir, workDir)
 		}
 	case len(repos) == 1:
 		// Default to the single repo's clone folder.
@@ -276,7 +279,9 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 		"-o", "IdentitiesOnly=yes",
 		"-o", "PreferredAuthentications=publickey",
 		"-i", cli.Config().SSHIdentityFile,
-		fmt.Sprintf("ssh://%s@%s:%s", opts.user, localHost, localPort),
+		"-p", localPort,
+		fmt.Sprintf("%s@%s", opts.user, localHost),
+		"true",
 	)
 	warmup.Run()
 
@@ -301,10 +306,17 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 	cli.PrintAux("Opening %s...\n", opts.ide)
 	cli.PrintAux("Running: %s --folder-uri %s\n", opts.ide, folderURI)
 
-	cmd := exec.CommandContext(ctx, opts.ide, "--folder-uri", folderURI)
-	if err := cmd.Run(); err != nil {
+	codeCmd := exec.CommandContext(ctx, opts.ide, "--folder-uri", folderURI)
+	if runtime.GOOS == "windows" {
+		codeCmd = exec.CommandContext(ctx, "cmd", "/C", opts.ide, "--folder-uri", folderURI)
+	}
+	codeCmd.Stdout = os.Stdout
+	codeCmd.Stderr = os.Stderr
+	codeCmd.Stdin = os.Stdin
+	if err := codeCmd.Start(); err != nil {
 		return fmt.Errorf("couldn't open %s: %w", opts.ide, err)
 	}
+	cli.PrintAux("%s launched.\n", cases.Title(language.Und).String(opts.ide))
 
 	cli.PrintAux("\n# If the IDE fails to connect, add the following to your ~/.ssh/config:\n")
 	cli.PrintAux("Host localhost 127.0.0.1 ::1\n")
@@ -342,7 +354,7 @@ func cloneRepos(ctx context.Context, cli labcli.CLI, opts *options, repos []repo
 
 			cloneCmd := fmt.Sprintf(
 				"mkdir -p %s && GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no' git clone %s %s",
-				filepath.Dir(target), r.url, target)
+				path.Dir(target), r.url, target)
 
 			var err error
 			if opts.forwardAgent {
@@ -389,11 +401,12 @@ func doRunRemoteCommand(ctx context.Context, identityFile, user, host, port, com
 		"-o", "IdentitiesOnly=yes",
 		"-o", "PreferredAuthentications=publickey",
 		"-i", identityFile,
+		"-p", port,
 	}
 	if forwardAgent {
 		args = append(args, "-o", "ForwardAgent=yes")
 	}
-	args = append(args, fmt.Sprintf("ssh://%s@%s:%s", user, host, port), command)
+	args = append(args, fmt.Sprintf("%s@%s", user, host), command)
 
 	cmd := exec.CommandContext(ctx, "ssh", args...)
 	out, err := cmd.CombinedOutput()
@@ -412,6 +425,17 @@ func repoBaseName(repo string) string {
 		name = name[i+1:]
 	}
 	return name
+}
+
+func remotePathIsAbs(p string) bool {
+	return strings.HasPrefix(p, "/")
+}
+
+func remotePathJoin(baseDir, p string) string {
+	if remotePathIsAbs(p) {
+		return p
+	}
+	return path.Join(baseDir, p)
 }
 
 func userHomeDir(user string) string {

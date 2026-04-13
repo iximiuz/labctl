@@ -51,7 +51,7 @@ func TestListFiles(t *testing.T) {
 	for _, path := range result {
 		relPath, err := filepath.Rel(tmpDir, path)
 		require.NoError(t, err)
-		relPaths = append(relPaths, relPath)
+		relPaths = append(relPaths, filepath.ToSlash(relPath))
 	}
 
 	// Expected files (only non-.git files)
@@ -105,7 +105,7 @@ func TestListDirs(t *testing.T) {
 	for _, path := range result {
 		relPath, err := filepath.Rel(tmpDir, path)
 		require.NoError(t, err)
-		relPaths = append(relPaths, relPath)
+		relPaths = append(relPaths, filepath.ToSlash(relPath))
 	}
 
 	// Expected directories (only non-.git directories)
@@ -157,7 +157,7 @@ func TestListFilesIgnoreBackupFiles(t *testing.T) {
 	for _, path := range result {
 		relPath, err := filepath.Rel(tmpDir, path)
 		require.NoError(t, err)
-		relPaths = append(relPaths, relPath)
+		relPaths = append(relPaths, filepath.ToSlash(relPath))
 	}
 
 	// assert: the temp file is not listed
