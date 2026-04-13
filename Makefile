@@ -13,6 +13,12 @@ build-dev-darwin-arm64:
 		-ldflags="-X 'main.version=dev' -X 'main.commit=${GIT_COMMIT}' -X 'main.date=${UTC_NOW}'" \
 		-o labctl
 
+.PHONY: build-dev-windows-amd64
+build-dev-windows-amd64:
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+		-ldflags="-X 'main.version=dev' -X 'main.commit=${GIT_COMMIT}' -X 'main.date=${UTC_NOW}'" \
+		-o labctl.exe
+
 .PHONY: release
 release:
 	goreleaser --clean
