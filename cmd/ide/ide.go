@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -78,12 +77,12 @@ func parseRepoSpec(spec string) (repoSpec, error) {
 // cloneTarget returns the absolute path where the repo should be cloned.
 func (r repoSpec) cloneTarget(baseDir string) string {
 	if r.cloneDir != "" {
-		if filepath.IsAbs(r.cloneDir) {
+		if remotePathIsAbs(r.cloneDir) {
 			return r.cloneDir
 		}
-		return filepath.Join(baseDir, r.cloneDir)
+		return remotePathJoin(baseDir, r.cloneDir)
 	}
-	return filepath.Join(baseDir, repoBaseName(r.url))
+	return remotePathJoin(baseDir, repoBaseName(r.url))
 }
 
 type options struct {
@@ -261,19 +260,14 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 	workDir := opts.workDir
 	switch {
 	case workDir != "":
-		if !filepath.IsAbs(workDir) {
-			workDir = filepath.Join(homeDir, workDir)
+		if !remotePathIsAbs(workDir) {
+			workDir = remotePathJoin(homeDir, workDir)
 		}
 	case len(repos) == 1:
 		// Default to the single repo's clone folder.
 		workDir = repos[0].cloneTarget(homeDir)
 	default:
 		workDir = homeDir
-	}
-
-	// Normalize remote Linux paths on Windows.
-	if workDir != "" && !filepath.IsAbs(workDir) {
-		workDir = path.Join(homeDir, workDir)
 	}
 
 	// Workaround: SSH into the playground first - otherwise, the IDE may fail to connect.
@@ -358,7 +352,7 @@ func cloneRepos(ctx context.Context, cli labcli.CLI, opts *options, repos []repo
 
 			cloneCmd := fmt.Sprintf(
 				"mkdir -p %s && GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no' git clone %s %s",
-				filepath.Dir(target), r.url, target)
+				path.Dir(target), r.url, target)
 
 			var err error
 			if opts.forwardAgent {
@@ -429,6 +423,17 @@ func repoBaseName(repo string) string {
 		name = name[i+1:]
 	}
 	return name
+}
+
+func remotePathIsAbs(p string) bool {
+	return strings.HasPrefix(p, "/")
+}
+
+func remotePathJoin(baseDir, p string) string {
+	if remotePathIsAbs(p) {
+		return p
+	}
+	return path.Join(baseDir, p)
 }
 
 func userHomeDir(user string) string {
