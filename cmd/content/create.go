@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -245,47 +245,75 @@ func maybeCreateAuthorProfile(ctx context.Context, cli labcli.CLI) error {
 
 	cli.PrintAux("Creating an author profile...\n")
 
-	displayName := "John Doe"
-	if err := cli.Input("Please enter your full name:", "?", &displayName, func(v string) error {
-		if v == "" {
-			return fmt.Errorf("display name cannot be empty")
-		}
-		if !strings.Contains(v, " ") {
-			return fmt.Errorf("display name must contain at least two words")
-		}
-		if len(v) < 5 {
-			return fmt.Errorf("display name is too short")
-		}
-		if len(v) > 24 {
-			return fmt.Errorf("display name is too long")
-		}
-		return nil
-	}); err != nil {
+	var displayName string
+	if err := cli.Input("Please enter your full name:", "?", &displayName, validateAuthorDisplayName); err != nil {
 		return err
 	}
 
-	var profileURL string
-	if err := cli.Input("Please enter your X, LinkedIn, or other public profile URL:", "?", &profileURL, func(v string) error {
-		parsed, err := url.Parse(v)
-		if err != nil {
-			return fmt.Errorf("invalid URL: %w", err)
-		}
-		if parsed.Host == "" {
-			return fmt.Errorf("invalid URL: hostname is required")
-		}
-		return nil
-	}); err != nil {
+	name := slugifyAuthorDisplayName(displayName)
+	if err := cli.Input("Please pick a username (lowercase letters, digits, and dashes):", "?", &name, validateAuthorName); err != nil {
 		return err
 	}
 
 	if _, err := cli.Client().CreateAuthor(ctx, api.CreateAuthorRequest{
 		Author: api.Author{
-			DisplayName:        displayName,
-			ExternalProfileURL: profileURL,
+			Name:        name,
+			DisplayName: displayName,
 		},
 	}); err != nil {
 		return fmt.Errorf("couldn't create an author profile: %w", err)
 	}
 
 	return nil
+}
+
+var (
+	authorDisplayNamePattern = regexp.MustCompile(`^[\p{L}0-9 -]+$`)
+	authorNamePattern        = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
+	nonSlugRunePattern       = regexp.MustCompile(`[^a-z0-9-]+`)
+	repeatedDashPattern      = regexp.MustCompile(`-+`)
+)
+
+func validateAuthorDisplayName(v string) error {
+	v = strings.TrimSpace(v)
+	if len(v) < 4 {
+		return fmt.Errorf("display name must be at least 4 characters")
+	}
+	if len(v) > 25 {
+		return fmt.Errorf("display name must be at most 25 characters")
+	}
+	if !authorDisplayNamePattern.MatchString(v) {
+		return fmt.Errorf("display name can only contain letters, digits, spaces, and dashes")
+	}
+	if !strings.Contains(v, " ") {
+		return fmt.Errorf("display name must contain at least one space")
+	}
+	if len(strings.Fields(v)) > 4 {
+		return fmt.Errorf("display name must contain at most 4 words")
+	}
+	return nil
+}
+
+func validateAuthorName(v string) error {
+	if len(v) < 4 {
+		return fmt.Errorf("username must be at least 4 characters")
+	}
+	if len(v) > 25 {
+		return fmt.Errorf("username must be at most 25 characters")
+	}
+	if !authorNamePattern.MatchString(v) {
+		return fmt.Errorf("username must start with a letter, end with a letter or digit, and contain only lowercase letters, digits, and dashes")
+	}
+	if strings.Contains(v, "--") {
+		return fmt.Errorf("username cannot contain consecutive dashes")
+	}
+	return nil
+}
+
+func slugifyAuthorDisplayName(displayName string) string {
+	slug := strings.ToLower(strings.TrimSpace(displayName))
+	slug = strings.ReplaceAll(slug, " ", "-")
+	slug = nonSlugRunePattern.ReplaceAllString(slug, "")
+	slug = repeatedDashPattern.ReplaceAllString(slug, "-")
+	return strings.Trim(slug, "-")
 }

@@ -7,8 +7,8 @@ import (
 type Author struct {
 	UserID string `json:"userId"`
 
-	DisplayName        string `json:"displayName"`
-	ExternalProfileURL string `json:"externalProfileUrl"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
 
 	Official bool `json:"official,omitempty"`
 }
