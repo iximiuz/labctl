@@ -32,14 +32,29 @@ func newManifestCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runManifest(ctx context.Context, cli labcli.CLI, opts *manifestOptions) error {
-	playground, err := cli.Client().GetPlayground(ctx, opts.name, &api.GetPlaygroundOptions{
+	manifest, err := getManifest(ctx, cli, opts.name)
+	if err != nil {
+		return err
+	}
+
+	bytes, err := yaml.Marshal(manifest)
+	if err != nil {
+		return fmt.Errorf("couldn't marshal manifest: %w", err)
+	}
+
+	cli.PrintOut("%s", string(bytes))
+	return nil
+}
+
+func getManifest(ctx context.Context, cli labcli.CLI, name string) (*api.PlaygroundManifest, error) {
+	playground, err := cli.Client().GetPlayground(ctx, name, &api.GetPlaygroundOptions{
 		Format: "extended",
 	})
 	if err != nil {
-		return fmt.Errorf("couldn't get playground: %w", err)
+		return nil, fmt.Errorf("couldn't get playground: %w", err)
 	}
 
-	manifest := api.PlaygroundManifest{
+	return &api.PlaygroundManifest{
 		Kind:        "playground",
 		Name:        playground.Name,
 		Base:        playground.Base,
@@ -58,13 +73,5 @@ func runManifest(ctx context.Context, cli labcli.CLI, opts *manifestOptions) err
 			PortForwards:   playground.PortForwards,
 			AccessControl:  playground.AccessControl,
 		},
-	}
-
-	bytes, err := yaml.Marshal(manifest)
-	if err != nil {
-		return fmt.Errorf("couldn't marshal manifest: %w", err)
-	}
-
-	cli.PrintOut("%s", string(bytes))
-	return nil
+	}, nil
 }
