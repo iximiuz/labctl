@@ -18,6 +18,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/cp"
 	"github.com/iximiuz/labctl/cmd/expose"
 	"github.com/iximiuz/labctl/cmd/ide"
+	"github.com/iximiuz/labctl/cmd/kubeproxy"
 	"github.com/iximiuz/labctl/cmd/playground"
 	"github.com/iximiuz/labctl/cmd/portforward"
 	"github.com/iximiuz/labctl/cmd/ssh"
@@ -82,6 +83,7 @@ func main() {
 		cp.NewCommand(cli),
 		expose.NewCommand(cli),
 		ide.NewCommand(cli),
+		kubeproxy.NewCommand(cli),
 		playground.NewCommand(cli),
 		portforward.NewCommand(cli),
 		ssh.NewCommand(cli),
