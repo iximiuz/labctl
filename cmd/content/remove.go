@@ -81,6 +81,9 @@ func runRemoveContent(ctx context.Context, cli labcli.CLI, opts *removeOptions) 
 	case content.KindTraining:
 		return cli.Client().DeleteTraining(ctx, opts.name)
 
+	case content.KindVendor:
+		return cli.Client().DeleteVendor(ctx, opts.name)
+
 	default:
 		return fmt.Errorf("unknown content kind %q", opts.kind)
 	}

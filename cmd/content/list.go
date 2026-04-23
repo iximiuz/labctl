@@ -47,6 +47,7 @@ type AuthoredContent struct {
 	SkillPaths []api.SkillPath `json:"skill-paths" yaml:"skill-paths"`
 	Courses    []api.Course    `json:"courses"    yaml:"courses"`
 	Trainings  []api.Training  `json:"trainings"  yaml:"trainings"`
+	Vendors    []api.Vendor    `json:"vendors"    yaml:"vendors"`
 }
 
 func runListContent(ctx context.Context, cli labcli.CLI, opts *listOptions) error {
@@ -104,6 +105,15 @@ func runListContent(ctx context.Context, cli labcli.CLI, opts *listOptions) erro
 		}
 
 		authored.Trainings = trainings
+	}
+
+	if opts.kind == "" || opts.kind == content.KindVendor {
+		vendors, err := cli.Client().ListAuthoredVendors(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot list authored vendors: %w", err)
+		}
+
+		authored.Vendors = vendors
 	}
 
 	if err := yaml.NewEncoder(cli.OutputStream()).Encode(authored); err != nil {

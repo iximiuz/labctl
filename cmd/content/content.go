@@ -86,6 +86,9 @@ func getContent(
 	case content.KindTraining:
 		return cli.Client().GetTraining(ctx, name)
 
+	case content.KindVendor:
+		return cli.Client().GetVendor(ctx, name)
+
 	default:
 		return nil, fmt.Errorf("unknown content kind %q", kind)
 	}

@@ -103,6 +103,9 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 	case content.KindTraining:
 		cont, err = createTraining(ctx, cli, opts)
+
+	case content.KindVendor:
+		cont, err = createVendor(ctx, cli, opts)
 	}
 
 	if err != nil {
@@ -222,6 +225,17 @@ func createTraining(ctx context.Context, cli labcli.CLI, opts *createOptions) (c
 	}
 
 	return t, nil
+}
+
+func createVendor(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	v, err := cli.Client().CreateVendor(ctx, api.CreateVendorRequest{
+		Name: opts.name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create vendor: %w", err)
+	}
+
+	return v, nil
 }
 
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {
