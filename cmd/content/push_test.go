@@ -163,3 +163,158 @@ func TestListFilesIgnoreBackupFiles(t *testing.T) {
 	// assert: the temp file is not listed
 	assert.Equal(t, []string{"index.md"}, relPaths)
 }
+
+func TestListFilesLabctlIgnore(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create test structure:
+	// tmpDir/
+	//   ├── .labctlignore
+	//   ├── index.md
+	//   ├── CLAUDE.md        <- ignored by exact name pattern
+	//   ├── AGENTS.md        <- ignored by exact name pattern
+	//   ├── notes.txt
+	//   ├── .omc/
+	//   │   └── config       <- ignored because .omc/ dir is ignored
+	//   └── subdir/
+	//       ├── CLAUDE.md    <- ignored by exact name (matches basename)
+	//       └── readme.md
+
+	ignoreContent := "# Claude-specific files\nCLAUDE.md\nAGENTS.md\n.omc/\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".labctlignore"), []byte(ignoreContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("index"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "CLAUDE.md"), []byte("claude"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("agents"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "notes.txt"), []byte("notes"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".omc"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".omc/config"), []byte("omc config"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/CLAUDE.md"), []byte("claude"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/readme.md"), []byte("readme"), 0644))
+
+	result, err := listFiles(tmpDir)
+	require.NoError(t, err)
+
+	var relPaths []string
+	for _, path := range result {
+		relPath, err := filepath.Rel(tmpDir, path)
+		require.NoError(t, err)
+		relPaths = append(relPaths, filepath.ToSlash(relPath))
+	}
+
+	expected := []string{
+		"index.md",
+		"notes.txt",
+		"subdir/readme.md",
+	}
+	slices.Sort(relPaths)
+	slices.Sort(expected)
+
+	assert.Equal(t, expected, relPaths)
+}
+
+func TestListFilesLabctlIgnoreGlobPattern(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	ignoreContent := "*.log\nbuild/\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".labctlignore"), []byte(ignoreContent), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("index"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "debug.log"), []byte("log"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "build"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "build/output.bin"), []byte("bin"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src/main.go"), []byte("code"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src/trace.log"), []byte("log"), 0644))
+
+	result, err := listFiles(tmpDir)
+	require.NoError(t, err)
+
+	var relPaths []string
+	for _, path := range result {
+		relPath, err := filepath.Rel(tmpDir, path)
+		require.NoError(t, err)
+		relPaths = append(relPaths, filepath.ToSlash(relPath))
+	}
+
+	expected := []string{
+		"index.md",
+		"src/main.go",
+	}
+	slices.Sort(relPaths)
+	slices.Sort(expected)
+
+	assert.Equal(t, expected, relPaths)
+}
+
+func TestListFilesLabctlIgnoreCascading(t *testing.T) {
+	// Root .labctlignore excludes CLAUDE.md everywhere.
+	// subdir/.labctlignore additionally excludes *.log within subdir and below.
+	tmpDir := t.TempDir()
+
+	// Root structure
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".labctlignore"), []byte("CLAUDE.md\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("index"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "CLAUDE.md"), []byte("ignored"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "root.log"), []byte("log"), 0644)) // NOT ignored at root level
+
+	// subdir with its own .labctlignore
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/.labctlignore"), []byte("*.log\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/main.go"), []byte("code"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/debug.log"), []byte("ignored"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/CLAUDE.md"), []byte("ignored"), 0644)) // root rule cascades
+
+	// nested inside subdir — both rule sets should apply
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "subdir/nested"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/nested/notes.md"), []byte("notes"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/nested/trace.log"), []byte("ignored"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir/nested/CLAUDE.md"), []byte("ignored"), 0644))
+
+	result, err := listFiles(tmpDir)
+	require.NoError(t, err)
+
+	var relPaths []string
+	for _, path := range result {
+		relPath, err := filepath.Rel(tmpDir, path)
+		require.NoError(t, err)
+		relPaths = append(relPaths, filepath.ToSlash(relPath))
+	}
+
+	expected := []string{
+		"index.md",
+		"root.log",
+		"subdir/main.go",
+		"subdir/nested/notes.md",
+	}
+	slices.Sort(relPaths)
+	slices.Sort(expected)
+
+	assert.Equal(t, expected, relPaths)
+}
+
+func TestListDirsLabctlIgnore(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	ignoreContent := ".omc/\nbuild/\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".labctlignore"), []byte(ignoreContent), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".omc"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "build"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src/lib"), 0755))
+
+	result, err := listDirs(tmpDir)
+	require.NoError(t, err)
+
+	var relPaths []string
+	for _, path := range result {
+		relPath, err := filepath.Rel(tmpDir, path)
+		require.NoError(t, err)
+		relPaths = append(relPaths, filepath.ToSlash(relPath))
+	}
+
+	expected := []string{"src", "src/lib"}
+	slices.Sort(relPaths)
+	slices.Sort(expected)
+
+	assert.Equal(t, expected, relPaths)
+}

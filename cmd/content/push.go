@@ -438,7 +438,46 @@ func addWatchDirs(cli labcli.CLI, watcher *fsnotify.Watcher, state pushState) er
 	return nil
 }
 
+// ignoreRuleSet pairs a base directory with the patterns read from its .labctlignore.
+// Patterns are matched relative to their own baseDir, so each directory's rules are
+// scoped to that directory and its descendants.
+type ignoreRuleSet struct {
+	baseDir  string
+	patterns []string
+}
+
+func loadRuleSets(dir string, inherited []ignoreRuleSet) ([]ignoreRuleSet, error) {
+	patterns, err := readIgnorePatterns(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(patterns) == 0 {
+		return inherited, nil
+	}
+	result := make([]ignoreRuleSet, len(inherited)+1)
+	copy(result, inherited)
+	result[len(inherited)] = ignoreRuleSet{baseDir: dir, patterns: patterns}
+	return result, nil
+}
+
+func matchesAnyRuleSet(fullPath string, isDir bool, ruleSets []ignoreRuleSet) bool {
+	for _, rs := range ruleSets {
+		if matchesIgnorePatterns(rs.baseDir, fullPath, isDir, rs.patterns) {
+			return true
+		}
+	}
+	return false
+}
+
 func listDirs(dir string) ([]string, error) {
+	ruleSets, err := loadRuleSets(dir, nil)
+	if err != nil {
+		return nil, err
+	}
+	return listDirsRecursive(dir, ruleSets)
+}
+
+func listDirsRecursive(dir string, ruleSets []ignoreRuleSet) ([]string, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't list directory: %w", err)
@@ -451,22 +490,41 @@ func listDirs(dir string) ([]string, error) {
 			continue
 		}
 
-		if file.IsDir() {
-			result = append(result, fullPath)
-
-			children, err := listDirs(fullPath)
-			if err != nil {
-				return nil, err
-			}
-
-			result = append(result, children...)
+		if !file.IsDir() {
+			continue
 		}
+
+		if matchesAnyRuleSet(fullPath, true, ruleSets) {
+			continue
+		}
+
+		result = append(result, fullPath)
+
+		subRuleSets, err := loadRuleSets(fullPath, ruleSets)
+		if err != nil {
+			return nil, err
+		}
+
+		children, err := listDirsRecursive(fullPath, subRuleSets)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, children...)
 	}
 
 	return result, nil
 }
 
 func listFiles(dir string) ([]string, error) {
+	ruleSets, err := loadRuleSets(dir, nil)
+	if err != nil {
+		return nil, err
+	}
+	return listFilesRecursive(dir, ruleSets)
+}
+
+func listFilesRecursive(dir string, ruleSets []ignoreRuleSet) ([]string, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't list directory: %w", err)
@@ -483,19 +541,91 @@ func listFiles(dir string) ([]string, error) {
 			continue
 		}
 
+		if file.Name() == ".labctlignore" {
+			continue
+		}
+
+		fullPath := filepath.Join(dir, file.Name())
+
+		if matchesAnyRuleSet(fullPath, file.IsDir(), ruleSets) {
+			continue
+		}
+
 		if file.IsDir() {
-			children, err := listFiles(filepath.Join(dir, file.Name()))
+			subRuleSets, err := loadRuleSets(fullPath, ruleSets)
+			if err != nil {
+				return nil, err
+			}
+
+			children, err := listFilesRecursive(fullPath, subRuleSets)
 			if err != nil {
 				return nil, err
 			}
 
 			result = append(result, children...)
 		} else {
-			result = append(result, filepath.Join(dir, file.Name()))
+			result = append(result, fullPath)
 		}
 	}
 
 	return result, nil
+}
+
+func readIgnorePatterns(dir string) ([]string, error) {
+	data, err := os.ReadFile(filepath.Join(dir, ".labctlignore"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("couldn't read .labctlignore: %w", err)
+	}
+
+	var patterns []string
+	for line := range strings.SplitSeq(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		patterns = append(patterns, line)
+	}
+	return patterns, nil
+}
+
+// matchesIgnorePatterns checks whether fullPath should be excluded based on
+// gitignore-style patterns read from the root dir's .labctlignore file.
+//
+// Pattern rules:
+//   - Patterns without a slash match against the entry's basename only (any depth).
+//   - Patterns with a slash are matched against the path relative to rootDir.
+//   - A trailing slash restricts the match to directories only.
+func matchesIgnorePatterns(rootDir, fullPath string, isDir bool, patterns []string) bool {
+	relPath, err := filepath.Rel(rootDir, fullPath)
+	if err != nil {
+		return false
+	}
+	relPath = filepath.ToSlash(relPath)
+	name := filepath.Base(relPath)
+
+	for _, pattern := range patterns {
+		dirOnly := strings.HasSuffix(pattern, "/")
+		if dirOnly && !isDir {
+			continue
+		}
+		p := strings.TrimSuffix(pattern, "/")
+
+		if strings.Contains(p, "/") {
+			matched, _ := filepath.Match(p, relPath)
+			if matched {
+				return true
+			}
+		} else {
+			matched, _ := filepath.Match(p, name)
+			if matched {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func fileChecksum(file string) (string, error) {
