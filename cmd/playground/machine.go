@@ -91,7 +91,7 @@ func runStopMachine(ctx context.Context, cli labcli.CLI, playID, machine string)
 func newMachineRestartCommand(cli labcli.CLI) *cobra.Command {
 	return &cobra.Command{
 		Use:   "restart <playground-id> <machine>",
-		Short: "Restart a machine of a running playground session",
+		Short: "Restart a previously stopped machine of a running playground session",
 		Args:  cobra.ExactArgs(2),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			switch len(args) {
@@ -122,7 +122,7 @@ func runRestartMachine(ctx context.Context, cli labcli.CLI, playID, machine stri
 func newMachineConsoleCommand(cli labcli.CLI) *cobra.Command {
 	return &cobra.Command{
 		Use:   "console <playground-id> <machine>",
-		Short: "Print all serial console files of a machine, separated by clear headers",
+		Short: "Print all serial console files of a machine (one per boot)",
 		Args:  cobra.ExactArgs(2),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			switch len(args) {
