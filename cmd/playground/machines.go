@@ -35,10 +35,14 @@ func runListMachines(ctx context.Context, cli labcli.CLI, playgroundID string) e
 	writer := tabwriter.NewWriter(cli.OutputStream(), 0, 4, 2, ' ', 0)
 	defer writer.Flush()
 
-	fmt.Fprintln(writer, "MACHINE NAME")
+	fmt.Fprintln(writer, "MACHINE NAME\tSTATE")
 
 	for _, machine := range play.Machines {
-		fmt.Fprintln(writer, machine.Name)
+		state := play.MachineState(machine.Name)
+		if state == "" {
+			state = "-"
+		}
+		fmt.Fprintf(writer, "%s\t%s\n", machine.Name, state)
 	}
 
 	return nil

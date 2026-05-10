@@ -67,6 +67,31 @@ func plays(cli labcli.CLI, filter func(*api.Play) bool) CompletionFunc {
 	}
 }
 
+// PlayMachineNames completes machine names for a play whose ID is the previous arg.
+// Use for: machine reboot/stop/restart/console subcommands.
+func PlayMachineNames(cli labcli.CLI) CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 1 {
+			return nil, noFileComp
+		}
+
+		if cli.Client() == nil {
+			return nil, noFileComp
+		}
+
+		play, err := cli.Client().GetPlay(cmd.Context(), args[0])
+		if err != nil {
+			return nil, noFileComp
+		}
+
+		var completions []string
+		for _, m := range play.Machines {
+			completions = append(completions, m.Name)
+		}
+		return completions, noFileComp
+	}
+}
+
 // --- Playground name completions ---
 
 // PlaygroundNames completes playground template names for the start command.

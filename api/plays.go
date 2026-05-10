@@ -28,9 +28,28 @@ type StateEvent struct {
 	At    string    `json:"at" yaml:"at"`
 }
 
+type MachineState string
+
+const (
+	MachineStateCreated   MachineState = "CREATED"
+	MachineStateWarmingUp MachineState = "WARMING_UP"
+	MachineStateWarmedUp  MachineState = "WARMED_UP"
+	MachineStateStarting  MachineState = "STARTING"
+	MachineStateRunning   MachineState = "RUNNING"
+	MachineStateRebooting MachineState = "REBOOTING"
+	MachineStateStopping  MachineState = "STOPPING"
+	MachineStateStopped   MachineState = "STOPPED"
+)
+
+type MachineStatus struct {
+	Name  string       `json:"name" yaml:"name"`
+	State MachineState `json:"state" yaml:"state"`
+}
+
 type PlayStatus struct {
-	FactoryID   string       `json:"factoryId" yaml:"factoryId"`
-	StateEvents []StateEvent `json:"stateEvents" yaml:"stateEvents"`
+	FactoryID   string          `json:"factoryId" yaml:"factoryId"`
+	StateEvents []StateEvent    `json:"stateEvents" yaml:"stateEvents"`
+	Machines    []MachineStatus `json:"machines,omitempty" yaml:"machines,omitempty"`
 }
 
 type Play struct {
@@ -88,6 +107,18 @@ func (p *Play) GetMachine(name string) *Machine {
 		}
 	}
 	return nil
+}
+
+func (p *Play) MachineState(name string) MachineState {
+	if p.Status == nil {
+		return ""
+	}
+	for _, m := range p.Status.Machines {
+		if m.Name == name {
+			return m.State
+		}
+	}
+	return ""
 }
 
 func (p *Play) FactoryID() string {
@@ -310,6 +341,70 @@ func (c *Client) PersistPlay(ctx context.Context, id string) error {
 
 	var p Play
 	return c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+func (c *Client) RebootPlayMachine(ctx context.Context, id, machine string) (*Play, error) {
+	body, err := toJSONBody(map[string]any{"action": "machine.reboot", "machine": machine})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+func (c *Client) StopPlayMachine(ctx context.Context, id, machine string) (*Play, error) {
+	body, err := toJSONBody(map[string]any{"action": "machine.stop", "machine": machine})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+func (c *Client) RestartPlayMachine(ctx context.Context, id, machine string) (*Play, error) {
+	body, err := toJSONBody(map[string]any{"action": "machine.restart", "machine": machine})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+func (c *Client) ListPlayMachineConsoles(ctx context.Context, id, machine string) ([]string, error) {
+	body, err := toJSONBody(map[string]any{"action": "machine.console.list", "machine": machine})
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Consoles []string `json:"consoles"`
+	}
+	if err := c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Consoles, nil
+}
+
+func (c *Client) ReadPlayMachineConsole(ctx context.Context, id, machine, console string) (string, error) {
+	body, err := toJSONBody(map[string]any{
+		"action":  "machine.console.read",
+		"machine": machine,
+		"console": console,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	var resp struct {
+		Content string `json:"content"`
+	}
+	if err := c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &resp); err != nil {
+		return "", err
+	}
+	return resp.Content, nil
 }
 
 // Deprecated: Use DestroyPlay instead
