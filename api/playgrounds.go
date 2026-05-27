@@ -240,7 +240,7 @@ type InitTask struct {
 
 type InitConditionValue struct {
 	Key             string   `yaml:"key" json:"key"`
-	Default         string   `yaml:"default,omitempty" json:"default,omitempty"`
+	Default         string   `yaml:"default" json:"default"`
 	Nullable        bool     `yaml:"nullable,omitempty" json:"nullable,omitempty"`
 	Options         []string `yaml:"options,omitempty" json:"options,omitempty"`
 	Placeholder     string   `yaml:"placeholder,omitempty" json:"placeholder,omitempty"`
