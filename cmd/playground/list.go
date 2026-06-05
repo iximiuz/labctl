@@ -83,7 +83,7 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		return err
 	}
 
-	plays, err := cli.Client().ListPlays(ctx, &api.ListPlaysQueryParams{})
+	plays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{})
 	if err != nil {
 		return fmt.Errorf("couldn't list playgrounds: %w", err)
 	}
@@ -123,7 +123,7 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 		header := []string{
 			"PLAYGROUND ID",
 			"PLAYGROUND NAME",
-			"CUSTOM TITLE",
+			"TITLE",
 			"CREATED",
 			"STATUS",
 			"LINK",

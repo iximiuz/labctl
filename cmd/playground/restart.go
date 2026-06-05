@@ -140,7 +140,7 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOptions) error {
 	if opts.title != "" {
 		cli.PrintAux("Searching for a playground with title: %s\n", opts.title)
-		playgroundsList, err := cli.Client().ListPlays(ctx, &api.ListPlaysQueryParams{Persistent: true})
+		playgroundsList, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{Persistent: true})
 		if err != nil {
 			return fmt.Errorf("couldn't get a list of playgrounds: %w", err)
 		}

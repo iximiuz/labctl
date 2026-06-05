@@ -50,7 +50,7 @@ func plays(cli labcli.CLI, filter func(*api.Play) bool) CompletionFunc {
 			return nil, noFileComp
 		}
 
-		plays, err := cli.Client().ListPlays(cmd.Context(), &api.ListPlaysQueryParams{})
+		plays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{})
 		if err != nil {
 			return nil, noFileComp
 		}
@@ -187,7 +187,7 @@ func StartedChallengeNames(cli labcli.CLI) CompletionFunc {
 			return nil, noFileComp
 		}
 
-		plays, err := cli.Client().ListPlays(cmd.Context(), &api.ListPlaysQueryParams{})
+		plays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{})
 		if err != nil {
 			return nil, noFileComp
 		}
@@ -244,7 +244,7 @@ func StartedTutorialNames(cli labcli.CLI) CompletionFunc {
 			return nil, noFileComp
 		}
 
-		plays, err := cli.Client().ListPlays(cmd.Context(), &api.ListPlaysQueryParams{})
+		plays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{})
 		if err != nil {
 			return nil, noFileComp
 		}
@@ -320,7 +320,7 @@ func StartedCourseArgs(cli labcli.CLI) CompletionFunc {
 		switch len(args) {
 		case 0:
 			// Complete course names that have active play sessions.
-			plays, err := cli.Client().ListPlays(cmd.Context(), &api.ListPlaysQueryParams{})
+			plays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{})
 			if err != nil {
 				return nil, noFileComp
 			}

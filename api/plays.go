@@ -304,10 +304,10 @@ type ListPlaysQueryParams struct {
 	Persistent bool `json:"persistent,omitempty" yaml:"persistent,omitempty"`
 }
 
-func (c *Client) ListPlays(ctx context.Context, listQueryParams *ListPlaysQueryParams) ([]*Play, error) {
+func (c *Client) ListPlays(ctx context.Context, listPlaysQueryParams ListPlaysQueryParams) ([]*Play, error) {
 	var plays []*Play
 	query := url.Values{}
-	if listQueryParams.Persistent {
+	if listPlaysQueryParams.Persistent {
 		query.Add("persistent", "true")
 	}
 	return plays, c.GetInto(ctx, "/plays", query, nil, &plays)
