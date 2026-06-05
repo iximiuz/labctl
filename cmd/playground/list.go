@@ -122,7 +122,8 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 	case "table":
 		header := []string{
 			"PLAYGROUND ID",
-			"NAME",
+			"PLAYGROUND NAME",
+			"CUSTOM TITLE",
 			"CREATED",
 			"STATUS",
 			"LINK",
@@ -137,6 +138,7 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 			return []string{
 				play.ID,
 				play.Playground.Name,
+				play.Title,
 				humanize.Time(safeParseTime(play.CreatedAt)),
 				playStatus(play),
 				link,
