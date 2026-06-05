@@ -40,9 +40,6 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 			if opts.base == "" {
 				return labcli.NewStatusError(1, "--base <base-playground-name> flag is required\n\nHint: List all possible base playgrounds with `labctl playgrounds catalog --filter base`.")
 			}
-			if opts.file == "" {
-				return labcli.NewStatusError(1, "--file <path/to/manifest.yaml> flag is required\n\nHint: You can get some inspiration from `labctl playgrounds manifest k8s-omni` output.")
-			}
 			return labcli.WrapStatusError(runCreate(cmd.Context(), cli, &opts))
 		},
 	}
@@ -74,19 +71,33 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runCreate(ctx context.Context, cli labcli.CLI, opts *createOptions) error {
-	if opts.file != "-" {
-		absFile, err := filepath.Abs(opts.file)
-		if err != nil {
-			return fmt.Errorf("couldn't get the absolute path of %s: %w", opts.file, err)
-		}
-		cli.PrintAux("Creating playground from %s\n", absFile)
-	} else {
-		cli.PrintAux("Creating playground from stdin\n")
-	}
+	var manifest *api.PlaygroundManifest
+	var err error
+	if opts.file == "" {
+		cli.PrintAux("Creating playground from default manifest\n")
 
-	manifest, err := readManifestFile(opts.file)
-	if err != nil {
-		return fmt.Errorf("couldn't read manifest: %w", err)
+		manifest, err = getManifest(ctx, cli, opts.base)
+		if err != nil {
+			return err
+		}
+
+		manifest.Name = opts.name
+	} else {
+
+		if opts.file != "-" {
+			absFile, err := filepath.Abs(opts.file)
+			if err != nil {
+				return fmt.Errorf("couldn't get the absolute path of %s: %w", opts.file, err)
+			}
+			cli.PrintAux("Creating playground from %s\n", absFile)
+		} else {
+			cli.PrintAux("Creating playground from stdin\n")
+		}
+
+		manifest, err = readManifestFile(opts.file)
+		if err != nil {
+			return fmt.Errorf("couldn't read manifest: %w", err)
+		}
 	}
 
 	if manifest.Name != "" && manifest.Name != opts.name {
