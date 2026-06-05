@@ -22,6 +22,7 @@ const restartCommandTimeout = 5 * time.Minute
 
 type restartOptions struct {
 	playID string
+	title  string
 
 	machine string
 	user    string
@@ -41,9 +42,8 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 	var opts restartOptions
 
 	cmd := &cobra.Command{
-		Use:               "restart [flags] <playground-id>",
+		Use:               "restart [flags]",
 		Short:             `Restart a stopped playground session, resuming its state`,
-		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completion.StoppedPlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
@@ -56,13 +56,30 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 				return labcli.NewStatusError(1, "can't use --ide and --ssh flags at the same time")
 			}
 
-			opts.playID = args[0]
+			if len(args) == 0 && opts.title == "" {
+				return labcli.NewStatusError(1, "either specify an argument playID or the title of playground using `--title`")
+			}
+
+			if len(args) == 1 {
+				opts.playID = args[0]
+			}
+
+			if len(args) > 1 {
+				return labcli.NewStatusError(1, "only 1 playgroundId is supported at a time, found more")
+			}
 
 			return labcli.WrapStatusError(runRestartPlayground(cmd.Context(), cli, &opts))
 		},
 	}
 
 	flags := cmd.Flags()
+
+	flags.StringVar(
+		&opts.title,
+		"title",
+		"",
+		`title of the playground that needs to be restarted`,
+	)
 
 	flags.StringVarP(
 		&opts.machine,
@@ -121,6 +138,23 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOptions) error {
+	if opts.title != "" {
+		cli.PrintAux("Searching for a playground with title: %s\n", opts.title)
+		playgroundsList, err := cli.Client().ListPlays(ctx, &api.ListPlaysQueryParams{Persistent: true})
+		if err != nil {
+			return fmt.Errorf("couldn't get a list of playgrounds: %w", err)
+		}
+		for _, pgItem := range playgroundsList {
+			if pgItem.Title == opts.title {
+				opts.playID = pgItem.ID
+			}
+		}
+
+		if opts.playID == "" {
+			return fmt.Errorf("unable to find a playground with mentioned title")
+		}
+	}
+
 	cli.PrintAux("Restarting playground %s...\n", opts.playID)
 
 	play, err := cli.Client().RestartPlay(ctx, opts.playID)

@@ -83,7 +83,7 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		return err
 	}
 
-	plays, err := cli.Client().ListPlays(ctx)
+	plays, err := cli.Client().ListPlays(ctx, &api.ListPlaysQueryParams{})
 	if err != nil {
 		return fmt.Errorf("couldn't list playgrounds: %w", err)
 	}

@@ -44,7 +44,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 }
 
 func runListChallenges(ctx context.Context, cli labcli.CLI, opts *listOptions) error {
-	plays, err := cli.Client().ListPlays(ctx)
+	plays, err := cli.Client().ListPlays(ctx, &api.ListPlaysQueryParams{})
 	if err != nil {
 		return fmt.Errorf("cannot list plays: %w", err)
 	}
