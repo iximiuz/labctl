@@ -24,12 +24,39 @@ func ActivePlays(cli labcli.CLI) CompletionFunc {
 	return plays(cli, (*api.Play).IsActive)
 }
 
-// StoppedPlays completes playground IDs that are in a stopped state.
+// StoppedPlays completes playground IDs and titles that are in a stopped state.
 // Use for: restart.
 func StoppedPlays(cli labcli.CLI) CompletionFunc {
-	return plays(cli, func(p *api.Play) bool {
-		return p.StateIs(api.StateStopped)
-	})
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, noFileComp
+		}
+
+		if cli.Client() == nil {
+			return nil, noFileComp
+		}
+
+		plays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{})
+		if err != nil {
+			return nil, noFileComp
+		}
+
+		var completions []string
+		for _, p := range plays {
+			if !p.StateIs(api.StateStopped) {
+				continue
+			}
+
+			desc := fmt.Sprintf("%s (%s)", p.Playground.Name, p.State())
+			completions = append(completions, fmt.Sprintf("%s\t%s", p.ID, desc))
+
+			if p.Title != "" {
+				completions = append(completions, fmt.Sprintf("%s\t%s", p.Title, desc))
+			}
+		}
+
+		return completions, noFileComp
+	}
 }
 
 // NonDestroyedPlays completes playground IDs that are not destroyed.
