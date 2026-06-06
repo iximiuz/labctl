@@ -49,6 +49,7 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "restart [flags] <playground-id|title>",
 		Short:             `Restart a stopped playground session, resuming its state`,
+		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completion.StoppedPlays(cli),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.SetQuiet(opts.quiet)
