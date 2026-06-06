@@ -149,7 +149,7 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 
 		rowFunc := func(play *api.Play) []string {
 			var link string
-			if play.IsActive() || play.TutorialName+play.ChallengeName+play.CourseName != "" {
+			if play.IsActive() || play.StateIs(api.StateStopped) || play.TutorialName+play.ChallengeName+play.CourseName != "" {
 				link = play.PageURL
 			}
 
