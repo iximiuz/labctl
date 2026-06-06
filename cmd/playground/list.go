@@ -103,7 +103,7 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		}
 	}
 	slices.SortFunc(plays, func(a, b *api.Play) int {
-		return strings.Compare(a.UpdatedAt, b.UpdatedAt)
+		return strings.Compare(b.UpdatedAt, a.UpdatedAt)
 	})
 
 	var filteredPlays []*api.Play
