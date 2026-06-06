@@ -36,9 +36,28 @@ func StoppedPlays(cli labcli.CLI) CompletionFunc {
 			return nil, noFileComp
 		}
 
+		// Stopped playgrounds that can be restarted are persistent plays, which
+		// the API only returns when queried with Persistent: true. Merge them
+		// with the recent plays (deduping by ID) the same way `playground ls` does.
 		plays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{})
 		if err != nil {
 			return nil, noFileComp
+		}
+
+		persistentPlays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{Persistent: true})
+		if err != nil {
+			return nil, noFileComp
+		}
+
+		seen := map[string]bool{}
+		for _, p := range plays {
+			seen[p.ID] = true
+		}
+		for _, p := range persistentPlays {
+			if !seen[p.ID] {
+				seen[p.ID] = true
+				plays = append(plays, p)
+			}
 		}
 
 		var completions []string
