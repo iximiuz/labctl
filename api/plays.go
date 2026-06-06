@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -55,6 +56,7 @@ type PlayStatus struct {
 type Play struct {
 	ID string `json:"id" yaml:"id"`
 
+	Title       string `json:"title" yaml:"title"`
 	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
 	UpdatedAt   string `json:"updatedAt" yaml:"updatedAt"`
 	LastStateAt string `json:"lastStateAt" yaml:"lastStateAt"`
@@ -298,9 +300,17 @@ func (c *Client) GetPlay(ctx context.Context, id string) (*Play, error) {
 	return &p, c.GetInto(ctx, "/plays/"+id, nil, nil, &p)
 }
 
-func (c *Client) ListPlays(ctx context.Context) ([]*Play, error) {
+type ListPlaysQueryParams struct {
+	Persistent bool `json:"persistent,omitempty" yaml:"persistent,omitempty"`
+}
+
+func (c *Client) ListPlays(ctx context.Context, listPlaysQueryParams ListPlaysQueryParams) ([]*Play, error) {
 	var plays []*Play
-	return plays, c.GetInto(ctx, "/plays", nil, nil, &plays)
+	query := url.Values{}
+	if listPlaysQueryParams.Persistent {
+		query.Add("persistent", "true")
+	}
+	return plays, c.GetInto(ctx, "/plays", query, nil, &plays)
 }
 
 func (c *Client) StopPlay(ctx context.Context, id string) (*Play, error) {

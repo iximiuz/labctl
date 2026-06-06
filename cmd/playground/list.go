@@ -83,7 +83,7 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		return err
 	}
 
-	plays, err := cli.Client().ListPlays(ctx)
+	plays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{})
 	if err != nil {
 		return fmt.Errorf("couldn't list playgrounds: %w", err)
 	}
@@ -122,7 +122,8 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 	case "table":
 		header := []string{
 			"PLAYGROUND ID",
-			"NAME",
+			"PLAYGROUND NAME",
+			"TITLE",
 			"CREATED",
 			"STATUS",
 			"LINK",
@@ -137,6 +138,7 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 			return []string{
 				play.ID,
 				play.Playground.Name,
+				play.Title,
 				humanize.Time(safeParseTime(play.CreatedAt)),
 				playStatus(play),
 				link,
