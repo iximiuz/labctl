@@ -38,11 +38,6 @@ type restartOptions struct {
 	quiet bool
 }
 
-var (
-	// can be a playID or a title of the playground
-	playgroundIdentifier string
-)
-
 func newRestartCommand(cli labcli.CLI) *cobra.Command {
 	var opts restartOptions
 
@@ -62,8 +57,8 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 				return labcli.NewStatusError(1, "can't use --ide and --ssh flags at the same time")
 			}
 
-			playgroundIdentifier = args[0]
-			return labcli.WrapStatusError(runRestartPlayground(cmd.Context(), cli, &opts, playgroundIdentifier))
+			opts.playId = args[0]
+			return labcli.WrapStatusError(runRestartPlayground(cmd.Context(), cli, &opts))
 		},
 	}
 
@@ -125,7 +120,41 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 	return cmd
 }
 
-func restartWithPlaygroundId(ctx context.Context, cli labcli.CLI, opts *restartOptions) error {
+func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOptions) error {
+	if api.LooksLikePlayID(opts.playId) {
+		return restartPlay(ctx, cli, opts)
+	}
+
+	// If the provided identifier is not a play ID, search for
+	// a play with matching title and, if found one, restart it.
+	var matches []*api.Play
+
+	cli.PrintAux("Searching for a playground with title: %s\n", opts.playId)
+	plays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{Persistent: true})
+	if err != nil {
+		return fmt.Errorf("couldn't get a list of playgrounds: %w", err)
+	}
+	for _, p := range plays {
+		if strings.HasPrefix(p.Title, opts.playId) {
+			matches = append(matches, p)
+		}
+	}
+
+	if len(matches) == 0 {
+		return errors.New("could not find a play with the given title")
+	}
+
+	if len(matches) > 1 {
+		return errors.New("ambiguous title, please use the full title of a play or a longer prefix")
+	}
+
+	opts.playId = matches[0].ID
+	return restartPlay(ctx, cli, opts)
+}
+
+func restartPlay(ctx context.Context, cli labcli.CLI, opts *restartOptions) error {
+	cli.PrintAux("Restarting playground %s...\n", opts.playId)
+
 	play, err := cli.Client().RestartPlay(ctx, opts.playId)
 	if err != nil {
 		return fmt.Errorf("couldn't restart the playground: %w", err)
@@ -213,58 +242,4 @@ func restartWithPlaygroundId(ctx context.Context, cli labcli.CLI, opts *restartO
 	}
 
 	return nil
-}
-
-func isItPlaygroundIDCheck(id string) bool {
-	if len(id) != 24 {
-		return false
-	}
-	// check if each charachter within the string falls in the hex range
-	for _, c := range id {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-			return false
-		}
-	}
-	return true
-}
-
-func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOptions, playgroundIdentifier string) error {
-	cli.PrintAux("Restarting playground %s...\n", playgroundIdentifier)
-
-	// if the provided identifier is a confirmed playgroundID restart it immediately
-	if isItPlaygroundIDCheck(playgroundIdentifier) {
-		opts.playId = playgroundIdentifier
-		return restartWithPlaygroundId(ctx, cli, opts)
-	}
-
-	// if identifier is not a playgroundID search for playgrounds with matching titles
-	// and if found one restart it.
-	var matchingPlaygrounds []api.Play
-
-	cli.PrintAux("Searching for a playground with title: %s\n", playgroundIdentifier)
-	playgroundsList, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{Persistent: true})
-	if err != nil {
-		return fmt.Errorf("couldn't get a list of playgrounds: %w", err)
-	}
-	for _, pgItem := range playgroundsList {
-		if pgItem.Title == playgroundIdentifier {
-			matchingPlaygrounds = []api.Play{*pgItem}
-			break
-		}
-
-		if strings.HasPrefix(pgItem.Title, playgroundIdentifier) {
-			matchingPlaygrounds = append(matchingPlaygrounds, *pgItem)
-		}
-	}
-
-	if len(matchingPlaygrounds) == 0 {
-		return errors.New("unable to find a playground with provided title")
-	}
-
-	if len(matchingPlaygrounds) > 1 {
-		return errors.New("unambigious title, please use the full title of a playground or a longer prefix")
-	}
-
-	opts.playId = matchingPlaygrounds[0].ID
-	return restartWithPlaygroundId(ctx, cli, opts)
 }

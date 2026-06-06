@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"time"
 )
 
@@ -212,6 +213,12 @@ func (p *Play) CountCompletedTasks() int {
 		}
 	}
 	return count
+}
+
+var validPlayIDRegex = regexp.MustCompile(`^[0-9a-f]{24}$`)
+
+func LooksLikePlayID(v string) bool {
+	return validPlayIDRegex.MatchString(v)
 }
 
 type Machine struct {

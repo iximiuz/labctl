@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -83,10 +84,27 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		return err
 	}
 
-	plays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{})
+	recentPlays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{})
 	if err != nil {
 		return fmt.Errorf("couldn't list playgrounds: %w", err)
 	}
+
+	persistentPlays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{Persistent: true})
+	if err != nil {
+		return fmt.Errorf("couldn't list stopped playgrounds: %w", err)
+	}
+
+	plays := append([]*api.Play{}, recentPlays...)
+	for _, play := range persistentPlays {
+		if !slices.ContainsFunc(plays, func(p *api.Play) bool {
+			return p.ID == play.ID
+		}) {
+			plays = append(plays, play)
+		}
+	}
+	slices.SortFunc(plays, func(a, b *api.Play) int {
+		return strings.Compare(a.UpdatedAt, b.UpdatedAt)
+	})
 
 	var filteredPlays []*api.Play
 	for _, play := range plays {
@@ -121,9 +139,9 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 	switch output {
 	case "table":
 		header := []string{
-			"PLAYGROUND ID",
+			"PLAYGROUND RUN ID",
 			"PLAYGROUND NAME",
-			"TITLE",
+			"PLAYGROUND RUN TITLE",
 			"CREATED",
 			"STATUS",
 			"LINK",
@@ -145,7 +163,7 @@ func newListPrinter(w io.Writer, output string) listPrinter {
 			}
 		}
 
-		return labcli.NewSliceTablePrinter[*api.Play](w, header, rowFunc)
+		return labcli.NewSliceTablePrinter(w, header, rowFunc)
 	case "json":
 		return labcli.NewJSONPrinter[*api.Play, []*api.Play](w)
 	// case "id":
