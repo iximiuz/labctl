@@ -6,6 +6,8 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Printer prints a list of values.
@@ -110,6 +112,25 @@ func (p *jsonPrinter[T, U]) Print(items U) error {
 }
 
 func (p *jsonPrinter[T, U]) Flush() {}
+
+type yamlPrinter[T any, U []T | map[string]T] struct {
+	writer io.Writer
+}
+
+// NewYAMLPrinter outputs values as YAML.
+func NewYAMLPrinter[T any, U []T | map[string]T](w io.Writer) Printer[T, U] {
+	return &yamlPrinter[T, U]{writer: w}
+}
+
+func (p *yamlPrinter[T, U]) Print(items U) error {
+	encoder := yaml.NewEncoder(p.writer)
+	encoder.SetIndent(2)
+	defer encoder.Close()
+
+	return encoder.Encode(items)
+}
+
+func (p *yamlPrinter[T, U]) Flush() {}
 
 type mapKeyPrinter[T any, U map[string]T] struct {
 	writer io.Writer

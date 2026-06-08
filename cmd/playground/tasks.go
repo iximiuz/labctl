@@ -25,8 +25,8 @@ type tasksOptions struct {
 }
 
 func (opts *tasksOptions) validate() error {
-	if opts.output != "table" && opts.output != "json" && opts.output != "name" && opts.output != "none" {
-		return fmt.Errorf("invalid output format: %s (supported formats: table, json, name, none)", opts.output)
+	if opts.output != "table" && opts.output != "json" && opts.output != "yaml" && opts.output != "name" && opts.output != "none" {
+		return fmt.Errorf("invalid output format: %s (supported formats: table, json, yaml, name, none)", opts.output)
 	}
 
 	if opts.kind != "" && opts.kind != "init" && opts.kind != "helper" && opts.kind != "regular" {
@@ -59,7 +59,7 @@ func newTasksCommand(cli labcli.CLI) *cobra.Command {
 		"output",
 		"o",
 		"table",
-		"Output format: table, json, name, none",
+		"Output format: table, json, yaml, name, none",
 	)
 
 	flags.BoolVar(
@@ -163,41 +163,55 @@ func runListTasks(ctx context.Context, cli labcli.CLI, playgroundID string, opts
 		return play, nil
 	}
 
-	b := backoff.NewExponentialBackOff()
-	b.Multiplier = 1.3
-	b.MaxInterval = 10 * time.Second
+	var waitErr error
+	if opts.wait {
+		b := backoff.NewExponentialBackOff()
+		b.Multiplier = 1.3
+		b.MaxInterval = 10 * time.Second
 
-	play, err := backoff.Retry(
-		ctx,
-		operation,
-		backoff.WithMaxElapsedTime(opts.timeout),
-		backoff.WithBackOff(b),
-	)
-	spin.Stop()
-	if err != nil && !errors.Is(err, errFailed) && !errors.Is(err, errUnfinished) {
-		return err
+		_, err := backoff.Retry(
+			ctx,
+			operation,
+			backoff.WithMaxElapsedTime(opts.timeout),
+			backoff.WithBackOff(b),
+		)
+		spin.Stop()
+		if err != nil && !errors.Is(err, errFailed) && !errors.Is(err, errUnfinished) {
+			return err
+		}
+		waitErr = err
 	}
 
 	if opts.output != "none" {
+		// The merged control-plane + data-plane view, with full task details for
+		// privileged callers (super-admins, capability holders, authors).
+		tasks, err := cli.Client().GetPlayTasks(ctx, playgroundID, nil)
+		if err != nil {
+			return fmt.Errorf("couldn't list playground tasks: %w", err)
+		}
+
+		byName := make(map[string]api.PlayTaskDetails, len(tasks))
+		for _, task := range tasks {
+			byName[task.Name] = task
+		}
+
 		printer := newTaskListPrinter(cli.OutputStream(), opts.output)
 
-		filteredTasks := filterTasksByKind(play.Tasks, opts.kind)
-
-		if err := printer.Print(filteredTasks); err != nil {
+		if err := printer.Print(filterTasksByKind(byName, opts.kind)); err != nil {
 			return err
 		}
-		defer printer.Flush()
+		printer.Flush()
 	}
 
-	if err != nil {
-		return labcli.NewStatusError(2, "%s", err.Error())
+	if waitErr != nil {
+		return labcli.NewStatusError(2, "%s", waitErr.Error())
 	}
 
 	return nil
 }
 
 type taskListPrinter interface {
-	Print(map[string]api.PlayTask) error
+	Print(map[string]api.PlayTaskDetails) error
 	Flush()
 }
 
@@ -206,27 +220,31 @@ func newTaskListPrinter(w io.Writer, output string) taskListPrinter {
 	case "table":
 		header := []string{
 			"NAME",
+			"MACHINE",
 			"STATUS",
 			"INIT",
 			"HELPER",
 		}
 
-		rowFunc := func(task api.PlayTask) []string {
+		rowFunc := func(task api.PlayTaskDetails) []string {
 			return []string{
+				task.Machine,
 				formatTaskStatus(task.Status),
 				fmt.Sprint(task.Init),
 				fmt.Sprint(task.Helper),
 			}
 		}
 
-		return labcli.NewMapTablePrinter[api.PlayTask](w, header, rowFunc, true)
+		return labcli.NewMapTablePrinter[api.PlayTaskDetails](w, header, rowFunc, true)
 	case "json":
-		return labcli.NewJSONPrinter[api.PlayTask, map[string]api.PlayTask](w)
+		return labcli.NewJSONPrinter[api.PlayTaskDetails, map[string]api.PlayTaskDetails](w)
+	case "yaml":
+		return labcli.NewYAMLPrinter[api.PlayTaskDetails, map[string]api.PlayTaskDetails](w)
 	case "name":
-		return labcli.NewMapKeyPrinter[api.PlayTask](w)
+		return labcli.NewMapKeyPrinter[api.PlayTaskDetails](w)
 	default:
 		// This should never happen
-		panic(fmt.Errorf("invalid output format: %s (supported formats: table, json, name)", output))
+		panic(fmt.Errorf("invalid output format: %s (supported formats: table, json, yaml, name)", output))
 	}
 }
 
@@ -253,12 +271,12 @@ func taskIsFinished(task api.PlayTask) bool {
 	return task.Status == api.PlayTaskStatusCompleted || task.Status == api.PlayTaskStatusFailed
 }
 
-func filterTasksByKind(tasks map[string]api.PlayTask, kind string) map[string]api.PlayTask {
+func filterTasksByKind(tasks map[string]api.PlayTaskDetails, kind string) map[string]api.PlayTaskDetails {
 	if kind == "" {
 		return tasks
 	}
 
-	filtered := make(map[string]api.PlayTask)
+	filtered := make(map[string]api.PlayTaskDetails)
 	for name, task := range tasks {
 		switch kind {
 		case "init":

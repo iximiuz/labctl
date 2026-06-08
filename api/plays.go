@@ -444,6 +444,18 @@ func (c *Client) RequestPlayConn(ctx context.Context, id string) (*PlayConnHandl
 	return &conn, c.PostInto(ctx, "/plays/"+id+"/conns", nil, nil, nil, &conn)
 }
 
+// GetPlayTasks returns the merged control-plane + data-plane view of a play's
+// tasks. When machines is non-empty, only those machines' tasks are returned.
+func (c *Client) GetPlayTasks(ctx context.Context, id string, machines []string) ([]PlayTaskDetails, error) {
+	query := url.Values{}
+	for _, m := range machines {
+		query.Add("machine", m)
+	}
+
+	var tasks []PlayTaskDetails
+	return tasks, c.GetInto(ctx, "/plays/"+id+"/tasks", query, nil, &tasks)
+}
+
 type PortAccess string
 
 const (
