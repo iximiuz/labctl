@@ -166,6 +166,16 @@ func (p *Play) IsFailed() bool {
 	return false
 }
 
+// HasFailedTask reports whether any non-helper task has failed.
+func (p *Play) HasFailedTask() bool {
+	for _, task := range p.Tasks {
+		if !task.Helper && task.Status == PlayTaskStatusFailed {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Play) CountInitTasks() int {
 	count := 0
 	for _, task := range p.Tasks {

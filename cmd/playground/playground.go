@@ -34,6 +34,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newUpdateCommand(cli),
 		newRemoveCommand(cli),
 		newTasksCommand(cli),
+		newWaitCommand(cli),
 	)
 
 	return cmd

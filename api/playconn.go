@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,10 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/gorilla/websocket"
 )
+
+// ErrPlayTasksFailed is returned by WaitTasks when one or more of the
+// playground's (non-helper) tasks ended up in the failed state.
+var ErrPlayTasksFailed = errors.New("one or more playground tasks failed")
 
 type PlayConnMessage struct {
 	Kind    string   `json:"kind"`
@@ -214,4 +219,85 @@ func (pc *PlayConn) WaitDone() error {
 	}
 
 	return pc.ctx.Err()
+}
+
+// WaitTasks blocks until the playground's tasks reach a terminal state, driven
+// by live task updates received over the play connection.
+//
+// When initOnly is true, it returns successfully as soon as all init tasks have
+// completed; otherwise it waits for all non-helper tasks to complete. In either
+// mode it returns ErrPlayTasksFailed as soon as a non-helper task fails, unless
+// the wait condition has already been satisfied.
+//
+// A non-positive timeout means wait indefinitely (until the connection's context
+// is cancelled).
+func (pc *PlayConn) WaitTasks(timeout time.Duration, initOnly bool, s *spinner.Spinner) error {
+	prefix := func() string {
+		if initOnly {
+			return fmt.Sprintf(
+				"Waiting for init tasks to complete: %d/%d ",
+				pc.play.CountCompletedInitTasks(), pc.play.CountInitTasks(),
+			)
+		}
+		return fmt.Sprintf(
+			"Waiting for tasks to complete: %d/%d ",
+			pc.play.CountCompletedTasks(), pc.play.CountTasks(),
+		)
+	}
+
+	if s != nil {
+		s.Prefix = prefix()
+		s.Start()
+		defer s.Stop()
+	}
+
+	done := func() (bool, error) {
+		if initOnly {
+			if pc.play.IsInitialized() {
+				return true, nil
+			}
+		} else if pc.play.IsCompletable() {
+			return true, nil
+		}
+		if pc.play.HasFailedTask() {
+			return true, ErrPlayTasksFailed
+		}
+		return false, nil
+	}
+
+	if ok, err := done(); ok {
+		return err
+	}
+
+	ctx := pc.ctx
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(pc.ctx, timeout)
+		defer cancel()
+	}
+
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case err := <-pc.errCh:
+			slog.Warn("Play connection error", "error", err.Error())
+
+		case msg := <-pc.msgCh:
+			if msg.Kind == "task" {
+				pc.play.Tasks[msg.Task.Name] = msg.Task
+			}
+		}
+
+		if s != nil {
+			s.Prefix = prefix()
+		}
+
+		if ok, err := done(); ok {
+			return err
+		}
+	}
+
+	return ctx.Err()
 }
