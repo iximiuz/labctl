@@ -370,6 +370,16 @@ func (c *Client) PersistPlay(ctx context.Context, id string) error {
 	return c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
 }
 
+func (c *Client) ExtendPlay(ctx context.Context, id string, duration time.Duration) (*Play, error) {
+	body, err := toJSONBody(map[string]any{"action": "extend", "duration": duration.Milliseconds()})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
 func (c *Client) RebootPlayMachine(ctx context.Context, id, machine string) (*Play, error) {
 	body, err := toJSONBody(map[string]any{"action": "machine.reboot", "machine": machine})
 	if err != nil {
