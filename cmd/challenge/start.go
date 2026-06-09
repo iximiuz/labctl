@@ -251,7 +251,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 						eventCh <- EventSSHConnEnded
 					}()
 				} else {
-					cli.PrintAux("Challenge playground is ready!\n")
+					cli.PrintAux("Challenge playground is ready! (play ID: %s)\n", chal.Play.ID)
 					cli.PrintAux("Challenge page: %s\n", chal.PageURL)
 					if opts.keepAlive {
 						cli.PrintAux("The challenge playground will be kept alive.\n")
