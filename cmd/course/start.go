@@ -34,6 +34,8 @@ type startOptions struct {
 	noSSH     bool
 	keepAlive bool
 
+	skipWaitInit bool
+
 	ide string
 
 	safetyDisclaimerConsent bool
@@ -111,6 +113,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"keep-alive",
 		false,
 		`Keep the lesson playground alive after exiting SSH session`,
+	)
+	flags.BoolVar(
+		&opts.skipWaitInit,
+		"skip-wait-init",
+		false,
+		`Skip waiting for the playground initialization (useful for debugging)`,
 	)
 	flags.StringVar(
 		&opts.ide,
@@ -224,7 +232,9 @@ func runStartCourseLesson(ctx context.Context, cli labcli.CLI, opts *startOption
 	spin.Writer = cli.AuxStream()
 
 	go func() {
-		if err := playConn.WaitPlayReady(startCourseLessonTimeout, spin); err != nil {
+		if opts.skipWaitInit {
+			cli.PrintAux("WARNING: Not waiting for the playground initialization tasks to complete...\n")
+		} else if err := playConn.WaitPlayReady(startCourseLessonTimeout, spin); err != nil {
 			slog.Debug("websocket connection failed", "error", err)
 
 			eventCh <- EventWSConnFailed

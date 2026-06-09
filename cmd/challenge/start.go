@@ -31,6 +31,8 @@ type startOptions struct {
 	noSSH     bool
 	keepAlive bool
 
+	skipWaitInit bool
+
 	ide string
 
 	safetyDisclaimerConsent bool
@@ -104,6 +106,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"keep-alive",
 		false,
 		`Keep the challenge playground alive after it's completed`,
+	)
+	flags.BoolVar(
+		&opts.skipWaitInit,
+		"skip-wait-init",
+		false,
+		`Skip waiting for the playground initialization (useful for debugging)`,
 	)
 	flags.StringVar(
 		&opts.ide,
@@ -180,7 +188,9 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 	spin.Writer = cli.AuxStream()
 
 	go func() {
-		if err := playConn.WaitPlayReady(startChallengeTimeout, spin); err != nil {
+		if opts.skipWaitInit {
+			cli.PrintAux("WARNING: Not waiting for the playground initialization tasks to complete...\n")
+		} else if err := playConn.WaitPlayReady(startChallengeTimeout, spin); err != nil {
 			slog.Debug("websocket connection failed", "error", err)
 
 			eventCh <- EventWSConnFailed
