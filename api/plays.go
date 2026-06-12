@@ -64,6 +64,8 @@ type Play struct {
 
 	ExpiresIn int `json:"expiresIn" yaml:"expiresIn"`
 
+	MaxPlayTime string `json:"maxPlayTime,omitempty" yaml:"maxPlayTime,omitempty"`
+
 	Status *PlayStatus `json:"status,omitempty" yaml:"status,omitempty"`
 
 	Playground Playground `json:"playground" yaml:"playground"`
@@ -368,6 +370,19 @@ func (c *Client) PersistPlay(ctx context.Context, id string) error {
 
 	var p Play
 	return c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
+func (c *Client) SetPlayMaxPlayTime(ctx context.Context, id string, maxPlayTimeMinutes int) (*Play, error) {
+	body, err := toJSONBody(map[string]any{
+		"action":             "set_max_play_time",
+		"maxPlayTimeMinutes": maxPlayTimeMinutes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
 }
 
 func (c *Client) RebootPlayMachine(ctx context.Context, id, machine string) (*Play, error) {
