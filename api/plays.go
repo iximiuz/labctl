@@ -178,6 +178,38 @@ func (p *Play) HasFailedTask() bool {
 	return false
 }
 
+// CountMachines returns the number of machines defined for the play.
+func (p *Play) CountMachines() int {
+	return len(p.Machines)
+}
+
+// CountRunningMachines returns how many of the play's machines currently report
+// the RUNNING state in the latest status.
+func (p *Play) CountRunningMachines() int {
+	count := 0
+	for _, m := range p.Machines {
+		if p.MachineState(m.Name) == MachineStateRunning {
+			count++
+		}
+	}
+	return count
+}
+
+// AllMachinesRunning reports whether every machine of the play has reached the
+// RUNNING state. It returns false until a status with the full machine list has
+// been observed.
+func (p *Play) AllMachinesRunning() bool {
+	if p.Status == nil || len(p.Machines) == 0 {
+		return false
+	}
+	for _, m := range p.Machines {
+		if p.MachineState(m.Name) != MachineStateRunning {
+			return false
+		}
+	}
+	return true
+}
+
 func (p *Play) CountInitTasks() int {
 	count := 0
 	for _, task := range p.Tasks {

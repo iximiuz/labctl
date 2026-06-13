@@ -34,6 +34,7 @@ type startOptions struct {
 
 	forwardAgent     bool
 	skipWaitInit     bool
+	skipWaitRunning  bool
 	withPortForwards bool
 
 	safetyDisclaimerConsent bool
@@ -145,6 +146,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"skip-wait-init",
 		false,
 		`Skip waiting for the playground initialization (useful for debugging)`,
+	)
+	flags.BoolVar(
+		&opts.skipWaitRunning,
+		"skip-wait-running",
+		false,
+		`Skip waiting for all playground machines to reach the RUNNING state`,
 	)
 	flags.BoolVarP(
 		&opts.quiet,
@@ -260,16 +267,35 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 
 	if opts.skipWaitInit {
 		cli.PrintAux("WARNING: Not waiting for the playground initialization tasks to complete...\n")
-	} else if len(play.Tasks) > 0 {
+	}
+	if opts.skipWaitRunning {
+		cli.PrintAux("WARNING: Not waiting for all playground machines to reach the RUNNING state...\n")
+	}
+
+	waitRunning := !opts.skipWaitRunning
+	waitInit := !opts.skipWaitInit && len(play.Tasks) > 0
+
+	if waitRunning || waitInit {
 		playConn := api.NewPlayConn(ctx, play, cli.Client(), cli.Config().WebSocketOrigin())
 		if err := playConn.Start(); err != nil {
 			return fmt.Errorf("couldn't start play connection: %w", err)
 		}
+		defer playConn.Close()
 
-		spin := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
-		spin.Writer = cli.AuxStream()
-		if err := playConn.WaitPlayReady(startPlaygroundTimeout, spin); err != nil {
-			return fmt.Errorf("playground initialization failed: %w", err)
+		if waitRunning {
+			spin := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
+			spin.Writer = cli.AuxStream()
+			if err := playConn.WaitMachinesRunning(startPlaygroundTimeout, spin); err != nil {
+				return fmt.Errorf("couldn't wait for the playground machines to start: %w", err)
+			}
+		}
+
+		if waitInit {
+			spin := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
+			spin.Writer = cli.AuxStream()
+			if err := playConn.WaitPlayReady(startPlaygroundTimeout, spin); err != nil {
+				return fmt.Errorf("playground initialization failed: %w", err)
+			}
 		}
 	}
 

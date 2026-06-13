@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -19,9 +20,10 @@ import (
 var ErrPlayTasksFailed = errors.New("one or more playground tasks failed")
 
 type PlayConnMessage struct {
-	Kind    string   `json:"kind"`
-	Machine string   `json:"machine,omitempty"`
-	Task    PlayTask `json:"task,omitempty"`
+	Kind    string      `json:"kind"`
+	Machine string      `json:"machine,omitempty"`
+	Task    PlayTask    `json:"task,omitempty"`
+	Status  *PlayStatus `json:"status,omitempty"`
 }
 
 type PlayConn struct {
@@ -37,6 +39,8 @@ type PlayConn struct {
 
 	msgCh chan PlayConnMessage
 	errCh chan error
+
+	closeOnce sync.Once
 }
 
 func NewPlayConn(
@@ -147,10 +151,25 @@ func (pc *PlayConn) Start() error {
 }
 
 func (pc *PlayConn) Close() {
-	pc.cancel()
-	pc.conn.Close()
-	close(pc.msgCh)
-	close(pc.errCh)
+	pc.closeOnce.Do(func() {
+		pc.cancel()
+		pc.conn.Close()
+		close(pc.msgCh)
+		close(pc.errCh)
+	})
+}
+
+// applyMessage folds an incoming play-connection message into the local play
+// snapshot (task statuses and the latest machine/play status).
+func (pc *PlayConn) applyMessage(msg PlayConnMessage) {
+	switch msg.Kind {
+	case "task":
+		pc.play.Tasks[msg.Task.Name] = msg.Task
+	case "status":
+		if msg.Status != nil {
+			pc.play.Status = msg.Status
+		}
+	}
 }
 
 func (pc *PlayConn) WaitPlayReady(timeout time.Duration, s *spinner.Spinner) error {
@@ -175,9 +194,7 @@ func (pc *PlayConn) WaitPlayReady(timeout time.Duration, s *spinner.Spinner) err
 			slog.Warn("Play connection error", "error", err.Error())
 
 		case msg := <-pc.msgCh:
-			if msg.Kind == "task" {
-				pc.play.Tasks[msg.Task.Name] = msg.Task
-			}
+			pc.applyMessage(msg)
 		}
 
 		if s != nil {
@@ -198,6 +215,65 @@ func (pc *PlayConn) WaitPlayReady(timeout time.Duration, s *spinner.Spinner) err
 	return ctx.Err()
 }
 
+// WaitMachinesRunning blocks until every machine of the playground has reached
+// the RUNNING state, driven by live status updates received over the play
+// connection. A non-positive timeout means wait indefinitely (until the
+// connection's context is cancelled).
+func (pc *PlayConn) WaitMachinesRunning(timeout time.Duration, s *spinner.Spinner) error {
+	prefix := func() string {
+		return fmt.Sprintf(
+			"Waiting for machines to start... Running: %d/%d ",
+			pc.play.CountRunningMachines(), pc.play.CountMachines(),
+		)
+	}
+
+	if s != nil {
+		s.Prefix = prefix()
+		s.Start()
+		defer s.Stop()
+	}
+
+	if pc.play.AllMachinesRunning() {
+		if s != nil {
+			s.FinalMSG = "Waiting for machines to start... Done.\n"
+		}
+		return nil
+	}
+
+	ctx := pc.ctx
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(pc.ctx, timeout)
+		defer cancel()
+	}
+
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case err := <-pc.errCh:
+			slog.Warn("Play connection error", "error", err.Error())
+
+		case msg := <-pc.msgCh:
+			pc.applyMessage(msg)
+		}
+
+		if s != nil {
+			s.Prefix = prefix()
+		}
+
+		if pc.play.AllMachinesRunning() {
+			if s != nil {
+				s.FinalMSG = "Waiting for machines to start... Done.\n"
+			}
+			return nil
+		}
+	}
+
+	return ctx.Err()
+}
+
 func (pc *PlayConn) WaitDone() error {
 	for pc.ctx.Err() == nil {
 		select {
@@ -208,9 +284,7 @@ func (pc *PlayConn) WaitDone() error {
 			slog.Warn("Play connection error", "error", err.Error())
 
 		case msg := <-pc.msgCh:
-			if msg.Kind == "task" {
-				pc.play.Tasks[msg.Task.Name] = msg.Task
-			}
+			pc.applyMessage(msg)
 		}
 
 		if pc.play.IsCompletable() || pc.play.IsFailed() {
@@ -285,9 +359,7 @@ func (pc *PlayConn) WaitTasks(timeout time.Duration, initOnly bool, s *spinner.S
 			slog.Warn("Play connection error", "error", err.Error())
 
 		case msg := <-pc.msgCh:
-			if msg.Kind == "task" {
-				pc.play.Tasks[msg.Task.Name] = msg.Task
-			}
+			pc.applyMessage(msg)
 		}
 
 		if s != nil {
