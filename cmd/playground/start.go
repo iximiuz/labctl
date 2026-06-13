@@ -26,6 +26,7 @@ type startOptions struct {
 	playground string
 	machine    string
 	user       string
+	title      string
 
 	file string
 	open bool
@@ -109,6 +110,12 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		"u",
 		"",
 		`SSH user (default: the machine's default login user)`,
+	)
+	flags.StringVar(
+		&opts.title,
+		"title",
+		"",
+		`Title string which once set can be used to restart, stop and ssh into`,
 	)
 	flags.BoolVarP(
 		&opts.open,
@@ -248,6 +255,16 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	}
 	if opts.user, err = play.ResolveUser(opts.machine, opts.user); err != nil {
 		return err
+	}
+
+	// set a title, this should be a non-failure causing request by default
+	if opts.title != "" {
+		play, err = cli.Client().SetTitle(ctx, play.ID, opts.title)
+		if err != nil {
+			cli.PrintAux(fmt.Sprintf("Unable to set title: %s, exception: %s", opts.title, err.Error()))
+		} else {
+			cli.PrintAux(fmt.Sprintf("Playground created id: %s, setting title: %s", play.ID, opts.title))
+		}
 	}
 
 	cli.PrintAux("New %s playground started with ID %s\n", opts.playground, play.ID)
