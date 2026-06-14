@@ -257,17 +257,18 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		return err
 	}
 
+	cli.PrintAux("New %s playground started with ID %s\n", opts.playground, play.ID)
+
 	// set a title, this should be a non-failure causing request by default
 	if opts.title != "" {
-		play, err = cli.Client().SetTitle(ctx, play.ID, opts.title)
+		var playResponse *api.Play
+		playResponse, err = cli.Client().SetTitle(ctx, play.ID, opts.title)
 		if err != nil {
-			cli.PrintAux(fmt.Sprintf("Unable to set title: %s, exception: %s", opts.title, err.Error()))
+			cli.PrintAux(fmt.Sprintf("Unable to set title: %s, exception: %s\n", opts.title, err.Error()))
 		} else {
-			cli.PrintAux(fmt.Sprintf("Playground created id: %s, setting title: %s", play.ID, opts.title))
+			cli.PrintAux(fmt.Sprintf("Title set: %s\n", playResponse.Title))
 		}
 	}
-
-	cli.PrintAux("New %s playground started with ID %s\n", opts.playground, play.ID)
 
 	if opts.open {
 		browser.OpenWithFallbackMessage(cli, play.PageURL)
