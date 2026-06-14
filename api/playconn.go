@@ -120,7 +120,22 @@ func (pc *PlayConn) Start() error {
 	pc.errCh = make(chan error, 1)
 
 	go func() {
-		defer pc.Close()
+		// The reader is the sole sender on msgCh/errCh, so it owns closing them -
+		// doing it here (and nowhere else) makes the close race-free even when
+		// Close() is called concurrently from another goroutine. cancel() wakes
+		// any waiters that were blocked on the channels.
+		defer func() {
+			pc.cancel()
+			close(pc.msgCh)
+			close(pc.errCh)
+		}()
+
+		sendErr := func(err error) {
+			select {
+			case pc.errCh <- err:
+			case <-pc.ctx.Done():
+			}
+		}
 
 		for pc.ctx.Err() == nil {
 			_, message, err := pc.conn.ReadMessage()
@@ -129,33 +144,39 @@ func (pc *PlayConn) Start() error {
 					return // terminal error
 				}
 				if websocket.IsUnexpectedCloseError(err) {
-					pc.errCh <- fmt.Errorf("play connection WebSocket closed unexpectedly: %w", err)
+					sendErr(fmt.Errorf("play connection WebSocket closed unexpectedly: %w", err))
 					return // terminal error
 				}
 
-				pc.errCh <- fmt.Errorf("error reading play connection message: %w", err)
+				sendErr(fmt.Errorf("error reading play connection message: %w", err))
 				continue // non-terminal error
 			}
 
 			var msg PlayConnMessage
 			if err := json.Unmarshal(message, &msg); err != nil {
-				pc.errCh <- fmt.Errorf("error decoding play connection message: %w", err)
+				sendErr(fmt.Errorf("error decoding play connection message: %w", err))
 				continue // non-terminal error
 			}
 
-			pc.msgCh <- msg
+			select {
+			case pc.msgCh <- msg:
+			case <-pc.ctx.Done():
+				return
+			}
 		}
 	}()
 
 	return nil
 }
 
+// Close stops the play connection. It cancels the connection context and closes
+// the underlying websocket, which makes the reader goroutine exit and close the
+// message channels. It is idempotent and safe to call concurrently with the
+// reader (it never closes the channels itself).
 func (pc *PlayConn) Close() {
 	pc.closeOnce.Do(func() {
 		pc.cancel()
 		pc.conn.Close()
-		close(pc.msgCh)
-		close(pc.errCh)
 	})
 }
 

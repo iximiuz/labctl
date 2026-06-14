@@ -387,7 +387,7 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 
 			case http.StatusTooManyRequests:
 				if reset, e := strconv.ParseInt(resp.Header.Get("X-Ratelimit-Reset"), 10, 0); e == nil && reset > 0 {
-					return nil, backoff.RetryAfter(int(time.Until(time.Unix(int64(reset), 0)).Seconds()))
+					return nil, backoff.RetryAfter(retryAfterSeconds(reset))
 				}
 
 				return nil, ErrRateLimitExceeded
@@ -411,6 +411,35 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 		backoff.WithMaxElapsedTime(10*time.Second),
 		backoff.WithBackOff(backoff.NewExponentialBackOff()),
 	)
+}
+
+// maxRetryAfterSeconds bounds the wait derived from an X-Ratelimit-Reset
+// header. Without a bound, a bogus or far-future reset value overflows
+// time.Duration inside backoff.RetryAfter (which computes seconds*time.Second)
+// and surfaces as the nonsensical "retry after 2562047h47m16s".
+const maxRetryAfterSeconds = 300
+
+// retryAfterSeconds converts an X-Ratelimit-Reset value into a sane,
+// non-negative, bounded number of seconds to wait. The header may carry either
+// an absolute Unix timestamp (the common convention) or a relative
+// seconds-from-now value; both are accepted. The result is clamped to
+// [0, maxRetryAfterSeconds] so it can never overflow time.Duration downstream.
+func retryAfterSeconds(reset int64) int {
+	// Values large enough to be a plausible Unix timestamp are treated as
+	// absolute; smaller ones as a relative seconds-from-now delta.
+	const epochThreshold = 1_000_000_000 // ~2001-09-09; any real reset epoch exceeds this
+	secs := reset
+	if reset >= epochThreshold {
+		secs = reset - time.Now().Unix()
+	}
+
+	if secs < 0 {
+		secs = 0
+	}
+	if secs > maxRetryAfterSeconds {
+		secs = maxRetryAfterSeconds
+	}
+	return int(secs)
 }
 
 func base64Encode(s string) string {
