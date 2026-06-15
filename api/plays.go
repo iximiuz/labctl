@@ -364,7 +364,7 @@ func (c *Client) ListPlays(ctx context.Context, listPlaysQueryParams ListPlaysQu
 	return plays, c.GetInto(ctx, "/plays", query, nil, &plays)
 }
 
-func (c *Client) SetTitle(ctx context.Context, id string, title string) (*Play, error) {
+func (c *Client) SetPlayTitle(ctx context.Context, id string, title string) (*Play, error) {
 	body, err := toJSONBody(map[string]any{"action": "set_title", "title": title})
 	if err != nil {
 		return nil, err

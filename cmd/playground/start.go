@@ -262,7 +262,7 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 	// set a title, this should be a non-failure causing request by default
 	if opts.title != "" {
 		var playResponse *api.Play
-		playResponse, err = cli.Client().SetTitle(ctx, play.ID, opts.title)
+		playResponse, err = cli.Client().SetPlayTitle(ctx, play.ID, opts.title)
 		if err != nil {
 			cli.PrintAux(fmt.Sprintf("Unable to set title: %s, exception: %s\n", opts.title, err.Error()))
 		} else {
