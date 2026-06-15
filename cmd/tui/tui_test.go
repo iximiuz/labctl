@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/iximiuz/labctl/api"
 	"github.com/iximiuz/labctl/internal/config"
@@ -262,6 +263,186 @@ func TestPersistAction(t *testing.T) {
 	}
 }
 
+// TestTooSmallFloor guards the minimum-size message below the layout floor.
+func TestTooSmallFloor(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.width, m.height = 50, 10
+	if out := m.View(); !strings.Contains(out, "too small") {
+		t.Fatalf("View at 50x10 should show the too-small message, got:\n%s", out)
+	}
+}
+
+// TestNoOverflowAcrossWidths guards that no rendered line exceeds the terminal
+// width (the header degrades and columns shrink instead of overflowing).
+func TestNoOverflowAcrossWidths(t *testing.T) {
+	t.Parallel()
+	for _, wh := range [][2]int{{60, 14}, {62, 16}, {80, 24}, {120, 40}} {
+		m := newModel(testCLI())
+		m.width, m.height = wh[0], wh[1]
+		m.setSizes(wh[0], wh[1])
+		m.plays = []*api.Play{playWithState("abcd1234ef56", api.StateRunning)}
+		m.refreshRows()
+		for _, line := range strings.Split(m.View(), "\n") {
+			if got := lipgloss.Width(line); got > wh[0] {
+				t.Fatalf("%dx%d: line width %d > %d: %q", wh[0], wh[1], got, wh[0], line)
+			}
+		}
+	}
+}
+
+func TestDistribute(t *testing.T) {
+	t.Parallel()
+	mins := []int{10, 8, 8, 6}
+	got := distribute(54, []int{3, 2, 3, 2}, mins)
+	sum := 0
+	for i, v := range got {
+		if v < mins[i] {
+			t.Fatalf("col %d = %d below min %d", i, v, mins[i])
+		}
+		sum += v
+	}
+	if sum != 54 {
+		t.Fatalf("sum = %d, want 54", sum)
+	}
+}
+
+// TestShareTerminalOpens guards that `w` opens the share-access dialog defaulting
+// to Private.
+func TestShareTerminalOpens(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.refreshRows()
+
+	out, _ := m.handlePlaysKey(runeKey("w"))
+	mo := out.(model)
+	if mo.modal != modalShare {
+		t.Fatalf("modal = %v, want modalShare", mo.modal)
+	}
+	if mo.shareBtn != 0 {
+		t.Fatalf("shareBtn = %d, want 0 (Private)", mo.shareBtn)
+	}
+	if mo.exposeID != "p1" {
+		t.Fatalf("exposeID = %q, want p1", mo.exposeID)
+	}
+}
+
+// TestExportDialogRoutes guards that x opens the Export dialog and routes to the
+// share / expose-port sub-flows.
+func TestExportDialogRoutes(t *testing.T) {
+	t.Parallel()
+	open := func() model {
+		m := newModel(testCLI())
+		m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
+		m.refreshRows()
+		out, _ := m.handlePlaysKey(runeKey("x"))
+		return out.(model)
+	}
+	if m := open(); m.modal != modalExport {
+		t.Fatalf("x: modal = %v, want modalExport", m.modal)
+	}
+	// Web terminal (button 0) -> share access choice.
+	web, _ := open().handleExportKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if web.(model).modal != modalShare {
+		t.Fatalf("Export>Web: modal = %v, want modalShare", web.(model).modal)
+	}
+	// Port (button 1) -> port input.
+	m := open()
+	m.exportBtn = 1
+	port, _ := m.handleExportKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if port.(model).modal != modalExposePort {
+		t.Fatalf("Export>Port: modal = %v, want modalExposePort", port.(model).modal)
+	}
+}
+
+// TestCtrlDDestroys guards that Ctrl+D opens the destroy confirmation on the
+// Playgrounds tab.
+func TestCtrlDDestroys(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.refreshRows()
+
+	out, _ := m.handlePlaysKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+	if mo := out.(model); mo.modal != modalConfirm || mo.confirm.id != "p1" {
+		t.Fatalf("ctrl+d: modal=%v confirm=%q, want modalConfirm/p1", mo.modal, mo.confirm.id)
+	}
+}
+
+// TestUnexposeOnExportsTab guards that Ctrl+D unexposes the selected export.
+func TestUnexposeOnExportsTab(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.tab = tabExports
+	m.exports = []exportItem{{playID: "p1", playName: "pg", kind: "shell", url: "https://x", exposeID: "s1"}}
+	m.refreshRows()
+
+	out, cmd := m.handleExportsKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+	if got := out.(model).status; got != "Unexposing..." {
+		t.Fatalf("status = %q, want Unexposing...", got)
+	}
+	if cmd == nil {
+		t.Fatal("unexpose should return a command")
+	}
+}
+
+func TestParsePorts(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		want []int
+		ok   bool
+	}{
+		{in: "8080", want: []int{8080}, ok: true},
+		{in: "8080, 9090", want: []int{8080, 9090}, ok: true},
+		{in: "80 443 8080", want: []int{80, 443, 8080}, ok: true},
+		{in: "abc", ok: false},
+		{in: "70000", ok: false},
+		{in: "", ok: false},
+	}
+	for _, tt := range tests {
+		got, ok := parsePorts(tt.in)
+		if ok != tt.ok {
+			t.Fatalf("parsePorts(%q) ok = %v, want %v", tt.in, ok, tt.ok)
+		}
+		if ok && len(got) != len(tt.want) {
+			t.Fatalf("parsePorts(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestExposePortValidation guards the port parsing in the expose-port dialog.
+func TestExposePortValidation(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      string
+		wantPrefix string
+	}{
+		{name: "valid", input: "8080", wantPrefix: "Exposing port(s)..."},
+		{name: "multiple", input: "8080, 9090", wantPrefix: "Exposing port(s)..."},
+		{name: "not a number", input: "abc", wantPrefix: errMark},
+		{name: "zero", input: "0", wantPrefix: errMark},
+		{name: "too large", input: "70000", wantPrefix: errMark},
+		{name: "empty", input: "", wantPrefix: errMark},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := newModel(testCLI())
+			m.modal = modalExposePort
+			m.exposeID = "p1"
+			m.input.SetValue(tt.input)
+
+			out, _ := m.handleExposePortKey(tea.KeyMsg{Type: tea.KeyEnter})
+			if got := out.(model).status; !strings.HasPrefix(got, tt.wantPrefix) {
+				t.Fatalf("input %q: status = %q, want prefix %q", tt.input, got, tt.wantPrefix)
+			}
+		})
+	}
+}
+
 // TestPersistOnlyOnPlaygrounds guards that P is a no-op on the Persisted tab
 // (persisted labs are already persistent).
 func TestPersistOnlyOnPlaygrounds(t *testing.T) {
@@ -298,7 +479,7 @@ func TestPersistedTabSelection(t *testing.T) {
 func TestSwitchTabCycles(t *testing.T) {
 	t.Parallel()
 	m := newModel(testCLI())
-	for _, want := range []viewTab{tabPersisted, tabCatalog, tabPlays} {
+	for _, want := range []viewTab{tabPersisted, tabExports, tabCatalog, tabPlays} {
 		m.switchTab(1)
 		if m.tab != want {
 			t.Fatalf("after +1, tab = %v, want %v", m.tab, want)

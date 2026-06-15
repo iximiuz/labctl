@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -55,9 +56,20 @@ const (
 	tabCatalog viewTab = iota
 	tabPlays
 	tabPersisted
+	tabExports
 )
 
-const tabCount = 3
+const tabCount = 4
+
+// exportItem is one exposed shell or port across all labs (Exports tab).
+type exportItem struct {
+	playID   string
+	playName string
+	kind     string // "shell" or the port number as text
+	url      string
+	exposeID string // shell/port id, for unexpose
+	isPort   bool
+}
 
 type (
 	playsMsg   struct{ plays, persisted []*api.Play }
@@ -72,6 +84,12 @@ type (
 	loginDoneMsg   struct{ err error }
 	disarmQuitMsg  struct{}
 	statusClearMsg struct{ seq int }
+	exposedMsg     struct{ kind, url string } // a shell/port was just exposed
+	exposedListMsg struct {                   // exposed endpoints for the Info popup
+		shells []*api.Shell
+		ports  []*api.Port
+	}
+	exportsTabMsg struct{ items []exportItem } // aggregated exports for the Exports tab
 )
 
 const statusFlashDuration = 4 * time.Second
@@ -99,15 +117,18 @@ type pending struct {
 type modal uint8
 
 const (
-	modalNone    modal = iota
-	modalFilter        // footer search bar (renders within mainView)
-	modalExtend        // lifetime dialog
-	modalAuth          // sign-in popup
-	modalConfirm       // destroy confirmation
-	modalQuit          // quit confirmation
-	modalInfo          // details popup
-	modalThemes        // theme picker (live preview)
-	modalHelp          // shortcuts popup
+	modalNone       modal = iota
+	modalFilter           // footer search bar (renders within mainView)
+	modalExtend           // lifetime dialog
+	modalExport           // export choice (web terminal / port)
+	modalShare            // share-terminal access choice (private/public)
+	modalExposePort       // expose-port number input
+	modalAuth             // sign-in popup
+	modalConfirm          // destroy confirmation
+	modalQuit             // quit confirmation
+	modalInfo             // details popup
+	modalThemes           // theme picker (live preview)
+	modalHelp             // shortcuts popup
 )
 
 type model struct {
@@ -117,20 +138,29 @@ type model struct {
 	playsTable     table.Model
 	persistedTable table.Model
 	catalogTable   table.Model
+	exportsTable   table.Model
 
 	plays         []*api.Play      // full, unfiltered
 	persisted     []*api.Play      // persistent plays (ListPlays{Persistent:true})
 	catalog       []api.Playground // full, unfiltered
+	exports       []exportItem     // aggregated exposed shells/ports
 	filteredPlays []*api.Play      // rows currently shown (cursor indexes this)
 	filteredPers  []*api.Play
 	filteredCat   []api.Playground
+	filteredExp   []exportItem
 
 	modal modal // the single active overlay/prompt
 
 	filter    string
-	input     textinput.Model // filter + extend lifetime field
+	input     textinput.Model // filter + extend lifetime + expose-port field
 	extendBtn int             // 0 = field, 1 = Cancel, 2 = OK
 	extendID  string          // play being extended
+
+	exposeID   string       // play being shared / port-exposed
+	shareBtn   int          // 0 = Private, 1 = Public
+	exportBtn  int          // 0 = Web terminal, 1 = Port
+	infoShells []*api.Shell // exposed shells (loaded for the Info popup)
+	infoPorts  []*api.Port  // exposed ports (loaded for the Info popup)
 
 	status        string
 	statusSeq     int     // bumped per flash; stale auto-clears are ignored
@@ -152,12 +182,14 @@ func newModel(cli labcli.CLI) model {
 	pt := table.New(table.WithFocused(true))
 	pp := table.New()
 	ct := table.New()
+	ex := table.New()
 	applySkin(&pt)
 	applySkin(&pp)
 	applySkin(&ct)
+	applySkin(&ex)
 	ti := textinput.New()
 	ti.Prompt = ""
-	m := model{cli: cli, tab: tabPlays, playsTable: pt, persistedTable: pp, catalogTable: ct, input: ti, status: "Loading...", theme: "k9s"}
+	m := model{cli: cli, tab: tabPlays, playsTable: pt, persistedTable: pp, catalogTable: ct, exportsTable: ex, input: ti, status: "Loading...", theme: "k9s"}
 	m.setSizes(80, 24)
 	return m
 }
@@ -269,6 +301,135 @@ func (m model) extendPlay(id string, minutes int) tea.Cmd {
 	})
 }
 
+func access(public bool) api.AccessMode {
+	if public {
+		return api.AccessPublic
+	}
+	return api.AccessPrivate
+}
+
+// shareTerminal exposes a web terminal for the playground and returns its URL.
+func (m model) shareTerminal(id string, public bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		p, err := m.cli.Client().GetPlay(ctx, id)
+		if err != nil {
+			return errMsg{err}
+		}
+		machine, err := p.ResolveMachine("")
+		if err != nil {
+			return errMsg{err}
+		}
+		user, err := p.ResolveUser(machine, "")
+		if err != nil {
+			return errMsg{err}
+		}
+		sh, err := m.cli.Client().ExposeShell(ctx, id, api.ExposeShellRequest{
+			Machine: machine, User: user, Access: access(public),
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return exposedMsg{kind: "Terminal", url: sh.URL}
+	}
+}
+
+// exposePort exposes an HTTP service running in the playground and returns its
+// public URL.
+// exposePort exposes one or more HTTP ports (the API takes one per call, so we
+// fan out) and returns the joined URLs.
+func (m model) exposePort(id string, ports []int) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		p, err := m.cli.Client().GetPlay(ctx, id)
+		if err != nil {
+			return errMsg{err}
+		}
+		machine, err := p.ResolveMachine("")
+		if err != nil {
+			return errMsg{err}
+		}
+		var urls []string
+		for _, port := range ports {
+			pt, err := m.cli.Client().ExposePort(ctx, id, api.ExposePortRequest{
+				Machine: machine, Number: port, Access: api.AccessPublic,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			urls = append(urls, pt.URL)
+		}
+		kind := "Port"
+		if len(urls) > 1 {
+			kind = fmt.Sprintf("%d ports", len(urls))
+		}
+		return exposedMsg{kind: kind, url: strings.Join(urls, "  ")}
+	}
+}
+
+// loadExposed fetches the currently exposed shells/ports for the Info popup.
+func (m model) loadExposed(id string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		shells, _ := m.cli.Client().ListShells(ctx, id)
+		ports, _ := m.cli.Client().ListPorts(ctx, id)
+		return exposedListMsg{shells: shells, ports: ports}
+	}
+}
+
+// loadExports aggregates exposed shells/ports across all active labs for the
+// Exports tab.
+func (m model) loadExports() tea.Cmd {
+	plays := append(append([]*api.Play{}, m.plays...), m.persisted...)
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		var items []exportItem
+		for _, p := range plays {
+			if !p.IsActive() {
+				continue
+			}
+			for _, sh := range mustShells(m.cli.Client().ListShells(ctx, p.ID)) {
+				items = append(items, exportItem{
+					playID: p.ID, playName: p.Playground.Name,
+					kind: "shell", url: sh.URL, exposeID: sh.ID,
+				})
+			}
+			for _, pt := range mustPorts(m.cli.Client().ListPorts(ctx, p.ID)) {
+				items = append(items, exportItem{
+					playID: p.ID, playName: p.Playground.Name,
+					kind: strconv.Itoa(pt.Number), url: pt.URL, exposeID: pt.ID, isPort: true,
+				})
+			}
+		}
+		return exportsTabMsg{items: items}
+	}
+}
+
+func mustShells(s []*api.Shell, _ error) []*api.Shell { return s }
+func mustPorts(p []*api.Port, _ error) []*api.Port    { return p }
+
+// unexpose removes one exposed shell or port.
+func (m model) unexpose(e exportItem) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		var err error
+		if e.isPort {
+			err = m.cli.Client().UnexposePort(ctx, e.playID, e.exposeID)
+		} else {
+			err = m.cli.Client().UnexposeShell(ctx, e.playID, e.exposeID)
+		}
+		if err != nil {
+			return errMsg{err}
+		}
+		return actionMsg{"Unexposed " + e.kind}
+	}
+}
+
 func (m model) startPlay(name string) tea.Cmd {
 	return m.playAction("Started "+name, func(ctx context.Context) error {
 		// ponytail: official catalog playgrounds need no safety consent; auto-ack.
@@ -353,6 +514,25 @@ func (m *model) refreshRows() {
 		}
 	}
 	m.catalogTable.SetRows(cr)
+
+	m.filteredExp = m.filteredExp[:0]
+	er := make([]table.Row, 0, len(m.exports))
+	for _, e := range m.exports {
+		row := table.Row{e.playName, e.kind, e.url}
+		if f == "" || strings.Contains(strings.ToLower(strings.Join(row, " ")), f) {
+			m.filteredExp = append(m.filteredExp, e)
+			er = append(er, row)
+		}
+	}
+	m.exportsTable.SetRows(er)
+}
+
+func (m *model) selectedExport() *exportItem {
+	i := m.exportsTable.Cursor()
+	if i < 0 || i >= len(m.filteredExp) {
+		return nil
+	}
+	return &m.filteredExp[i]
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -444,12 +624,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.loadPlays(), tick())
 
 	case actionMsg:
-		clear := m.flash(okMark + " " + msg.info)
-		return m, tea.Batch(m.loadPlays(), clear)
+		cmds := []tea.Cmd{m.loadPlays(), m.flash(okMark + " " + msg.info)}
+		if m.tab == tabExports { // keep the exports list fresh after unexpose etc.
+			cmds = append(cmds, m.loadExports())
+		}
+		return m, tea.Batch(cmds...)
 
 	case errMsg:
 		clear := m.flash(errMark + " " + msg.err.Error())
 		return m, clear
+
+	case exposedMsg:
+		note := okMark + " " + msg.kind + " exposed: " + msg.url
+		if err := clipboard.WriteAll(msg.url); err == nil {
+			note += " (copied)"
+		}
+		return m, m.flash(note)
+
+	case exposedListMsg:
+		m.infoShells = msg.shells
+		m.infoPorts = msg.ports
+		return m, nil
+
+	case exportsTabMsg:
+		m.exports = msg.items
+		m.refreshRows()
+		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -484,9 +684,9 @@ func renderStatus(s string) string {
 }
 
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Double ctrl+c / ctrl+d to quit (Claude-CLI style): first press arms and
-	// hints, a second within the window quits. Works in every mode.
-	if s := msg.String(); s == "ctrl+c" || s == "ctrl+d" {
+	// Double ctrl+c to quit (Claude-CLI style): first press arms and hints, a
+	// second within the window quits. (ctrl+d is the delete key, see below.)
+	if msg.String() == "ctrl+c" {
 		if m.quitArmed {
 			return m, tea.Quit
 		}
@@ -502,6 +702,12 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleThemesKey(msg)
 	case modalExtend:
 		return m.handleExtendSelectKey(msg)
+	case modalExport:
+		return m.handleExportKey(msg)
+	case modalShare:
+		return m.handleShareKey(msg)
+	case modalExposePort:
+		return m.handleExposePortKey(msg)
 	case modalFilter:
 		return m.handlePromptKey(msg)
 	case modalQuit:
@@ -532,15 +738,19 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "tab", "right", "l":
 		m.switchTab(1)
-		return m, nil
+		return m, m.tabEnterCmd()
 
 	case "shift+tab", "left", "h":
 		m.switchTab(-1)
-		return m, nil
+		return m, m.tabEnterCmd()
 
 	case "r":
 		m.status = "Refreshing..."
-		return m, tea.Batch(m.loadPlays(), m.loadCatalog())
+		cmds := []tea.Cmd{m.loadPlays(), m.loadCatalog()}
+		if m.tab == tabExports {
+			cmds = append(cmds, m.loadExports())
+		}
+		return m, tea.Batch(cmds...)
 
 	case "?": // shortcuts popup
 		m.modal = modalHelp
@@ -552,17 +762,28 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "i": // show full details of the selected row
-		if (m.tab == tabCatalog && m.selectedPlayground() != nil) ||
-			(m.tab != tabCatalog && m.selectedPlay() != nil) {
+		m.infoShells, m.infoPorts = nil, nil
+		if m.tab == tabCatalog {
+			if m.selectedPlayground() != nil {
+				m.modal = modalInfo
+			}
+			return m, nil
+		}
+		if p := m.selectedPlay(); p != nil {
 			m.modal = modalInfo
+			return m, m.loadExposed(p.ID) // populate the exposed-endpoints section
 		}
 		return m, nil
 	}
 
-	if m.tab == tabCatalog {
+	switch m.tab {
+	case tabCatalog:
 		return m.handleCatalogKey(msg)
+	case tabExports:
+		return m.handleExportsKey(msg)
+	default:
+		return m.handlePlaysKey(msg) // tabPlays + tabPersisted share actions
 	}
-	return m.handlePlaysKey(msg) // tabPlays + tabPersisted share actions
 }
 
 // switchTab moves to the next/previous tab and focuses its table.
@@ -571,15 +792,27 @@ func (m *model) switchTab(delta int) {
 	m.focusActiveTable()
 }
 
+// tabEnterCmd loads data needed by the freshly-entered tab (exports are fetched
+// lazily, not on the 5s poll).
+func (m model) tabEnterCmd() tea.Cmd {
+	if m.tab == tabExports {
+		return m.loadExports()
+	}
+	return nil
+}
+
 func (m *model) focusActiveTable() {
 	m.playsTable.Blur()
 	m.persistedTable.Blur()
 	m.catalogTable.Blur()
+	m.exportsTable.Blur()
 	switch m.tab {
 	case tabPersisted:
 		m.persistedTable.Focus()
 	case tabCatalog:
 		m.catalogTable.Focus()
+	case tabExports:
+		m.exportsTable.Focus()
 	default:
 		m.playsTable.Focus()
 	}
@@ -689,6 +922,87 @@ func (m model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// handleShareKey drives the share-terminal access choice (Private/Public).
+// handleExportKey drives the Export choice (Web terminal / Port).
+func (m model) handleExportKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "down", "left", "right", "tab", "j", "k", "h", "l":
+		m.exportBtn = 1 - m.exportBtn
+		return m, nil
+	case "esc":
+		m.modal = modalNone
+		return m, nil
+	case "enter":
+		if m.exportBtn == 0 { // Web terminal -> access choice
+			m.modal = modalShare
+			m.shareBtn = 0
+			return m, nil
+		}
+		m.modal = modalExposePort // Port -> number input
+		m.input.SetValue("")
+		m.input.Placeholder = "ports e.g. 8080, 9090"
+		return m, m.input.Focus()
+	default:
+		return m, nil
+	}
+}
+
+func (m model) handleShareKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "down", "left", "right", "tab", "j", "k", "h", "l":
+		m.shareBtn = 1 - m.shareBtn
+		return m, nil
+	case "esc":
+		m.modal = modalNone
+		return m, nil
+	case "enter":
+		m.modal = modalNone
+		m.status = "Sharing terminal..."
+		return m, m.shareTerminal(m.exposeID, m.shareBtn == 1)
+	default:
+		return m, nil
+	}
+}
+
+// parsePorts parses a comma/space-separated list of valid ports.
+func parsePorts(s string) ([]int, bool) {
+	fields := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' })
+	ports := make([]int, 0, len(fields))
+	for _, f := range fields {
+		n, err := strconv.Atoi(f)
+		if err != nil || n < 1 || n > 65535 {
+			return nil, false
+		}
+		ports = append(ports, n)
+	}
+	return ports, len(ports) > 0
+}
+
+// handleExposePortKey drives the expose-port input (accepts a list).
+func (m model) handleExposePortKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.modal = modalNone
+		m.input.Blur()
+		return m, nil
+	case "enter":
+		ports, ok := parsePorts(m.input.Value())
+		id := m.exposeID
+		m.modal = modalNone
+		m.input.Blur()
+		if !ok {
+			m.status = errMark + " Invalid port(s): " + m.input.Value()
+			return m, nil
+		}
+		m.status = "Exposing port(s)..."
+		return m, m.exposePort(id, ports)
+	default:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+}
+
 // handlePromptKey drives the filter input (live-filters as you type).
 func (m model) handlePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -773,7 +1087,35 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		m.input.Placeholder = "90m, 3h"
 		return m, m.input.Focus()
-	case "x":
+	case "w": // share a web terminal (choose access)
+		if p == nil || !p.IsActive() {
+			m.status = errMark + " Select a running playground to share"
+			return m, nil
+		}
+		m.modal = modalShare
+		m.exposeID = p.ID
+		m.shareBtn = 0 // default to Private
+		return m, nil
+	case "E": // expose an HTTP port
+		if p == nil || !p.IsActive() {
+			m.status = errMark + " Select a running playground to expose a port"
+			return m, nil
+		}
+		m.modal = modalExposePort
+		m.exposeID = p.ID
+		m.input.SetValue("")
+		m.input.Placeholder = "port e.g. 8080"
+		return m, m.input.Focus()
+	case "x": // open the Export dialog (web terminal / port)
+		if p == nil || !p.IsActive() {
+			m.status = errMark + " Select a running playground to export"
+			return m, nil
+		}
+		m.modal = modalExport
+		m.exposeID = p.ID
+		m.exportBtn = 0
+		return m, nil
+	case "ctrl+d": // destroy the playground (with confirmation)
 		if p == nil {
 			return m, nil
 		}
@@ -782,6 +1124,36 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.modal = modalConfirm
 		m.status = ""
 		return m, nil
+	}
+	cmd := m.delegate(msg)
+	return m, cmd
+}
+
+// handleExportsKey drives the Exports tab: enter copies the URL, o opens it,
+// ctrl+d unexposes the selected endpoint.
+func (m model) handleExportsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	e := m.selectedExport()
+	switch msg.String() {
+	case "enter":
+		if e == nil {
+			return m, nil
+		}
+		note := okMark + " " + e.url
+		if err := clipboard.WriteAll(e.url); err == nil {
+			note += " (copied)"
+		}
+		return m, m.flash(note)
+	case "o":
+		if e != nil {
+			_ = browser.Open(e.url)
+		}
+		return m, nil
+	case "ctrl+d": // unexpose the selected endpoint
+		if e == nil {
+			return m, nil
+		}
+		m.status = "Unexposing..."
+		return m, m.unexpose(*e)
 	}
 	cmd := m.delegate(msg)
 	return m, cmd
@@ -811,16 +1183,53 @@ func (m *model) delegate(msg tea.Msg) tea.Cmd {
 		m.persistedTable, cmd = m.persistedTable.Update(msg)
 	case tabCatalog:
 		m.catalogTable, cmd = m.catalogTable.Update(msg)
+	case tabExports:
+		m.exportsTable, cmd = m.exportsTable.Update(msg)
 	default:
 		m.playsTable, cmd = m.playsTable.Update(msg)
 	}
 	return cmd
 }
 
+// gapsFor returns the blank-row breathing space (header→table, title→header),
+// collapsed to 0 on short terminals to reclaim data rows.
+func gapsFor(h int) (header, table int) {
+	if h < 22 {
+		return 0, 0
+	}
+	return 1, 1
+}
+
+// distribute splits total across columns by weight, honoring per-column minimums
+// so columns shrink gracefully on narrow terminals instead of overflowing.
+func distribute(total int, weights, mins []int) []int {
+	out := make([]int, len(weights))
+	sumMin, sumW := 0, 0
+	for i := range weights {
+		sumMin += mins[i]
+		sumW += weights[i]
+	}
+	extra := total - sumMin
+	if extra < 0 {
+		extra = 0
+	}
+	used := 0
+	for i := range weights {
+		out[i] = mins[i]
+		if sumW > 0 {
+			add := extra * weights[i] / sumW
+			out[i] += add
+			used += add
+		}
+	}
+	out[len(out)-1] += extra - used // rounding remainder to the last column
+	return out
+}
+
 func (m *model) setSizes(w, h int) {
-	// Reserve rows: header(4) + gap(2) + box border(2) + footer(1) + table top
-	// gap(1). Fixed so the table is the same height on both tabs.
-	bodyH := h - headerRows - headerGap - 3 - tableGap
+	hGap, tGap := gapsFor(h)
+	// Reserve rows: header(4) + header gap + box border(2) + footer(1) + table gap.
+	bodyH := h - headerRows - hGap - 3 - tGap
 	if bodyH < 3 {
 		bodyH = 3
 	}
@@ -829,32 +1238,34 @@ func (m *model) setSizes(w, h int) {
 	m.catalogTable.SetHeight(bodyH)
 
 	inner := w - 2 // titledBox eats one column per side
-	idW, nameW, statusW := 26, 18, 26
-	ageW := inner - idW - nameW - statusW - 6
-	if ageW < 10 {
-		ageW = 10
-	}
+
+	pc := distribute(inner-6, []int{3, 2, 3, 2}, []int{10, 8, 8, 6}) // ID NAME STATUS AGE
 	playCols := []table.Column{
-		{Title: "ID", Width: idW},
-		{Title: "NAME", Width: nameW},
-		{Title: "STATUS", Width: statusW},
-		{Title: "AGE", Width: ageW},
+		{Title: "ID", Width: pc[0]},
+		{Title: "NAME", Width: pc[1]},
+		{Title: "STATUS", Width: pc[2]},
+		{Title: "AGE", Width: pc[3]},
 	}
 	m.playsTable.SetColumns(playCols)
 	m.playsTable.SetWidth(inner)
 	m.persistedTable.SetColumns(playCols)
 	m.persistedTable.SetWidth(inner)
 
-	cNameW := 22
-	descW := inner - cNameW - 4
-	if descW < 20 {
-		descW = 20
-	}
+	cc := distribute(inner-4, []int{1, 3}, []int{12, 15}) // PLAYGROUND DESCRIPTION
 	m.catalogTable.SetColumns([]table.Column{
-		{Title: "PLAYGROUND", Width: cNameW},
-		{Title: "DESCRIPTION", Width: descW},
+		{Title: "PLAYGROUND", Width: cc[0]},
+		{Title: "DESCRIPTION", Width: cc[1]},
 	})
 	m.catalogTable.SetWidth(inner)
+
+	ec := distribute(inner-6, []int{2, 1, 4}, []int{8, 6, 16}) // LAB KIND URL
+	m.exportsTable.SetColumns([]table.Column{
+		{Title: "LAB", Width: ec[0]},
+		{Title: "KIND", Width: ec[1]},
+		{Title: "URL", Width: ec[2]},
+	})
+	m.exportsTable.SetWidth(inner)
+	m.exportsTable.SetHeight(bodyH)
 }
 
 func shortStatus(p *api.Play) string {
@@ -1128,6 +1539,13 @@ func (m model) overlayCentered(box string) string {
 	return overlay(m.mainView(), box, x, y)
 }
 
+func (m model) tooSmallView() string {
+	w, h := m.dims()
+	msg := lipgloss.NewStyle().Foreground(cLogo).Bold(true).Render("Terminal too small")
+	sub := helpStyle.Render(fmt.Sprintf("needs at least %dx%d  (now %dx%d)", minWidth, minHeight, w, h))
+	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, msg+"\n"+sub)
+}
+
 // dims returns the window size with an 80x24 fallback before the first resize.
 func (m model) dims() (int, int) {
 	if m.width == 0 {
@@ -1137,6 +1555,9 @@ func (m model) dims() (int, int) {
 }
 
 func (m model) View() string {
+	if w, h := m.dims(); w < minWidth || h < minHeight {
+		return m.tooSmallView()
+	}
 	switch m.modal {
 	case modalAuth:
 		return m.authView()
@@ -1146,6 +1567,12 @@ func (m model) View() string {
 		return m.quitView()
 	case modalExtend:
 		return m.extendSelectView()
+	case modalExport:
+		return m.exportView()
+	case modalShare:
+		return m.shareView()
+	case modalExposePort:
+		return m.exposePortView()
 	case modalInfo:
 		return m.infoView()
 	case modalThemes:
@@ -1166,6 +1593,8 @@ func (m model) mainView() string {
 		body = m.persistedTable.View()
 	case tabCatalog:
 		body = m.catalogTable.View()
+	case tabExports:
+		body = m.exportsTable.View()
 	default:
 		body = m.playsTable.View()
 	}
@@ -1180,14 +1609,16 @@ func (m model) mainView() string {
 		footer = renderStatus(m.status)
 	}
 
-	body = strings.Repeat("\n", tableGap) + body // gap between tab title and header row
+	_, h := m.dims()
+	hGap, tGap := gapsFor(h)
+	body = strings.Repeat("\n", tGap) + body // gap between tab title and header row
 
-	return strings.Join([]string{
-		m.headerView(w),
-		"", // headerGap blank row between header and table
-		titledBox(m.tabsTitle(), body, w-2),
-		footer,
-	}, "\n")
+	rows := []string{m.headerView(w)}
+	for range hGap {
+		rows = append(rows, "")
+	}
+	rows = append(rows, titledBox(m.tabsTitle(), body, w-2), footer)
+	return strings.Join(rows, "\n")
 }
 
 // tabsTitle renders the playgrounds/catalog tabs as filled blocks embedded in
@@ -1208,6 +1639,8 @@ func (m model) tabsTitle() string {
 		count = len(m.filteredPers)
 	case tabCatalog:
 		count = len(m.filteredCat)
+	case tabExports:
+		count = len(m.filteredExp)
 	default:
 		count = len(m.filteredPlays)
 	}
@@ -1217,7 +1650,8 @@ func (m model) tabsTitle() string {
 	}
 	return tab("catalog", m.tab == tabCatalog) + " " +
 		tab("playgrounds", m.tab == tabPlays) + " " +
-		tab("persisted", m.tab == tabPersisted) + dialogTitle.Render(suffix)
+		tab("persisted", m.tab == tabPersisted) + " " +
+		tab("exports", m.tab == tabExports) + dialogTitle.Render(suffix)
 }
 
 // applyTheme switches the active color scheme immediately (used for the live
@@ -1228,6 +1662,7 @@ func (m *model) applyTheme(name string) {
 	applySkin(&m.playsTable)
 	applySkin(&m.persistedTable)
 	applySkin(&m.catalogTable)
+	applySkin(&m.exportsTable)
 }
 
 // overlay composites box onto bg at column x, row y (ANSI-aware), leaving the
@@ -1370,6 +1805,30 @@ func (m model) quitView() string {
 	}))
 }
 
+func (m model) exportView() string {
+	return m.overlayCentered(kDialog("Export", []string{
+		menuText.Render("What to expose?"),
+		"",
+		buttonRow([]string{"Web terminal", "Port"}, m.exportBtn),
+	}))
+}
+
+func (m model) shareView() string {
+	return m.overlayCentered(kDialog("Share terminal", []string{
+		menuText.Render("Web terminal access:"),
+		"",
+		buttonRow([]string{"Private", "Public"}, m.shareBtn),
+	}))
+}
+
+func (m model) exposePortView() string {
+	return m.overlayCentered(kDialog("Expose port(s)", []string{
+		menuText.Render("HTTP port(s) to expose publicly"),
+		"",
+		formField("Port(s):", m.input, true),
+	}))
+}
+
 func (m *model) selectedURL() string {
 	if m.tab == tabCatalog {
 		if pg := m.selectedPlayground(); pg != nil {
@@ -1429,6 +1888,10 @@ func (m model) infoView() string {
 	}
 
 	parts := []string{strings.Join(fields, "\n")}
+	if endpoints := m.exposedLines(contentW); len(endpoints) > 0 {
+		parts = append(parts, "", logoStyle.Render("Exposed"))
+		parts = append(parts, endpoints...)
+	}
 	if desc != "" {
 		wrapped := lipgloss.NewStyle().Width(contentW).Foreground(cBody).Render(desc)
 		parts = append(parts, "", wrapped)
@@ -1436,6 +1899,19 @@ func (m model) infoView() string {
 	parts = append(parts, "", helpStyle.Render("o open in browser · any key to close"))
 
 	return m.centered(titledBox(dialogTitle.Render(title), strings.Join(parts, "\n"), contentW+2))
+}
+
+// exposedLines formats the loaded exposed shells/ports for the Info popup.
+func (m model) exposedLines(w int) []string {
+	var out []string
+	trunc := func(s string) string { return ansi.Truncate(s, w, "…") }
+	for _, sh := range m.infoShells {
+		out = append(out, trunc(infoVal.Render("shell  ")+menuText.Render(sh.URL)))
+	}
+	for _, pt := range m.infoPorts {
+		out = append(out, trunc(infoVal.Render(fmt.Sprintf("%-7d", pt.Number))+menuText.Render(pt.URL)))
+	}
+	return out
 }
 
 func (m model) headerView(w int) string {
@@ -1449,13 +1925,18 @@ func (m model) headerView(w int) string {
 		infoLine("Plays", strconv.Itoa(len(m.plays))),
 		infoLine("Catalog", strconv.Itoa(len(m.catalog))),
 	)
-	logo := logoStyle.Render(strings.Join(logoSmall, "\n"))
-	left := lipgloss.JoinHorizontal(lipgloss.Top, info, "     ", m.menuView())
-	gap := w - lipgloss.Width(left) - lipgloss.Width(logo)
-	if gap < 1 {
-		gap = 1
+
+	// Greedily add the menu, then the logo, only when each still fits the width —
+	// so the header degrades instead of overflowing on narrow terminals.
+	header := info
+	if menu := m.menuView(); lipgloss.Width(header)+5+lipgloss.Width(menu) <= w {
+		header = lipgloss.JoinHorizontal(lipgloss.Top, header, "     ", menu)
 	}
-	header := lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", gap), logo)
+	if logo := logoStyle.Render(strings.Join(logoSmall, "\n")); lipgloss.Width(header)+2+lipgloss.Width(logo) <= w {
+		gap := w - lipgloss.Width(header) - lipgloss.Width(logo)
+		header = lipgloss.JoinHorizontal(lipgloss.Top, header, strings.Repeat(" ", gap), logo)
+	}
+
 	// Pin the header to exactly headerRows so the table never shifts between tabs.
 	lines := strings.Split(header, "\n")
 	for len(lines) < headerRows {
@@ -1464,41 +1945,64 @@ func (m model) headerView(w int) string {
 	return strings.Join(lines[:headerRows], "\n")
 }
 
+const headerRows = 4 // header pinned to this many rows for cross-tab stability
+
+// Below this the layout can't render usefully; show a "too small" message.
 const (
-	headerRows = 4
-	headerGap  = 1 // blank row between header and table
-	tableGap   = 1 // blank row between the tab title and the table header
+	minWidth  = 60
+	minHeight = 14
 )
 
-// menuView shows only the essential shortcuts (everything else lives in the ?
-// popup). Both tabs use the same item count so the header height is stable.
+// menuView shows the per-tab essential shortcuts (everything else lives in the
+// ? popup). At most 3 rows tall, so the 4-row header stays stable.
 func (m model) menuView() string {
-	enter := "SSH"
-	if m.tab == tabCatalog {
-		enter = "Start"
-	}
-	items := [][2]string{
-		{"enter", enter}, {"i", "Info"}, {":", "Filter"},
-		{"tab", "Switch"}, {"r", "Refresh"}, {"?", "Shortcuts"},
-	}
-	if m.tab == tabPlays { // persist only applies to (non-persistent) playgrounds
-		items = append(items, [2]string{"P", "Persist"})
-	}
-	half := (len(items) + 1) / 2
-	var col1, col2 []string
-	for i, it := range items {
-		line := menuKey.Render("<"+it[0]+"> ") + menuText.Render(it[1])
-		if i < half {
-			col1 = append(col1, line)
-		} else {
-			col2 = append(col2, line)
+	var items [][2]string
+	switch m.tab {
+	case tabCatalog:
+		items = [][2]string{
+			{"enter", "Start"}, {"i", "Info"}, {":", "Filter"},
+			{"r", "Refresh"}, {"tab", "Switch"}, {"?", "Shortcuts"},
+		}
+	case tabExports:
+		items = [][2]string{
+			{"enter", "Copy"}, {"o", "Open"}, {"ctrl+d", "Unexpose"},
+			{":", "Filter"}, {"r", "Refresh"}, {"?", "Shortcuts"},
+		}
+	case tabPersisted:
+		items = [][2]string{
+			{"enter", "SSH"}, {"i", "Info"}, {"w", "Share"},
+			{"E", "Expose"}, {"x", "Export"}, {":", "Filter"},
+			{"r", "Refresh"}, {"tab", "Switch"}, {"?", "Shortcuts"},
+		}
+	default: // tabPlays
+		items = [][2]string{
+			{"enter", "SSH"}, {"i", "Info"}, {"w", "Share"},
+			{"E", "Expose"}, {"x", "Export"}, {"P", "Persist"},
+			{":", "Filter"}, {"r", "Refresh"}, {"?", "Shortcuts"},
 		}
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.JoinVertical(lipgloss.Left, col1...),
-		"   ",
-		lipgloss.JoinVertical(lipgloss.Left, col2...),
-	)
+	return menuColumns(items)
+}
+
+// menuColumns lays items out column-major in 3-row columns.
+func menuColumns(items [][2]string) string {
+	const rows = 3
+	cols := (len(items) + rows - 1) / rows
+	parts := make([]string, 0, cols*2)
+	for c := range cols {
+		var lines []string
+		for r := range rows {
+			if idx := c*rows + r; idx < len(items) {
+				it := items[idx]
+				lines = append(lines, menuKey.Render("<"+it[0]+"> ")+menuText.Render(it[1]))
+			}
+		}
+		if c > 0 {
+			parts = append(parts, "   ")
+		}
+		parts = append(parts, lipgloss.JoinVertical(lipgloss.Left, lines...))
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
 
 func (m model) helpView() string {
@@ -1522,12 +2026,18 @@ func (m model) helpView() string {
 		key("t", "restart"),
 		key("P", "persist"),
 		key("e", "extend lifetime"),
-		key("x", "destroy"),
+		key("ctrl+d", "destroy"),
 	}, "\n")
 	right := strings.Join([]string{
-		hdr("Catalog"),
-		key("enter", "start"),
-		key("i", "info"),
+		hdr("Export"),
+		key("w", "share terminal"),
+		key("E", "expose port(s)"),
+		key("x", "export dialog"),
+		"",
+		hdr("Exports tab"),
+		key("enter", "copy url"),
+		key("o", "open url"),
+		key("ctrl+d", "unexpose"),
 		"",
 		hdr("General"),
 		key("r", "refresh"),

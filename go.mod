@@ -3,6 +3,7 @@ module github.com/iximiuz/labctl
 go 1.25.0
 
 require (
+	github.com/atotto/clipboard v0.1.4
 	github.com/briandowns/spinner v1.23.2
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/charmbracelet/bubbles v1.0.0
@@ -29,7 +30,6 @@ require (
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
-	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
