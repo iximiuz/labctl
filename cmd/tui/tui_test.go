@@ -1,0 +1,349 @@
+package tui
+
+import (
+	"bytes"
+	"io"
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/internal/config"
+	"github.com/iximiuz/labctl/internal/labcli"
+)
+
+func testCLI() labcli.CLI {
+	cli := labcli.NewCLI(io.NopCloser(bytes.NewReader(nil)), &bytes.Buffer{}, &bytes.Buffer{}, "test")
+	cli.SetConfig(config.Default("/tmp"))
+	return cli
+}
+
+func runeKey(s string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+}
+
+func playWithState(id string, st api.PlayState) *api.Play {
+	return &api.Play{
+		ID:         id,
+		Playground: api.Playground{Name: "pg"},
+		Status:     &api.PlayStatus{StateEvents: []api.StateEvent{{State: st}}},
+	}
+}
+
+// TestDelegateMovesCursor guards the regression where delegate had a value
+// receiver and dropped the table's updated cursor, breaking up/down navigation.
+func TestDelegateMovesCursor(t *testing.T) {
+	m := model{tab: tabPlays, playsTable: table.New(table.WithFocused(true))}
+	m.setSizes(80, 24)
+	m.playsTable.SetRows([]table.Row{
+		{"a", "", "", ""},
+		{"b", "", "", ""},
+		{"c", "", "", ""},
+	})
+
+	if got := m.playsTable.Cursor(); got != 0 {
+		t.Fatalf("start cursor = %d, want 0", got)
+	}
+
+	m.delegate(tea.KeyMsg{Type: tea.KeyDown})
+
+	if got := m.playsTable.Cursor(); got != 1 {
+		t.Fatalf("after down, cursor = %d, want 1 (delegate must persist table state)", got)
+	}
+}
+
+// TestViewRenders smoke-tests the k9s-style chrome: it must render the titled
+// frame, breadcrumbs, and logo without panicking on a fresh (empty) model.
+func TestViewRenders(t *testing.T) {
+	cli := labcli.NewCLI(io.NopCloser(bytes.NewReader(nil)), &bytes.Buffer{}, &bytes.Buffer{}, "test")
+	cli.SetConfig(config.Default("/tmp"))
+
+	m := newModel(cli)
+	m.width, m.height = 100, 30
+	m.setSizes(100, 30)
+
+	out := m.View()
+	for _, want := range []string{"playgrounds", "catalog", "[0]", "User:"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("View() missing %q\n---\n%s", want, out)
+		}
+	}
+}
+
+// TestDoubleQuit guards the Claude-CLI-style quit: one ctrl+c arms (no quit),
+// a second one actually quits.
+func TestDoubleQuit(t *testing.T) {
+	m := newModel(testCLI())
+	ctrlC := tea.KeyMsg{Type: tea.KeyCtrlC}
+
+	m1, _ := m.handleKey(ctrlC)
+	if !m1.(model).quitArmed {
+		t.Fatal("first ctrl+c should arm quit, not quit immediately")
+	}
+
+	_, cmd := m1.(model).handleKey(ctrlC)
+	if cmd == nil {
+		t.Fatal("second ctrl+c should return a quit command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("second ctrl+c cmd = %T, want tea.QuitMsg", cmd())
+	}
+}
+
+// TestFilterMapping guards that filtering keeps selectedPlay pointing at the
+// right play (cursor indexes the filtered slice, not the full list).
+func TestFilterMapping(t *testing.T) {
+	m := newModel(testCLI())
+	m.plays = []*api.Play{
+		{ID: "aaa", Playground: api.Playground{Name: "docker"}},
+		{ID: "bbb", Playground: api.Playground{Name: "k3s"}},
+	}
+	m.filter = "k3s"
+	m.refreshRows()
+
+	if len(m.filteredPlays) != 1 {
+		t.Fatalf("filtered len = %d, want 1", len(m.filteredPlays))
+	}
+	if p := m.selectedPlay(); p == nil || p.ID != "bbb" {
+		t.Fatalf("selectedPlay = %v, want play bbb", p)
+	}
+}
+
+// TestStatusFlashClears guards that an action status auto-clears, and that a
+// stale clear (superseded by a newer flash) does not wipe the current status.
+func TestStatusFlashClears(t *testing.T) {
+	m := newModel(testCLI())
+
+	cmd := m.flash("Destroyed xyz")
+	if m.status != "Destroyed xyz" {
+		t.Fatalf("status = %q, want flash text", m.status)
+	}
+	cleared, _ := m.Update(cmd()) // fire the scheduled clear
+	if s := cleared.(model).status; s != "" {
+		t.Fatalf("status after clear = %q, want empty", s)
+	}
+
+	stale := m.flash("first")    // seq N
+	m.flash("second")            // seq N+1, status="second"
+	kept, _ := m.Update(stale()) // stale clear for seq N must be ignored
+	if s := kept.(model).status; s != "second" {
+		t.Fatalf("stale clear wiped status = %q, want \"second\"", s)
+	}
+}
+
+// TestQuitConfirm guards that q opens a confirmation popup and only the Quit
+// button actually quits.
+func TestQuitConfirm(t *testing.T) {
+	m := newModel(testCLI())
+	q := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")}
+
+	opened, _ := m.handleKey(q)
+	mo := opened.(model)
+	if mo.modal != modalQuit {
+		t.Fatal("q should open the quit-confirmation popup, not quit")
+	}
+
+	// Cancel (default button) closes without quitting.
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	cancelled, cmd := mo.handleKey(enter)
+	if cancelled.(model).modal != modalNone || cmd != nil {
+		t.Fatal("enter on Cancel should close the popup without quitting")
+	}
+
+	// Move to Quit, then enter quits.
+	mo.quitBtn = 1
+	_, cmd = mo.handleKey(enter)
+	if cmd == nil {
+		t.Fatal("enter on Quit should return a quit command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("quit cmd = %T, want tea.QuitMsg", cmd())
+	}
+}
+
+// TestStartStopToggle guards that `s` is state-aware: stop a running playground,
+// start a stopped one.
+func TestStartStopToggle(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		state      api.PlayState
+		wantStatus string
+	}{
+		{name: "running stops", state: api.StateRunning, wantStatus: "Stopping..."},
+		{name: "stopped starts", state: api.StateStopped, wantStatus: "Starting..."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := newModel(testCLI())
+			m.plays = []*api.Play{playWithState("p1", tt.state)}
+			m.refreshRows()
+
+			out, cmd := m.handlePlaysKey(runeKey("s"))
+			if got := out.(model).status; got != tt.wantStatus {
+				t.Fatalf("status = %q, want %q", got, tt.wantStatus)
+			}
+			if cmd == nil {
+				t.Fatal("toggle should return an action command")
+			}
+		})
+	}
+}
+
+// TestExtendValidation guards the lifetime parsing in the extend dialog: valid
+// durations submit, junk and sub-minute values are rejected with a ✗ status.
+func TestExtendValidation(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      string
+		wantPrefix string
+	}{
+		{name: "minutes", input: "90m", wantPrefix: "Setting lifetime..."},
+		{name: "hours", input: "3h", wantPrefix: "Setting lifetime..."},
+		{name: "not a duration", input: "abc", wantPrefix: errMark},
+		{name: "below one minute", input: "30s", wantPrefix: errMark},
+		{name: "empty", input: "", wantPrefix: errMark},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := newModel(testCLI())
+			m.modal = modalExtend
+			m.extendBtn = 0 // field focused; enter submits
+			m.extendID = "p1"
+			m.input.SetValue(tt.input)
+
+			out, _ := m.handleExtendSelectKey(tea.KeyMsg{Type: tea.KeyEnter})
+			if got := out.(model).status; !strings.HasPrefix(got, tt.wantPrefix) {
+				t.Fatalf("input %q: status = %q, want prefix %q", tt.input, got, tt.wantPrefix)
+			}
+		})
+	}
+}
+
+func TestThemeIndex(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{name: "default is first", in: "k9s", want: 0},
+		{name: "known theme", in: "dracula", want: 1},
+		{name: "unknown falls back to 0", in: "nope", want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := themeIndex(tt.in); got != tt.want {
+				t.Fatalf("themeIndex(%q) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPersistAction guards that `p` triggers a persist command.
+func TestPersistAction(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.refreshRows()
+
+	out, cmd := m.handlePlaysKey(runeKey("P"))
+	if got := out.(model).status; got != "Persisting..." {
+		t.Fatalf("status = %q, want %q", got, "Persisting...")
+	}
+	if cmd == nil {
+		t.Fatal("persist should return a command")
+	}
+}
+
+// TestPersistOnlyOnPlaygrounds guards that P is a no-op on the Persisted tab
+// (persisted labs are already persistent).
+func TestPersistOnlyOnPlaygrounds(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.persisted = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.refreshRows()
+	m.tab = tabPersisted
+
+	out, _ := m.handlePlaysKey(runeKey("P"))
+	if got := out.(model).status; got == "Persisting..." {
+		t.Fatal("persist should be a no-op on the Persisted tab")
+	}
+}
+
+// TestPersistedTabSelection guards that on the Persisted tab, selectedPlay
+// indexes the persisted slice (not the plays slice).
+func TestPersistedTabSelection(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.plays = []*api.Play{playWithState("aaa", api.StateRunning)}
+	m.persisted = []*api.Play{playWithState("bbb", api.StateStopped)}
+	m.refreshRows()
+
+	m.switchTab(1) // playgrounds -> persisted
+	if m.tab != tabPersisted {
+		t.Fatalf("tab = %v, want tabPersisted", m.tab)
+	}
+	if p := m.selectedPlay(); p == nil || p.ID != "bbb" {
+		t.Fatalf("selectedPlay = %v, want persisted play bbb", p)
+	}
+}
+
+func TestSwitchTabCycles(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	for _, want := range []viewTab{tabPersisted, tabCatalog, tabPlays} {
+		m.switchTab(1)
+		if m.tab != want {
+			t.Fatalf("after +1, tab = %v, want %v", m.tab, want)
+		}
+	}
+	m.switchTab(-1)
+	if m.tab != tabCatalog {
+		t.Fatalf("after -1, tab = %v, want tabCatalog", m.tab)
+	}
+}
+
+// TestSigningInFlash guards that login replaces the stuck "Signing in..." with a
+// "Signed in as <user>" confirmation (which then auto-clears via flash).
+func TestSigningInFlash(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.status = "Signing in..."
+
+	out, _ := m.Update(authMsg{ok: true, user: "usr_x"})
+	got := out.(model).status
+	if got == "Signing in..." {
+		t.Fatal(`"Signing in..." should be replaced after auth resolves`)
+	}
+	if !strings.HasPrefix(got, okMark) || !strings.Contains(got, "usr_x") {
+		t.Fatalf("status = %q, want a signed-in flash mentioning the user", got)
+	}
+}
+
+func TestShortStatus(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		play       *api.Play
+		wantPrefix string
+	}{
+		{name: "no status", play: &api.Play{}, wantPrefix: "UNKNOWN"},
+		{name: "stopped", play: playWithState("p", api.StateStopped), wantPrefix: "STOPPED"},
+		{name: "running", play: playWithState("p", api.StateRunning), wantPrefix: "RUNNING"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := shortStatus(tt.play); !strings.HasPrefix(got, tt.wantPrefix) {
+				t.Fatalf("shortStatus = %q, want prefix %q", got, tt.wantPrefix)
+			}
+		})
+	}
+}
