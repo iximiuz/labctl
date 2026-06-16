@@ -364,6 +364,16 @@ func (c *Client) ListPlays(ctx context.Context, listPlaysQueryParams ListPlaysQu
 	return plays, c.GetInto(ctx, "/plays", query, nil, &plays)
 }
 
+func (c *Client) SetPlayTitle(ctx context.Context, id string, title string) (*Play, error) {
+	body, err := toJSONBody(map[string]any{"action": "set_title", "title": title})
+	if err != nil {
+		return nil, err
+	}
+
+	var p Play
+	return &p, c.PostInto(ctx, "/plays/"+id+"/actions", nil, nil, body, &p)
+}
+
 func (c *Client) StopPlay(ctx context.Context, id string) (*Play, error) {
 	body, err := toJSONBody(map[string]any{"action": "stop"})
 	if err != nil {

@@ -28,6 +28,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newDestroyCommand(cli),
 		newPersistCommand(cli),
 		newLifetimeCommand(cli),
+		newRegionCommand(cli),
 		newMachinesCommand(cli),
 		newMachineCommand(cli),
 		newCreateCommand(cli),
