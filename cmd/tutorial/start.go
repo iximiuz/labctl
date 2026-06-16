@@ -15,6 +15,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/completion"
+	"github.com/iximiuz/labctl/internal/ide"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/safety"
 	issh "github.com/iximiuz/labctl/internal/ssh"
@@ -64,7 +65,7 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("ide") && opts.ide == "" {
-				opts.ide = sshproxy.IDEVSCode
+				opts.ide = ide.VSCode
 			}
 
 			return labcli.WrapStatusError(runStartTutorial(cmd.Context(), cli, &opts))
@@ -116,7 +117,7 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		&opts.ide,
 		"ide",
 		"",
-		`Open the tutorial playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
+		fmt.Sprintf(`Open the tutorial playground in the IDE by specifying the IDE name (supported: %s)`, ide.SupportedList()),
 	)
 	flags.BoolVar(
 		&opts.safetyDisclaimerConsent,
