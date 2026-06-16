@@ -11,14 +11,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/internal/completion"
+	"github.com/iximiuz/labctl/internal/ide"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
-)
-
-const (
-	IDEVSCode   = "code"
-	IDECursor   = "cursor"
-	IDEWindsurf = "windsurf"
 )
 
 type Options struct {
@@ -47,7 +42,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 			opts.PlayID = args[0]
 
 			if cmd.Flags().Changed("ide") && opts.IDE == "" {
-				opts.IDE = IDEVSCode
+				opts.IDE = ide.VSCode
 			}
 
 			if opts.Address != "" && strings.Count(opts.Address, ":") != 1 {
@@ -83,7 +78,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		&opts.IDE,
 		"ide",
 		"",
-		`[DEPRECATED: Use the "labctl ide" command instead] Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
+		fmt.Sprintf(`[DEPRECATED: Use the "labctl ide" command instead] Open the playground in the IDE by specifying the IDE name (supported: %s)`, ide.SupportedList()),
 	)
 	flags.BoolVarP(
 		&opts.Quiet,
@@ -160,11 +155,15 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		}
 	}()
 
-	if opts.IDE == IDEVSCode || opts.IDE == IDECursor || opts.IDE == IDEWindsurf {
+	if ide.IsSupported(opts.IDE) {
 		cli.PrintAux("Opening the playground in the IDE...\n")
 
+		if err := ide.EnsureInstalled(opts.IDE); err != nil {
+			return err
+		}
+
 		// Hack: SSH into the playground first - otherwise, the IDE may fail to connect for some reason.
-		cmd := exec.Command("ssh",
+		warmup := exec.Command("ssh",
 			"-o", "UserKnownHostsFile=/dev/null",
 			"-o", "StrictHostKeyChecking=no",
 			"-o", "IdentitiesOnly=yes",
@@ -172,13 +171,10 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 			"-i", cli.Config().SSHIdentityFile,
 			fmt.Sprintf("ssh://%s@%s:%s", opts.User, localHost, localPort),
 		)
-		cmd.Run()
+		warmup.Run()
 
-		cmd = exec.Command(opts.IDE,
-			"--folder-uri", fmt.Sprintf("vscode-remote://ssh-remote+%s@%s:%s%s",
-				opts.User, localHost, localPort, userHomeDir(opts.User)),
-		)
-		if err := cmd.Run(); err != nil {
+		args := ide.LaunchArgs(opts.IDE, opts.User, localHost, localPort, ide.UserHomeDir(opts.User))
+		if err := ide.Command(ctx, opts.IDE, args).Run(); err != nil {
 			return fmt.Errorf("couldn't open the IDE: %w", err)
 		}
 	} else if opts.IDE != "" {
@@ -250,11 +246,4 @@ func hostStr(address string) string {
 	}
 
 	return strings.Split(address, ":")[0]
-}
-
-func userHomeDir(user string) string {
-	if user == "root" {
-		return "/root"
-	}
-	return fmt.Sprintf("/home/%s", user)
 }

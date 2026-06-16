@@ -15,15 +15,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/internal/completion"
+	ideutil "github.com/iximiuz/labctl/internal/ide"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 	"github.com/iximiuz/labctl/internal/retry"
-)
-
-const (
-	ideVSCode   = "code"
-	ideCursor   = "cursor"
-	ideWindsurf = "windsurf"
 )
 
 type repoSpec struct {
@@ -100,7 +95,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	var opts options
 
 	cmd := &cobra.Command{
-		Use:   "ide <code|cursor|windsurf> <playground-id>",
+		Use:   "ide <code|cursor|windsurf|zed> <playground-id>",
 		Short: `Open a playground in a local IDE`,
 		Long: `Start an SSH proxy to the playground and open it in the specified IDE.
 
@@ -120,10 +115,8 @@ labctl ide code $PLAY_ID --workdir projects --repo https://github.com/foo/bar
 			opts.ide = args[0]
 			opts.playID = args[1]
 
-			switch opts.ide {
-			case ideVSCode, ideCursor, ideWindsurf:
-			default:
-				return fmt.Errorf("unsupported IDE %q (supported: %q, %q, %q)", opts.ide, ideVSCode, ideCursor, ideWindsurf)
+			if !ideutil.IsSupported(opts.ide) {
+				return fmt.Errorf("unsupported IDE %q (supported: %s)", opts.ide, ideutil.SupportedList())
 			}
 
 			return labcli.WrapStatusError(runIDE(cmd.Context(), cli, &opts))
@@ -177,9 +170,10 @@ func ideCompletion(cli labcli.CLI) completion.CompletionFunc {
 		switch len(args) {
 		case 0:
 			return []string{
-				ideVSCode + "\tVisual Studio Code",
-				ideCursor + "\tCursor",
-				ideWindsurf + "\tWindsurf",
+				ideutil.VSCode + "\tVisual Studio Code",
+				ideutil.Cursor + "\tCursor",
+				ideutil.Windsurf + "\tWindsurf",
+				ideutil.Zed + "\tZed",
 			}, cobra.ShellCompDirectiveNoFileComp
 		case 1:
 			return completion.ActivePlays(cli)(cmd, nil, toComplete)
@@ -190,6 +184,10 @@ func ideCompletion(cli labcli.CLI) completion.CompletionFunc {
 }
 
 func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
+	if err := ideutil.EnsureInstalled(opts.ide); err != nil {
+		return err
+	}
+
 	cli.PrintAux("Starting SSH proxy to the playground...\n")
 
 	p, err := cli.Client().GetPlay(ctx, opts.playID)
@@ -244,7 +242,7 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 
 	cli.PrintAux("SSH connection established.\n")
 
-	homeDir := userHomeDir(opts.user)
+	homeDir := ideutil.UserHomeDir(opts.user)
 
 	// Parse repo specs.
 	var repos []repoSpec
@@ -300,16 +298,12 @@ func runIDE(ctx context.Context, cli labcli.CLI, opts *options) error {
 		}
 	}
 
-	folderURI := fmt.Sprintf("vscode-remote://ssh-remote+%s@%s:%s%s",
-		opts.user, localHost, localPort, workDir)
+	ideArgs := ideutil.LaunchArgs(opts.ide, opts.user, localHost, localPort, workDir)
 
 	cli.PrintAux("Opening %s...\n", opts.ide)
-	cli.PrintAux("Running: %s --folder-uri %s\n", opts.ide, folderURI)
+	cli.PrintAux("Running: %s %s\n", opts.ide, strings.Join(ideArgs, " "))
 
-	ideCmd := exec.CommandContext(ctx, opts.ide, "--folder-uri", folderURI)
-	if runtime.GOOS == "windows" {
-		ideCmd = exec.CommandContext(ctx, "cmd", "/C", opts.ide, "--folder-uri", folderURI)
-	}
+	ideCmd := ideutil.Command(ctx, opts.ide, ideArgs)
 	ideCmd.Stdout = os.Stdout
 	ideCmd.Stderr = os.Stderr
 	ideCmd.Stdin = os.Stdin
@@ -435,11 +429,4 @@ func remotePathJoin(baseDir, p string) string {
 		return p
 	}
 	return path.Join(baseDir, p)
-}
-
-func userHomeDir(user string) string {
-	if user == "root" {
-		return "/root"
-	}
-	return fmt.Sprintf("/home/%s", user)
 }

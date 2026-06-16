@@ -16,6 +16,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/completion"
+	"github.com/iximiuz/labctl/internal/ide"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/portforward"
 )
@@ -50,7 +51,7 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 			cli.SetQuiet(opts.quiet)
 
 			if cmd.Flags().Changed("ide") && opts.ide == "" {
-				opts.ide = sshproxy.IDEVSCode
+				opts.ide = ide.VSCode
 			}
 
 			if opts.ide != "" && opts.ssh {
@@ -89,7 +90,7 @@ func newRestartCommand(cli labcli.CLI) *cobra.Command {
 		&opts.ide,
 		"ide",
 		"",
-		`Open the playground in the IDE by specifying the IDE name (supported: "code", "cursor", "windsurf")`,
+		fmt.Sprintf(`Open the playground in the IDE by specifying the IDE name (supported: %s)`, ide.SupportedList()),
 	)
 	flags.BoolVar(
 		&opts.ssh,
