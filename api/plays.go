@@ -57,6 +57,7 @@ type PlayStatus struct {
 type Play struct {
 	ID string `json:"id" yaml:"id"`
 
+	Region      string `json:"region,omitempty" yaml:"region,omitempty"`
 	Title       string `json:"title" yaml:"title"`
 	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
 	UpdatedAt   string `json:"updatedAt" yaml:"updatedAt"`

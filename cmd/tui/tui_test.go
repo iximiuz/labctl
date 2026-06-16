@@ -3,8 +3,10 @@ package tui
 import (
 	"bytes"
 	"io"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -328,31 +330,21 @@ func TestShareTerminalOpens(t *testing.T) {
 	}
 }
 
-// TestExportDialogRoutes guards that x opens the Export dialog and routes to the
-// share / expose-port sub-flows.
-func TestExportDialogRoutes(t *testing.T) {
+// TestExposePortsDirect guards that x goes straight to the port-expose input
+// (the old web-terminal/port chooser is gone; w handles terminals now).
+func TestExposePortsDirect(t *testing.T) {
 	t.Parallel()
-	open := func() model {
-		m := newModel(testCLI())
-		m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
-		m.refreshRows()
-		out, _ := m.handlePlaysKey(runeKey("x"))
-		return out.(model)
+	m := newModel(testCLI())
+	m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.refreshRows()
+
+	out, _ := m.handlePlaysKey(runeKey("x"))
+	mo := out.(model)
+	if mo.modal != modalExposePort {
+		t.Fatalf("x: modal = %v, want modalExposePort", mo.modal)
 	}
-	if m := open(); m.modal != modalExport {
-		t.Fatalf("x: modal = %v, want modalExport", m.modal)
-	}
-	// Web terminal (button 0) -> share access choice.
-	web, _ := open().handleExportKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if web.(model).modal != modalShare {
-		t.Fatalf("Export>Web: modal = %v, want modalShare", web.(model).modal)
-	}
-	// Port (button 1) -> port input.
-	m := open()
-	m.exportBtn = 1
-	port, _ := m.handleExportKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if port.(model).modal != modalExposePort {
-		t.Fatalf("Export>Port: modal = %v, want modalExposePort", port.(model).modal)
+	if mo.exposeID != "p1" {
+		t.Fatalf("exposeID = %q, want p1", mo.exposeID)
 	}
 }
 
@@ -443,43 +435,49 @@ func TestExposePortValidation(t *testing.T) {
 	}
 }
 
-// TestPersistOnlyOnPlaygrounds guards that P is a no-op on the Persisted tab
-// (persisted labs are already persistent).
-func TestPersistOnlyOnPlaygrounds(t *testing.T) {
+// TestPersistNoOpWhenAlreadyPersistent guards that P is rejected for a lab that
+// is already persistent (marked via persistedIDs).
+func TestPersistNoOpWhenAlreadyPersistent(t *testing.T) {
 	t.Parallel()
 	m := newModel(testCLI())
-	m.persisted = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.persistedIDs = map[string]bool{"p1": true}
 	m.refreshRows()
-	m.tab = tabPersisted
 
 	out, _ := m.handlePlaysKey(runeKey("P"))
 	if got := out.(model).status; got == "Persisting..." {
-		t.Fatal("persist should be a no-op on the Persisted tab")
+		t.Fatal("persist should be a no-op for an already-persistent lab")
 	}
 }
 
-// TestPersistedTabSelection guards that on the Persisted tab, selectedPlay
-// indexes the persisted slice (not the plays slice).
-func TestPersistedTabSelection(t *testing.T) {
+// TestPersistentMarker guards that persistent plays render with a * prefix in
+// the merged Playgrounds list, and selectedPlay still maps correctly.
+func TestPersistentMarker(t *testing.T) {
 	t.Parallel()
 	m := newModel(testCLI())
-	m.plays = []*api.Play{playWithState("aaa", api.StateRunning)}
-	m.persisted = []*api.Play{playWithState("bbb", api.StateStopped)}
+	m.plays = []*api.Play{
+		playWithState("aaa", api.StateRunning),
+		playWithState("bbb", api.StateStopped),
+	}
+	m.persistedIDs = map[string]bool{"bbb": true}
 	m.refreshRows()
 
-	m.switchTab(1) // playgrounds -> persisted
-	if m.tab != tabPersisted {
-		t.Fatalf("tab = %v, want tabPersisted", m.tab)
+	rows := m.playsTable.Rows()
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
 	}
-	if p := m.selectedPlay(); p == nil || p.ID != "bbb" {
-		t.Fatalf("selectedPlay = %v, want persisted play bbb", p)
+	if !strings.HasPrefix(rows[1][0], "* ") {
+		t.Fatalf("persistent row name = %q, want a * prefix", rows[1][0])
+	}
+	if strings.HasPrefix(rows[0][0], "*") {
+		t.Fatalf("non-persistent row name = %q, should have no * prefix", rows[0][0])
 	}
 }
 
 func TestSwitchTabCycles(t *testing.T) {
 	t.Parallel()
 	m := newModel(testCLI())
-	for _, want := range []viewTab{tabPersisted, tabExports, tabCatalog, tabPlays} {
+	for _, want := range []viewTab{tabExports, tabCatalog, tabPlays} {
 		m.switchTab(1)
 		if m.tab != want {
 			t.Fatalf("after +1, tab = %v, want %v", m.tab, want)
@@ -526,5 +524,175 @@ func TestShortStatus(t *testing.T) {
 				t.Fatalf("shortStatus = %q, want prefix %q", got, tt.wantPrefix)
 			}
 		})
+	}
+}
+
+// TestRegionPickerPreselects guards that `R` opens the region picker with the
+// button preselected to the user's current region.
+func TestRegionPickerPreselects(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.region = api.RegionAP
+	out, _ := m.handleKey(runeKey("R"))
+	mo := out.(model)
+	if mo.modal != modalRegion {
+		t.Fatalf("modal = %v, want modalRegion", mo.modal)
+	}
+	if got, want := mo.regionBtn, slices.Index(api.KnownRegions, api.RegionAP); got != want {
+		t.Fatalf("regionBtn = %d, want %d", got, want)
+	}
+}
+
+// TestRegionSetUpdatesModel guards that a successful region set updates the
+// header value.
+func TestRegionSetUpdatesModel(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	out, _ := m.Update(regionSetMsg{region: api.RegionEU})
+	if got := out.(model).region; got != api.RegionEU {
+		t.Fatalf("region = %q, want %q", got, api.RegionEU)
+	}
+}
+
+// TestSpawnRegionPicker guards that pressing enter on a catalog playground opens
+// the region picker in spawn mode, defaulted to the platform region.
+func TestSpawnRegionPicker(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.catalog = []api.Playground{{Name: "docker"}}
+	m.region = api.RegionAP
+	m.refreshRows()
+	m.tab = tabCatalog
+	m.focusActiveTable()
+
+	out, _ := m.handleCatalogKey(tea.KeyMsg{Type: tea.KeyEnter})
+	mo := out.(model)
+	if mo.modal != modalRegion || !mo.regionForSpawn {
+		t.Fatalf("modal=%v regionForSpawn=%v, want modalRegion/true", mo.modal, mo.regionForSpawn)
+	}
+	if mo.spawnName != "docker" {
+		t.Fatalf("spawnName = %q, want docker", mo.spawnName)
+	}
+	if want := slices.Index(api.KnownRegions, api.RegionAP); mo.regionBtn != want {
+		t.Fatalf("regionBtn = %d, want %d (default to platform region)", mo.regionBtn, want)
+	}
+}
+
+// TestSpawnRegionStarts guards that confirming the spawn-region picker starts the
+// lab and returns to the Playgrounds tab.
+func TestSpawnRegionStarts(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.regionForSpawn = true
+	m.spawnName = "docker"
+	m.modal = modalRegion
+	m.regionBtn = 0
+
+	out, cmd := m.handleRegionKey(tea.KeyMsg{Type: tea.KeyEnter})
+	mo := out.(model)
+	if mo.modal != modalNone || mo.regionForSpawn {
+		t.Fatalf("modal=%v regionForSpawn=%v, want modalNone/false", mo.modal, mo.regionForSpawn)
+	}
+	if mo.tab != tabPlays {
+		t.Fatalf("tab = %v, want tabPlays", mo.tab)
+	}
+	if !strings.HasPrefix(mo.status, "Starting docker") {
+		t.Fatalf("status = %q, want Starting docker...", mo.status)
+	}
+	if cmd == nil {
+		t.Fatal("spawn should return a start command")
+	}
+}
+
+// TestPersistentDoubleConfirm guards that destroying a persistent lab needs two
+// confirmations, while a normal lab needs one.
+func TestPersistentDoubleConfirm(t *testing.T) {
+	t.Parallel()
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+
+	// Persistent: first Destroy advances to stage 1 without destroying.
+	m := newModel(testCLI())
+	m.confirm = pending{id: "p1", name: "pg", persistent: true}
+	m.confirmBtn = 1
+	m.modal = modalConfirm
+	out, cmd := m.handleConfirmKey(enter)
+	mo := out.(model)
+	if mo.modal != modalConfirm || mo.confirmStage != 1 {
+		t.Fatalf("first confirm: modal=%v stage=%d, want modalConfirm/1", mo.modal, mo.confirmStage)
+	}
+	if cmd != nil {
+		t.Fatal("first confirm on a persistent lab must not destroy yet")
+	}
+	// Second Destroy actually destroys.
+	mo.confirmBtn = 1
+	out2, cmd2 := mo.handleConfirmKey(enter)
+	if out2.(model).modal != modalNone || cmd2 == nil {
+		t.Fatal("second confirm should destroy and close")
+	}
+
+	// Non-persistent: a single Destroy is enough.
+	n := newModel(testCLI())
+	n.confirm = pending{id: "p2", name: "pg", persistent: false}
+	n.confirmBtn = 1
+	n.modal = modalConfirm
+	out3, cmd3 := n.handleConfirmKey(enter)
+	if out3.(model).modal != modalNone || cmd3 == nil {
+		t.Fatal("non-persistent lab should destroy on the first confirm")
+	}
+}
+
+func TestFmtDur(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, "0s"},
+		{45 * time.Second, "45s"},
+		{30 * time.Minute, "30m"},
+		{60 * time.Minute, "1h"},
+		{90 * time.Minute, "1h30m"},
+	}
+	for _, tt := range tests {
+		if got := fmtDur(tt.d); got != tt.want {
+			t.Fatalf("fmtDur(%s) = %q, want %q", tt.d, got, tt.want)
+		}
+	}
+}
+
+// TestPlayAge guards that a running lab shows elapsed/total and a stopped one
+// shows just the elapsed time (no slash).
+func TestPlayAge(t *testing.T) {
+	t.Parallel()
+	running := playWithState("p", api.StateRunning)
+	running.CreatedAt = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
+	running.ExpiresIn = int((50 * time.Minute) / time.Millisecond)
+	if got := playAge(running); !strings.Contains(got, "/") {
+		t.Fatalf("running playAge = %q, want elapsed/total", got)
+	}
+
+	stopped := playWithState("p", api.StateStopped)
+	stopped.CreatedAt = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
+	if got := playAge(stopped); strings.Contains(got, "/") {
+		t.Fatalf("stopped playAge = %q, want elapsed only (no slash)", got)
+	}
+}
+
+// TestSpawnRegionCached guards that the region chosen at spawn is remembered and
+// shown in the REGION column (the API returns no per-play region).
+func TestSpawnRegionCached(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+
+	out, _ := m.Update(spawnedMsg{id: "p1", name: "docker", region: api.RegionAP})
+	mo := out.(model)
+	if got := mo.spawnRegions["p1"]; got != api.RegionAP {
+		t.Fatalf("spawnRegions[p1] = %q, want %q", got, api.RegionAP)
+	}
+
+	mo.plays = []*api.Play{playWithState("p1", api.StateRunning)} // API play has no region
+	mo.refreshRows()
+	if got := mo.playsTable.Rows()[0][1]; got != strings.ToUpper(api.RegionAP) {
+		t.Fatalf("REGION cell = %q, want %q (from spawn cache)", got, strings.ToUpper(api.RegionAP))
 	}
 }

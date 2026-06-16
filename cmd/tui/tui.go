@@ -55,11 +55,10 @@ type viewTab int
 const (
 	tabCatalog viewTab = iota
 	tabPlays
-	tabPersisted
 	tabExports
 )
 
-const tabCount = 4
+const tabCount = 3
 
 // exportItem is one exposed shell or port across all labs (Exports tab).
 type exportItem struct {
@@ -72,15 +71,21 @@ type exportItem struct {
 }
 
 type (
-	playsMsg   struct{ plays, persisted []*api.Play }
+	playsMsg struct {
+		plays        []*api.Play
+		persistedIDs map[string]bool
+	}
 	catalogMsg struct{ items []api.Playground }
 	actionMsg  struct{ info string }
 	errMsg     struct{ err error }
 	tickMsg    struct{}
 	authMsg    struct {
-		ok   bool
-		user string
+		ok     bool
+		user   string
+		region string
 	}
+	regionSetMsg   struct{ region string }
+	spawnedMsg     struct{ id, name, region string }
 	loginDoneMsg   struct{ err error }
 	disarmQuitMsg  struct{}
 	statusClearMsg struct{ seq int }
@@ -109,7 +114,8 @@ func tick() tea.Cmd {
 }
 
 type pending struct {
-	id, name string
+	id, name   string
+	persistent bool
 }
 
 // modal is the single active overlay/prompt. Exactly one is active at any time,
@@ -120,7 +126,6 @@ const (
 	modalNone       modal = iota
 	modalFilter           // footer search bar (renders within mainView)
 	modalExtend           // lifetime dialog
-	modalExport           // export choice (web terminal / port)
 	modalShare            // share-terminal access choice (private/public)
 	modalExposePort       // expose-port number input
 	modalAuth             // sign-in popup
@@ -129,23 +134,23 @@ const (
 	modalInfo             // details popup
 	modalThemes           // theme picker (live preview)
 	modalHelp             // shortcuts popup
+	modalRegion           // preferred-region picker
 )
 
 type model struct {
 	cli labcli.CLI
 
-	tab            viewTab
-	playsTable     table.Model
-	persistedTable table.Model
-	catalogTable   table.Model
-	exportsTable   table.Model
+	tab          viewTab
+	playsTable   table.Model
+	catalogTable table.Model
+	exportsTable table.Model
 
-	plays         []*api.Play      // full, unfiltered
-	persisted     []*api.Play      // persistent plays (ListPlays{Persistent:true})
-	catalog       []api.Playground // full, unfiltered
-	exports       []exportItem     // aggregated exposed shells/ports
-	filteredPlays []*api.Play      // rows currently shown (cursor indexes this)
-	filteredPers  []*api.Play
+	plays         []*api.Play       // full, unfiltered (incl. persistent)
+	persistedIDs  map[string]bool   // which plays are persistent (* marker)
+	spawnRegions  map[string]string // playID -> region chosen at spawn (column fallback)
+	catalog       []api.Playground  // full, unfiltered
+	exports       []exportItem      // aggregated exposed shells/ports
+	filteredPlays []*api.Play       // rows currently shown (cursor indexes this)
 	filteredCat   []api.Playground
 	filteredExp   []exportItem
 
@@ -156,16 +161,19 @@ type model struct {
 	extendBtn int             // 0 = field, 1 = Cancel, 2 = OK
 	extendID  string          // play being extended
 
-	exposeID   string       // play being shared / port-exposed
-	shareBtn   int          // 0 = Private, 1 = Public
-	exportBtn  int          // 0 = Web terminal, 1 = Port
-	infoShells []*api.Shell // exposed shells (loaded for the Info popup)
-	infoPorts  []*api.Port  // exposed ports (loaded for the Info popup)
+	exposeID       string       // play being shared / port-exposed
+	shareBtn       int          // 0 = Private, 1 = Public
+	regionBtn      int          // index into api.KnownRegions (modalRegion)
+	regionForSpawn bool         // modalRegion is choosing a spawn region, not the default
+	spawnName      string       // catalog playground awaiting a region choice
+	infoShells     []*api.Shell // exposed shells (loaded for the Info popup)
+	infoPorts      []*api.Port  // exposed ports (loaded for the Info popup)
 
 	status        string
 	statusSeq     int     // bumped per flash; stale auto-clears are ignored
 	confirm       pending // destroy target (valid while modal == modalConfirm)
 	confirmBtn    int     // 0 = Cancel, 1 = Destroy
+	confirmStage  int     // persistent destroy needs two confirmations (0 then 1)
 	authBtn       int     // 0 = Dismiss, 1 = Login via browser
 	authDismissed bool    // auth popup already dismissed this session
 	quitBtn       int     // 0 = Cancel, 1 = Quit
@@ -174,22 +182,21 @@ type model struct {
 	theme         string  // active color theme name
 	themeIdx      int     // index into themeOrder for the T-key cycler
 	user          string  // logged-in user id (from GetMe)
+	region        string  // preferred region for new playgrounds (from GetMe)
 	defaulted     bool    // initial view default (catalog-if-empty) applied
 	width, height int
 }
 
 func newModel(cli labcli.CLI) model {
 	pt := table.New(table.WithFocused(true))
-	pp := table.New()
 	ct := table.New()
 	ex := table.New()
 	applySkin(&pt)
-	applySkin(&pp)
 	applySkin(&ct)
 	applySkin(&ex)
 	ti := textinput.New()
 	ti.Prompt = ""
-	m := model{cli: cli, tab: tabPlays, playsTable: pt, persistedTable: pp, catalogTable: ct, exportsTable: ex, input: ti, status: "Loading...", theme: "k9s"}
+	m := model{cli: cli, tab: tabPlays, playsTable: pt, catalogTable: ct, exportsTable: ex, input: ti, status: "Loading...", theme: "k9s", spawnRegions: map[string]string{}}
 	m.setSizes(80, 24)
 	return m
 }
@@ -206,7 +213,7 @@ func (m model) checkAuth() tea.Cmd {
 		if err != nil {
 			return authMsg{ok: false}
 		}
-		return authMsg{ok: true, user: me.ID}
+		return authMsg{ok: true, user: me.ID, region: me.PreferredRegion}
 	}
 }
 
@@ -240,18 +247,12 @@ func (m model) loadPlays() tea.Cmd {
 			isPersistent[p.ID] = true
 		}
 
-		// Playgrounds: active/stopped, non-persistent (persistent labs live only
-		// on the Persisted tab).
-		plays := slices.DeleteFunc(append([]*api.Play{}, recent...), func(p *api.Play) bool {
-			return gone(p) || isPersistent[p.ID]
-		})
+		// One unified list of active/stopped plays; persistent ones are kept and
+		// flagged (rendered with a * marker) rather than split into their own tab.
+		plays := slices.DeleteFunc(append([]*api.Play{}, recent...), gone)
 		slices.SortFunc(plays, byUpdated)
 
-		// Persisted: the persistent labs.
-		persisted := slices.DeleteFunc(append([]*api.Play{}, persistent...), gone)
-		slices.SortFunc(persisted, byUpdated)
-
-		return playsMsg{plays: plays, persisted: persisted}
+		return playsMsg{plays: plays, persistedIDs: isPersistent}
 	}
 }
 
@@ -292,6 +293,18 @@ func (m model) persistPlay(id string) tea.Cmd {
 	return m.playAction("Persisted "+id, func(ctx context.Context) error {
 		return m.cli.Client().PersistPlay(ctx, id)
 	})
+}
+
+func (m model) setRegion(region string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		me, err := m.cli.Client().SetPreferredRegion(ctx, region)
+		if err != nil {
+			return errMsg{err}
+		}
+		return regionSetMsg{region: me.PreferredRegion}
+	}
 }
 
 func (m model) extendPlay(id string, minutes int) tea.Cmd {
@@ -383,7 +396,7 @@ func (m model) loadExposed(id string) tea.Cmd {
 // loadExports aggregates exposed shells/ports across all active labs for the
 // Exports tab.
 func (m model) loadExports() tea.Cmd {
-	plays := append(append([]*api.Play{}, m.plays...), m.persisted...)
+	plays := append([]*api.Play{}, m.plays...)
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -430,15 +443,27 @@ func (m model) unexpose(e exportItem) tea.Cmd {
 	}
 }
 
-func (m model) startPlay(name string) tea.Cmd {
-	return m.playAction("Started "+name, func(ctx context.Context) error {
+func (m model) startPlay(name, region string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		// Region is an account-level preference ("region for new playgrounds"),
+		// not a per-create field — set it first so the lab spawns in that region.
+		if region != "" {
+			if _, err := m.cli.Client().SetPreferredRegion(ctx, region); err != nil {
+				return errMsg{err}
+			}
+		}
 		// ponytail: official catalog playgrounds need no safety consent; auto-ack.
-		_, err := m.cli.Client().CreatePlay(ctx, api.CreatePlayRequest{
+		p, err := m.cli.Client().CreatePlay(ctx, api.CreatePlayRequest{
 			Playground:              name,
 			SafetyDisclaimerConsent: true,
 		})
-		return err
-	})
+		if err != nil {
+			return errMsg{err}
+		}
+		return spawnedMsg{id: p.ID, name: name, region: region}
+	}
 }
 
 func (m model) playAction(info string, fn func(context.Context) error) tea.Cmd {
@@ -452,20 +477,13 @@ func (m model) playAction(info string, fn func(context.Context) error) tea.Cmd {
 	}
 }
 
-// selectedPlay returns the highlighted play on the active plays-like tab.
+// selectedPlay returns the highlighted play on the Playgrounds tab.
 func (m *model) selectedPlay() *api.Play {
-	var tbl *table.Model
-	var rows []*api.Play
-	switch m.tab {
-	case tabPlays:
-		tbl, rows = &m.playsTable, m.filteredPlays
-	case tabPersisted:
-		tbl, rows = &m.persistedTable, m.filteredPers
-	default:
+	if m.tab != tabPlays {
 		return nil
 	}
-	if i := tbl.Cursor(); i >= 0 && i < len(rows) {
-		return rows[i]
+	if i := m.playsTable.Cursor(); i >= 0 && i < len(m.filteredPlays) {
+		return m.filteredPlays[i]
 	}
 	return nil
 }
@@ -479,12 +497,26 @@ func (m *model) selectedPlayground() *api.Playground {
 }
 
 // filterPlays returns the subset of plays matching f, along with their rows,
-// keeping the cursor->slice mapping in sync.
-func filterPlays(plays []*api.Play, f string) ([]*api.Play, []table.Row) {
+// keeping the cursor->slice mapping in sync. Persistent plays get a * marker.
+func filterPlays(plays []*api.Play, f string, persistedIDs map[string]bool, spawnRegions map[string]string) ([]*api.Play, []table.Row) {
 	out := make([]*api.Play, 0, len(plays))
 	rows := make([]table.Row, 0, len(plays))
 	for _, p := range plays {
-		row := table.Row{p.ID, p.Playground.Name, shortStatus(p), humanize.Time(parseTime(p.CreatedAt))}
+		name := p.Playground.Name
+		if persistedIDs[p.ID] {
+			name = "* " + name
+		}
+		// Prefer the region the API returns; fall back to the one chosen at spawn.
+		region := p.Region
+		if region == "" {
+			region = spawnRegions[p.ID]
+		}
+		if region == "" {
+			region = "-"
+		} else {
+			region = strings.ToUpper(region)
+		}
+		row := table.Row{name, region, shortStatus(p), playAge(p)}
 		if f == "" || strings.Contains(strings.ToLower(strings.Join(row, " ")), f) {
 			out = append(out, p)
 			rows = append(rows, row)
@@ -498,11 +530,9 @@ func filterPlays(plays []*api.Play, f string) ([]*api.Play, []table.Row) {
 func (m *model) refreshRows() {
 	f := strings.ToLower(strings.TrimSpace(m.filter))
 
-	var pr, ppr []table.Row
-	m.filteredPlays, pr = filterPlays(m.plays, f)
+	var pr []table.Row
+	m.filteredPlays, pr = filterPlays(m.plays, f, m.persistedIDs, m.spawnRegions)
 	m.playsTable.SetRows(pr)
-	m.filteredPers, ppr = filterPlays(m.persisted, f)
-	m.persistedTable.SetRows(ppr)
 
 	m.filteredCat = m.filteredCat[:0]
 	cr := make([]table.Row, 0, len(m.catalog))
@@ -544,7 +574,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case playsMsg:
 		m.plays = msg.plays
-		m.persisted = msg.persisted
+		m.persistedIDs = msg.persistedIDs
 		m.refreshRows()
 		// Clear the transient progress statuses on a healthy poll (action results
 		// and ✗ errors clear themselves via flash).
@@ -573,6 +603,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.ok {
 			m.user = msg.user
+			m.region = msg.region
 			m.authDismissed = false
 			cmds := []tea.Cmd{m.loadPlays(), m.loadCatalog()}
 			if fromLogin { // confirm the sign-in, then auto-clear
@@ -651,6 +682,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshRows()
 		return m, nil
 
+	case regionSetMsg:
+		m.region = msg.region
+		return m, m.flash(okMark + " Region set to " + strings.ToUpper(msg.region))
+
+	case spawnedMsg:
+		// Remember the chosen region (the API doesn't return it per play) so the
+		// REGION column can show it for labs spawned in this session. Spawning
+		// also updates the account default, so reflect it in the header.
+		if msg.region != "" {
+			m.spawnRegions[msg.id] = msg.region
+			m.region = msg.region
+		}
+		return m, tea.Batch(m.loadPlays(), m.flash(okMark+" Started "+msg.name))
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -702,8 +747,6 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleThemesKey(msg)
 	case modalExtend:
 		return m.handleExtendSelectKey(msg)
-	case modalExport:
-		return m.handleExportKey(msg)
 	case modalShare:
 		return m.handleShareKey(msg)
 	case modalExposePort:
@@ -718,6 +761,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleAuthKey(msg)
 	case modalConfirm:
 		return m.handleConfirmKey(msg)
+	case modalRegion:
+		return m.handleRegionKey(msg)
 	case modalHelp: // any key closes it
 		m.modal = modalNone
 		return m, nil
@@ -761,6 +806,15 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.themePrevIdx = m.themeIdx
 		return m, nil
 
+	case "R": // set the default preferred region for new playgrounds
+		m.modal = modalRegion
+		m.regionForSpawn = false
+		m.regionBtn = slices.Index(api.KnownRegions, m.region)
+		if m.regionBtn < 0 {
+			m.regionBtn = 0
+		}
+		return m, nil
+
 	case "i": // show full details of the selected row
 		m.infoShells, m.infoPorts = nil, nil
 		if m.tab == tabCatalog {
@@ -782,7 +836,7 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tabExports:
 		return m.handleExportsKey(msg)
 	default:
-		return m.handlePlaysKey(msg) // tabPlays + tabPersisted share actions
+		return m.handlePlaysKey(msg) // tabPlays
 	}
 }
 
@@ -803,12 +857,9 @@ func (m model) tabEnterCmd() tea.Cmd {
 
 func (m *model) focusActiveTable() {
 	m.playsTable.Blur()
-	m.persistedTable.Blur()
 	m.catalogTable.Blur()
 	m.exportsTable.Blur()
 	switch m.tab {
-	case tabPersisted:
-		m.persistedTable.Focus()
 	case tabCatalog:
 		m.catalogTable.Focus()
 	case tabExports:
@@ -905,9 +956,16 @@ func (m model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		if m.confirmBtn == 1 {
+			// Persistent labs require a second confirmation before destroying.
+			if m.confirm.persistent && m.confirmStage == 0 {
+				m.confirmStage = 1
+				m.confirmBtn = 0 // re-default to Cancel
+				return m, nil
+			}
 			id := m.confirm.id
 			m.modal = modalNone
 			m.confirmBtn = 0
+			m.confirmStage = 0
 			m.status = "Destroying..."
 			return m, m.destroyPlay(id)
 		}
@@ -915,33 +973,9 @@ func (m model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.modal = modalNone
 		m.confirmBtn = 0
+		m.confirmStage = 0
 		m.status = "Cancelled"
 		return m, nil
-	default:
-		return m, nil
-	}
-}
-
-// handleShareKey drives the share-terminal access choice (Private/Public).
-// handleExportKey drives the Export choice (Web terminal / Port).
-func (m model) handleExportKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "up", "down", "left", "right", "tab", "j", "k", "h", "l":
-		m.exportBtn = 1 - m.exportBtn
-		return m, nil
-	case "esc":
-		m.modal = modalNone
-		return m, nil
-	case "enter":
-		if m.exportBtn == 0 { // Web terminal -> access choice
-			m.modal = modalShare
-			m.shareBtn = 0
-			return m, nil
-		}
-		m.modal = modalExposePort // Port -> number input
-		m.input.SetValue("")
-		m.input.Placeholder = "ports e.g. 8080, 9090"
-		return m, m.input.Focus()
 	default:
 		return m, nil
 	}
@@ -1003,6 +1037,37 @@ func (m model) handleExposePortKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// handleRegionKey drives the preferred-region picker (EU/AP). enter applies.
+func (m model) handleRegionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "down", "left", "right", "tab", "j", "k", "h", "l":
+		m.regionBtn = (m.regionBtn + 1) % len(api.KnownRegions)
+		return m, nil
+	case "esc":
+		m.modal = modalNone
+		m.regionForSpawn = false
+		return m, nil
+	case "enter":
+		region := api.KnownRegions[m.regionBtn]
+		m.modal = modalNone
+		if m.regionForSpawn { // spawn the catalog playground in the chosen region
+			name := m.spawnName
+			m.regionForSpawn = false
+			m.tab = tabPlays
+			m.focusActiveTable()
+			m.status = "Starting " + name + "..."
+			return m, m.startPlay(name, region)
+		}
+		if region == m.region {
+			return m, nil
+		}
+		m.status = "Setting region..."
+		return m, m.setRegion(region)
+	default:
+		return m, nil
+	}
+}
+
 // handlePromptKey drives the filter input (live-filters as you type).
 func (m model) handlePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -1031,8 +1096,13 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	p := m.selectedPlay()
 	switch msg.String() {
 	case "enter": // SSH by handing the terminal to `labctl ssh <id>`.
-		if p == nil || !p.IsActive() {
-			m.status = errMark + " Select a running playground to SSH"
+		if p == nil {
+			return m, nil
+		}
+		// SSH only works on a RUNNING lab; every other state (stopped, stopping,
+		// starting, warming up, …) can't accept a session.
+		if !p.StateIs(api.StateRunning) {
+			m.status = errMark + " Can't SSH into a " + shortStatus(p) + " lab — press ? for help"
 			return m, nil
 		}
 		c := exec.Command(os.Args[0], "ssh", p.ID)
@@ -1060,18 +1130,13 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.status = "Stopping..."
 		return m, m.stopPlay(p.ID)
-	case "t":
-		if p == nil {
-			return m, nil
-		}
-		m.status = "Restarting..."
-		return m, m.restartPlay(p.ID)
-	case "P": // make the playground persistent (Playgrounds tab, active labs only)
-		if m.tab != tabPlays {
-			return m, nil // already persistent / not a playground
-		}
+	case "P": // make the playground persistent (active, non-persistent labs only)
 		if p == nil || !p.IsActive() {
 			m.status = errMark + " Select a running playground to persist"
+			return m, nil
+		}
+		if m.persistedIDs[p.ID] {
+			m.status = errMark + " Already persistent"
 			return m, nil
 		}
 		m.status = "Persisting..."
@@ -1096,7 +1161,7 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.exposeID = p.ID
 		m.shareBtn = 0 // default to Private
 		return m, nil
-	case "E": // expose an HTTP port
+	case "x": // expose HTTP port(s)
 		if p == nil || !p.IsActive() {
 			m.status = errMark + " Select a running playground to expose a port"
 			return m, nil
@@ -1104,23 +1169,15 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.modal = modalExposePort
 		m.exposeID = p.ID
 		m.input.SetValue("")
-		m.input.Placeholder = "port e.g. 8080"
+		m.input.Placeholder = "ports e.g. 8080, 9090"
 		return m, m.input.Focus()
-	case "x": // open the Export dialog (web terminal / port)
-		if p == nil || !p.IsActive() {
-			m.status = errMark + " Select a running playground to export"
-			return m, nil
-		}
-		m.modal = modalExport
-		m.exposeID = p.ID
-		m.exportBtn = 0
-		return m, nil
 	case "ctrl+d": // destroy the playground (with confirmation)
 		if p == nil {
 			return m, nil
 		}
-		m.confirm = pending{id: p.ID, name: p.Playground.Name}
+		m.confirm = pending{id: p.ID, name: p.Playground.Name, persistent: m.persistedIDs[p.ID]}
 		m.confirmBtn = 0 // default-highlight Cancel for a destructive action
+		m.confirmStage = 0
 		m.modal = modalConfirm
 		m.status = ""
 		return m, nil
@@ -1165,10 +1222,15 @@ func (m model) handleCatalogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if pg == nil {
 			return m, nil
 		}
-		m.tab = tabPlays
-		m.focusActiveTable()
-		m.status = "Starting " + pg.Name + "..."
-		return m, m.startPlay(pg.Name)
+		// Pick a region before spawning, defaulted to the platform preference.
+		m.modal = modalRegion
+		m.regionForSpawn = true
+		m.spawnName = pg.Name
+		m.regionBtn = slices.Index(api.KnownRegions, m.region)
+		if m.regionBtn < 0 {
+			m.regionBtn = 0
+		}
+		return m, nil
 	}
 	cmd := m.delegate(msg)
 	return m, cmd
@@ -1179,8 +1241,6 @@ func (m model) handleCatalogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *model) delegate(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	switch m.tab {
-	case tabPersisted:
-		m.persistedTable, cmd = m.persistedTable.Update(msg)
 	case tabCatalog:
 		m.catalogTable, cmd = m.catalogTable.Update(msg)
 	case tabExports:
@@ -1234,22 +1294,18 @@ func (m *model) setSizes(w, h int) {
 		bodyH = 3
 	}
 	m.playsTable.SetHeight(bodyH)
-	m.persistedTable.SetHeight(bodyH)
 	m.catalogTable.SetHeight(bodyH)
 
 	inner := w - 2 // titledBox eats one column per side
 
-	pc := distribute(inner-6, []int{3, 2, 3, 2}, []int{10, 8, 8, 6}) // ID NAME STATUS AGE
-	playCols := []table.Column{
-		{Title: "ID", Width: pc[0]},
-		{Title: "NAME", Width: pc[1]},
+	pc := distribute(inner-6, []int{4, 1, 2, 2}, []int{12, 6, 8, 9}) // NAME REGION STATUS AGE
+	m.playsTable.SetColumns([]table.Column{
+		{Title: "NAME", Width: pc[0]},
+		{Title: "REGION", Width: pc[1]},
 		{Title: "STATUS", Width: pc[2]},
 		{Title: "AGE", Width: pc[3]},
-	}
-	m.playsTable.SetColumns(playCols)
+	})
 	m.playsTable.SetWidth(inner)
-	m.persistedTable.SetColumns(playCols)
-	m.persistedTable.SetWidth(inner)
 
 	cc := distribute(inner-4, []int{1, 3}, []int{12, 15}) // PLAYGROUND DESCRIPTION
 	m.catalogTable.SetColumns([]table.Column{
@@ -1273,10 +1329,41 @@ func shortStatus(p *api.Play) string {
 	if st == "" {
 		return "UNKNOWN"
 	}
-	if p.StateIs(api.StateRunning) {
-		return "RUNNING " + humanize.Time(time.Now().Add(time.Duration(p.ExpiresIn)*time.Millisecond))
-	}
 	return string(st)
+}
+
+// playAge renders the elapsed/total lifetime, e.g. "12m/1h". For running labs
+// total = elapsed + remaining (ExpiresIn); otherwise just the elapsed time.
+func playAge(p *api.Play) string {
+	created := parseTime(p.CreatedAt)
+	if created.IsZero() {
+		return "-"
+	}
+	elapsed := time.Since(created)
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	if p.StateIs(api.StateRunning) && p.ExpiresIn > 0 {
+		total := elapsed + time.Duration(p.ExpiresIn)*time.Millisecond
+		return fmtDur(elapsed) + "/" + fmtDur(total)
+	}
+	return fmtDur(elapsed)
+}
+
+// fmtDur renders a compact duration: 45s, 12m, 1h, 3h20m.
+func fmtDur(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		h := int(d.Hours())
+		if mins := int(d.Minutes()) % 60; mins > 0 {
+			return fmt.Sprintf("%dh%dm", h, mins)
+		}
+		return fmt.Sprintf("%dh", h)
+	}
 }
 
 func parseTime(s string) time.Time {
@@ -1567,8 +1654,6 @@ func (m model) View() string {
 		return m.quitView()
 	case modalExtend:
 		return m.extendSelectView()
-	case modalExport:
-		return m.exportView()
 	case modalShare:
 		return m.shareView()
 	case modalExposePort:
@@ -1577,6 +1662,8 @@ func (m model) View() string {
 		return m.infoView()
 	case modalThemes:
 		return m.themeView()
+	case modalRegion:
+		return m.regionView()
 	case modalHelp:
 		return m.helpView()
 	default: // modalNone or modalFilter (filter renders as a footer bar)
@@ -1589,8 +1676,6 @@ func (m model) mainView() string {
 
 	var body string
 	switch m.tab {
-	case tabPersisted:
-		body = m.persistedTable.View()
 	case tabCatalog:
 		body = m.catalogTable.View()
 	case tabExports:
@@ -1635,8 +1720,6 @@ func (m model) tabsTitle() string {
 	}
 	var count int
 	switch m.tab {
-	case tabPersisted:
-		count = len(m.filteredPers)
 	case tabCatalog:
 		count = len(m.filteredCat)
 	case tabExports:
@@ -1650,7 +1733,6 @@ func (m model) tabsTitle() string {
 	}
 	return tab("catalog", m.tab == tabCatalog) + " " +
 		tab("playgrounds", m.tab == tabPlays) + " " +
-		tab("persisted", m.tab == tabPersisted) + " " +
 		tab("exports", m.tab == tabExports) + dialogTitle.Render(suffix)
 }
 
@@ -1660,7 +1742,6 @@ func (m *model) applyTheme(name string) {
 	m.theme = name
 	initStyles(presets[name])
 	applySkin(&m.playsTable)
-	applySkin(&m.persistedTable)
 	applySkin(&m.catalogTable)
 	applySkin(&m.exportsTable)
 }
@@ -1797,19 +1878,27 @@ func (m model) extendSelectView() string {
 	}))
 }
 
-func (m model) quitView() string {
-	return m.centered(kDialog("Quit", []string{
-		menuText.Render("Quit labctl?"),
+func (m model) regionView() string {
+	labels := make([]string, len(api.KnownRegions))
+	for i, r := range api.KnownRegions {
+		labels[i] = strings.ToUpper(r)
+	}
+	title, msg := "Preferred region", "Region for new playgrounds:"
+	if m.regionForSpawn {
+		title, msg = "Spawn region", "Spawn "+m.spawnName+" in region:"
+	}
+	return m.overlayCentered(kDialog(title, []string{
+		menuText.Render(msg),
 		"",
-		buttonRow([]string{"Cancel", "Quit"}, m.quitBtn),
+		buttonRow(labels, m.regionBtn),
 	}))
 }
 
-func (m model) exportView() string {
-	return m.overlayCentered(kDialog("Export", []string{
-		menuText.Render("What to expose?"),
+func (m model) quitView() string {
+	return m.overlayCentered(kDialog("Quit", []string{
+		menuText.Render("Quit labctl?"),
 		"",
-		buttonRow([]string{"Web terminal", "Port"}, m.exportBtn),
+		buttonRow([]string{"Cancel", "Quit"}, m.quitBtn),
 	}))
 }
 
@@ -1877,7 +1966,6 @@ func (m model) infoView() string {
 		title = p.Playground.Name
 		fields = []string{
 			infoField("ID", p.ID),
-			infoField("Title", p.Title),
 			infoField("Status", shortStatus(p)),
 			infoField("Created", humanize.Time(parseTime(p.CreatedAt))),
 			infoField("Lifetime", p.MaxPlayTime),
@@ -1898,7 +1986,7 @@ func (m model) infoView() string {
 	}
 	parts = append(parts, "", helpStyle.Render("o open in browser · any key to close"))
 
-	return m.centered(titledBox(dialogTitle.Render(title), strings.Join(parts, "\n"), contentW+2))
+	return m.overlayCentered(titledBox(dialogTitle.Render(title), strings.Join(parts, "\n"), contentW+2))
 }
 
 // exposedLines formats the loaded exposed shells/ports for the Info popup.
@@ -1919,9 +2007,16 @@ func (m model) headerView(w int) string {
 	if user == "" {
 		user = "-"
 	}
+	region := m.region
+	if region == "" {
+		region = "-"
+	} else {
+		region = strings.ToUpper(region)
+	}
 	info := lipgloss.JoinVertical(lipgloss.Left,
 		infoLine("Labs", strings.TrimPrefix(m.cli.Config().BaseURL, "https://")),
 		infoLine("User", user),
+		infoLine("Region", region),
 		infoLine("Plays", strconv.Itoa(len(m.plays))),
 		infoLine("Catalog", strconv.Itoa(len(m.catalog))),
 	)
@@ -1945,7 +2040,7 @@ func (m model) headerView(w int) string {
 	return strings.Join(lines[:headerRows], "\n")
 }
 
-const headerRows = 4 // header pinned to this many rows for cross-tab stability
+const headerRows = 5 // header pinned to this many rows for cross-tab stability
 
 // Below this the layout can't render usefully; show a "too small" message.
 const (
@@ -1968,17 +2063,11 @@ func (m model) menuView() string {
 			{"enter", "Copy"}, {"o", "Open"}, {"ctrl+d", "Unexpose"},
 			{":", "Filter"}, {"r", "Refresh"}, {"?", "Shortcuts"},
 		}
-	case tabPersisted:
-		items = [][2]string{
-			{"enter", "SSH"}, {"i", "Info"}, {"w", "Share"},
-			{"E", "Expose"}, {"x", "Export"}, {":", "Filter"},
-			{"r", "Refresh"}, {"tab", "Switch"}, {"?", "Shortcuts"},
-		}
 	default: // tabPlays
 		items = [][2]string{
 			{"enter", "SSH"}, {"i", "Info"}, {"w", "Share"},
-			{"E", "Expose"}, {"x", "Export"}, {"P", "Persist"},
-			{":", "Filter"}, {"r", "Refresh"}, {"?", "Shortcuts"},
+			{"x", "Ports"}, {"P", "Persist"}, {":", "Filter"},
+			{"r", "Refresh"}, {"tab", "Switch"}, {"?", "Shortcuts"},
 		}
 	}
 	return menuColumns(items)
@@ -2023,7 +2112,6 @@ func (m model) helpView() string {
 		key("o", "open in browser"),
 		key("i", "info"),
 		key("s", "start/stop toggle"),
-		key("t", "restart"),
 		key("P", "persist"),
 		key("e", "extend lifetime"),
 		key("ctrl+d", "destroy"),
@@ -2031,8 +2119,7 @@ func (m model) helpView() string {
 	right := strings.Join([]string{
 		hdr("Export"),
 		key("w", "share terminal"),
-		key("E", "expose port(s)"),
-		key("x", "export dialog"),
+		key("x", "expose port(s)"),
 		"",
 		hdr("Exports tab"),
 		key("enter", "copy url"),
@@ -2041,17 +2128,18 @@ func (m model) helpView() string {
 		"",
 		hdr("General"),
 		key("r", "refresh"),
+		key("R", "preferred region"),
 		key("T", "theme picker"),
 		key("q", "quit"),
 		key("?", "close help"),
 	}, "\n")
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, "     ", right)
-	return m.centered(titledBox(dialogTitle.Render("Shortcuts"), body, 72))
+	return m.overlayCentered(titledBox(dialogTitle.Render("Shortcuts"), body, 72))
 }
 
 func (m model) authView() string {
-	return m.centered(kDialog("Sign in", []string{
+	return m.overlayCentered(kDialog("Sign in", []string{
 		menuText.Render("Not signed in to iximiuz Labs"),
 		"",
 		buttonRow([]string{"Dismiss", "Login via browser"}, m.authBtn),
@@ -2059,8 +2147,16 @@ func (m model) authView() string {
 }
 
 func (m model) confirmView() string {
+	msg := "Destroy " + m.confirm.name + "?"
+	if m.confirm.persistent {
+		if m.confirmStage == 0 {
+			msg = "Destroy PERSISTENT lab " + m.confirm.name + "?"
+		} else {
+			msg = "Confirm again — permanently destroy " + m.confirm.name + "?"
+		}
+	}
 	return m.overlayCentered(kDialog("Confirm", []string{
-		menuText.Render("Destroy " + m.confirm.name + "?"),
+		menuText.Render(msg),
 		infoVal.Render(m.confirm.id),
 		"",
 		buttonRow([]string{"Cancel", "Destroy"}, m.confirmBtn),
