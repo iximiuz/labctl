@@ -14,7 +14,9 @@ type PremiumAccess struct {
 type Me struct {
 	ID string `json:"id" yaml:"userId"`
 
-	GithubProfileId string `json:"githubProfileId" yaml:"githubProfileId"`
+	GithubProfileId string `json:"githubProfileId,omitempty" yaml:"githubProfileId,omitempty"`
+
+	PreferredRegion string `json:"preferredRegion,omitempty" yaml:"preferredRegion,omitempty"`
 
 	PremiumAccess *PremiumAccess `json:"premiumAccess,omitempty" yaml:"premiumAccess,omitempty"`
 }
