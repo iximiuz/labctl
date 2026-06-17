@@ -41,9 +41,9 @@ func TestDelegateMovesCursor(t *testing.T) {
 	m := model{tab: tabPlays, playsTable: table.New(table.WithFocused(true))}
 	m.setSizes(80, 24)
 	m.playsTable.SetRows([]table.Row{
-		{"a", "", "", ""},
-		{"b", "", "", ""},
-		{"c", "", "", ""},
+		{"a", "", "", "", ""},
+		{"b", "", "", "", ""},
+		{"c", "", "", "", ""},
 	})
 
 	if got := m.playsTable.Cursor(); got != 0 {
@@ -660,21 +660,27 @@ func TestFmtDur(t *testing.T) {
 	}
 }
 
-// TestPlayAge guards that a running lab shows elapsed/total and a stopped one
-// shows just the elapsed time (no slash).
+// TestPlayAge guards that a running lab shows the remaining time (counting down,
+// no slash) while a stopped one shows the elapsed time.
 func TestPlayAge(t *testing.T) {
 	t.Parallel()
 	running := playWithState("p", api.StateRunning)
 	running.CreatedAt = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
 	running.ExpiresIn = int((50 * time.Minute) / time.Millisecond)
-	if got := playAge(running); !strings.Contains(got, "/") {
-		t.Fatalf("running playAge = %q, want elapsed/total", got)
+	gotRunning := playAge(running)
+	if strings.Contains(gotRunning, "/") || gotRunning == "" {
+		t.Fatalf("running playAge = %q, want remaining only (no slash)", gotRunning)
 	}
 
 	stopped := playWithState("p", api.StateStopped)
 	stopped.CreatedAt = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
-	if got := playAge(stopped); strings.Contains(got, "/") {
-		t.Fatalf("stopped playAge = %q, want elapsed only (no slash)", got)
+	gotStopped := playAge(stopped)
+	if strings.Contains(gotStopped, "/") {
+		t.Fatalf("stopped playAge = %q, want elapsed only", gotStopped)
+	}
+	// Remaining (~50m) must differ from elapsed (~10m).
+	if gotRunning == gotStopped {
+		t.Fatalf("running %q should differ from stopped %q", gotRunning, gotStopped)
 	}
 }
 
@@ -694,5 +700,97 @@ func TestSpawnRegionCached(t *testing.T) {
 	mo.refreshRows()
 	if got := mo.playsTable.Rows()[0][1]; got != strings.ToUpper(api.RegionAP) {
 		t.Fatalf("REGION cell = %q, want %q (from spawn cache)", got, strings.ToUpper(api.RegionAP))
+	}
+}
+
+// TestForwardStartValidation guards the port-forward prompt: empty is rejected,
+// a real spec kicks off the forward.
+func TestForwardStartValidation(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ in, want string }{
+		{"8080", "Forwarding..."},
+		{"3000:80", "Forwarding..."},
+		{"  ", errMark},
+		{"", errMark},
+	} {
+		m := newModel(testCLI())
+		m.modal = modalForward
+		m.fwdTarget = pending{id: "p1", name: "pg"}
+		m.input.SetValue(tt.in)
+		out, _ := m.handleForwardKey(tea.KeyMsg{Type: tea.KeyEnter})
+		if got := out.(model).status; !strings.HasPrefix(got, tt.want) {
+			t.Fatalf("in %q: status=%q want prefix %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestStopForwards guards that ctrl+f's helper cancels and removes only the
+// selected lab's forwards.
+func TestStopForwards(t *testing.T) {
+	t.Parallel()
+	canceled := map[string]int{}
+	mk := func(id string) forward {
+		return forward{playID: id, cancel: func() { canceled[id]++ }}
+	}
+	m := newModel(testCLI())
+	m.forwards = []forward{mk("p1"), mk("p1"), mk("p2")}
+
+	if n := m.stopForwards("p1"); n != 2 {
+		t.Fatalf("stopForwards = %d, want 2", n)
+	}
+	if len(m.forwards) != 1 || m.forwards[0].playID != "p2" {
+		t.Fatalf("remaining forwards = %+v, want only p2", m.forwards)
+	}
+	if canceled["p1"] != 2 {
+		t.Fatalf("p1 cancel called %d times, want 2", canceled["p1"])
+	}
+}
+
+// TestForwardColumn guards that forwarded ports render in the PF column.
+func TestForwardColumn(t *testing.T) {
+	t.Parallel()
+	_, rows := filterPlays(
+		[]*api.Play{playWithState("p1", api.StateRunning)},
+		"", nil, nil, map[string][]string{"p1": {"8080<->9090"}},
+	)
+	if len(rows) != 1 || rows[0][4] != "8080<->9090" {
+		t.Fatalf("PF cell = %q, want 8080<->9090", rows[0][4])
+	}
+}
+
+// TestStopForwardConfirm guards that ctrl+f asks first and Cancel leaves the
+// forward running.
+func TestStopForwardConfirm(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.plays = []*api.Play{playWithState("p1", api.StateRunning)}
+	m.forwards = []forward{{playID: "p1", lport: "8080", cancel: func() {}}}
+	m.refreshRows()
+
+	out, _ := m.handlePlaysKey(tea.KeyMsg{Type: tea.KeyCtrlF})
+	mo := out.(model)
+	if mo.modal != modalStopForward || mo.fwdTarget.id != "p1" {
+		t.Fatalf("ctrl+f: modal=%v target=%q, want modalStopForward/p1", mo.modal, mo.fwdTarget.id)
+	}
+	// Cancel (button 0) keeps the forward.
+	mo.confirmBtn = 0
+	out2, _ := mo.handleStopForwardKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m2 := out2.(model)
+	if m2.modal != modalNone || len(m2.forwards) != 1 {
+		t.Fatalf("cancel: modal=%v forwards=%d, want modalNone/1", m2.modal, len(m2.forwards))
+	}
+}
+
+// TestForwardDuplicatePort guards that forwarding an already-bound local port is
+// rejected before any network call.
+func TestForwardDuplicatePort(t *testing.T) {
+	t.Parallel()
+	m := newModel(testCLI())
+	m.forwards = []forward{{playID: "p1", lport: "1337", rport: "80"}}
+
+	msg := m.startForward("p2", "pg", "1337:80")()
+	e, ok := msg.(errMsg)
+	if !ok || !strings.Contains(e.err.Error(), "already forwarded") {
+		t.Fatalf("msg = %#v, want errMsg about port already forwarded", msg)
 	}
 }

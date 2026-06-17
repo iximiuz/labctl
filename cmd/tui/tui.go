@@ -25,6 +25,7 @@ import (
 	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/config"
 	"github.com/iximiuz/labctl/internal/labcli"
+	"github.com/iximiuz/labctl/internal/portforward"
 )
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
@@ -41,6 +42,12 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 // Run launches the interactive TUI and blocks until the user exits.
 func Run(cli labcli.CLI) error {
 	skin, name := loadSkin()
+	// ~/.labctl.config theme choice wins over skin.yaml's theme.
+	if c := loadUIConfig(); c.Theme != "" {
+		if s, ok := presets[c.Theme]; ok {
+			skin, name = s, c.Theme
+		}
+	}
 	initStyles(skin)
 	m := newModel(cli)
 	m.theme = name
@@ -70,6 +77,14 @@ type exportItem struct {
 	isPort   bool
 }
 
+// forward is a live local background port-forward (labctl side -> playground).
+type forward struct {
+	playID, playName string
+	spec             string // the user's original spec, for restore
+	lport, rport     string // for inline display
+	cancel           context.CancelFunc
+}
+
 type (
 	playsMsg struct {
 		plays        []*api.Play
@@ -84,8 +99,12 @@ type (
 		user   string
 		region string
 	}
-	regionSetMsg   struct{ region string }
-	spawnedMsg     struct{ id, name, region string }
+	regionSetMsg      struct{ region string }
+	spawnedMsg        struct{ id, name, region string }
+	forwardStartedMsg struct {
+		playID, playName, spec, lport, rport string
+		cancel                               context.CancelFunc
+	}
 	loginDoneMsg   struct{ err error }
 	disarmQuitMsg  struct{}
 	statusClearMsg struct{ seq int }
@@ -123,18 +142,20 @@ type pending struct {
 type modal uint8
 
 const (
-	modalNone       modal = iota
-	modalFilter           // footer search bar (renders within mainView)
-	modalExtend           // lifetime dialog
-	modalShare            // share-terminal access choice (private/public)
-	modalExposePort       // expose-port number input
-	modalAuth             // sign-in popup
-	modalConfirm          // destroy confirmation
-	modalQuit             // quit confirmation
-	modalInfo             // details popup
-	modalThemes           // theme picker (live preview)
-	modalHelp             // shortcuts popup
-	modalRegion           // preferred-region picker
+	modalNone        modal = iota
+	modalFilter            // footer search bar (renders within mainView)
+	modalExtend            // lifetime dialog
+	modalShare             // share-terminal access choice (private/public)
+	modalExposePort        // expose-port number input
+	modalAuth              // sign-in popup
+	modalConfirm           // destroy confirmation
+	modalQuit              // quit confirmation
+	modalInfo              // details popup
+	modalThemes            // theme picker (live preview)
+	modalHelp              // shortcuts popup
+	modalRegion            // preferred-region picker
+	modalForward           // start-port-forward input
+	modalStopForward       // confirm stopping a lab's port-forwards
 )
 
 type model struct {
@@ -148,6 +169,9 @@ type model struct {
 	plays         []*api.Play       // full, unfiltered (incl. persistent)
 	persistedIDs  map[string]bool   // which plays are persistent (* marker)
 	spawnRegions  map[string]string // playID -> region chosen at spawn (column fallback)
+	forwards      []forward         // live local background port-forwards
+	restore       []savedForward    // forwards to re-establish once plays load
+	restored      bool              // restore attempted
 	catalog       []api.Playground  // full, unfiltered
 	exports       []exportItem      // aggregated exposed shells/ports
 	filteredPlays []*api.Play       // rows currently shown (cursor indexes this)
@@ -162,6 +186,7 @@ type model struct {
 	extendID  string          // play being extended
 
 	exposeID       string       // play being shared / port-exposed
+	fwdTarget      pending      // lab awaiting a port-forward spec (modalForward)
 	shareBtn       int          // 0 = Private, 1 = Public
 	regionBtn      int          // index into api.KnownRegions (modalRegion)
 	regionForSpawn bool         // modalRegion is choosing a spawn region, not the default
@@ -196,9 +221,19 @@ func newModel(cli labcli.CLI) model {
 	applySkin(&ex)
 	ti := textinput.New()
 	ti.Prompt = ""
-	m := model{cli: cli, tab: tabPlays, playsTable: pt, catalogTable: ct, exportsTable: ex, input: ti, status: "Loading...", theme: "k9s", spawnRegions: map[string]string{}}
+	st := loadUIState()
+	m := model{cli: cli, tab: tabPlays, playsTable: pt, catalogTable: ct, exportsTable: ex, input: ti, status: "Loading...", theme: "k9s", spawnRegions: st.Regions, restore: st.Forwards}
 	m.setSizes(80, 24)
 	return m
+}
+
+// persistState writes the per-lab region cache and live forwards to ~/.labctl.rc.
+func (m model) persistState() {
+	st := uiState{Regions: m.spawnRegions}
+	for _, f := range m.forwards {
+		st.Forwards = append(st.Forwards, savedForward{PlayID: f.playID, PlayName: f.playName, Spec: f.spec})
+	}
+	st.save()
 }
 
 func (m model) Init() tea.Cmd {
@@ -466,6 +501,80 @@ func (m model) startPlay(name, region string) tea.Cmd {
 	}
 }
 
+// startForward establishes a local background port-forward to the lab. The
+// tunnel lives under its own context so it keeps running after this cmd returns;
+// the returned cancel func (in forwardStartedMsg) stops it.
+func (m model) startForward(playID, playName, spec string) tea.Cmd {
+	return func() tea.Msg {
+		fs, err := portforward.ParseLocal(spec)
+		if err != nil {
+			return errMsg{fmt.Errorf("invalid port spec %q", spec)}
+		}
+		// A local port can only be bound once — reject a duplicate up front
+		// instead of silently failing to bind.
+		for _, f := range m.forwards {
+			if f.lport == fs.LocalPort {
+				return errMsg{fmt.Errorf("local port %s is already forwarded", fs.LocalPort)}
+			}
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		setup, setupCancel := context.WithTimeout(ctx, 30*time.Second)
+		p, err := m.cli.Client().GetPlay(setup, playID)
+		if err != nil {
+			setupCancel()
+			cancel()
+			return errMsg{err}
+		}
+		machine, err := p.ResolveMachine("")
+		if err != nil {
+			setupCancel()
+			cancel()
+			return errMsg{err}
+		}
+		tunnel, err := portforward.StartTunnel(ctx, m.cli.Client(), portforward.TunnelOptions{
+			PlayID: playID, Machine: machine,
+		})
+		setupCancel()
+		if err != nil {
+			cancel()
+			return errMsg{err}
+		}
+		tunnel.StartForwarding(ctx, fs) // runs in the background under ctx
+		return forwardStartedMsg{
+			playID: playID, playName: playName, spec: spec,
+			lport: fs.LocalPort, rport: fs.RemotePort, cancel: cancel,
+		}
+	}
+}
+
+// stopForwards cancels and removes every forward on the given lab, returning the
+// count stopped.
+func (m *model) stopForwards(playID string) int {
+	kept := m.forwards[:0]
+	n := 0
+	for _, f := range m.forwards {
+		if f.playID == playID {
+			if f.cancel != nil {
+				f.cancel()
+			}
+			n++
+			continue
+		}
+		kept = append(kept, f)
+	}
+	m.forwards = kept
+	return n
+}
+
+// fwdPortsByPlay maps a lab id to its "local<->remote" forwards (PF column).
+func (m model) fwdPortsByPlay() map[string][]string {
+	out := make(map[string][]string, len(m.forwards))
+	for _, f := range m.forwards {
+		out[f.playID] = append(out[f.playID], f.lport+"<->"+f.rport)
+	}
+	return out
+}
+
 func (m model) playAction(info string, fn func(context.Context) error) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -498,7 +607,7 @@ func (m *model) selectedPlayground() *api.Playground {
 
 // filterPlays returns the subset of plays matching f, along with their rows,
 // keeping the cursor->slice mapping in sync. Persistent plays get a * marker.
-func filterPlays(plays []*api.Play, f string, persistedIDs map[string]bool, spawnRegions map[string]string) ([]*api.Play, []table.Row) {
+func filterPlays(plays []*api.Play, f string, persistedIDs map[string]bool, spawnRegions map[string]string, fwdPorts map[string][]string) ([]*api.Play, []table.Row) {
 	out := make([]*api.Play, 0, len(plays))
 	rows := make([]table.Row, 0, len(plays))
 	for _, p := range plays {
@@ -506,6 +615,7 @@ func filterPlays(plays []*api.Play, f string, persistedIDs map[string]bool, spaw
 		if persistedIDs[p.ID] {
 			name = "* " + name
 		}
+		fwd := strings.Join(fwdPorts[p.ID], ",")
 		// Prefer the region the API returns; fall back to the one chosen at spawn.
 		region := p.Region
 		if region == "" {
@@ -516,7 +626,7 @@ func filterPlays(plays []*api.Play, f string, persistedIDs map[string]bool, spaw
 		} else {
 			region = strings.ToUpper(region)
 		}
-		row := table.Row{name, region, shortStatus(p), playAge(p)}
+		row := table.Row{name, region, shortStatus(p), playAge(p), fwd}
 		if f == "" || strings.Contains(strings.ToLower(strings.Join(row, " ")), f) {
 			out = append(out, p)
 			rows = append(rows, row)
@@ -531,7 +641,7 @@ func (m *model) refreshRows() {
 	f := strings.ToLower(strings.TrimSpace(m.filter))
 
 	var pr []table.Row
-	m.filteredPlays, pr = filterPlays(m.plays, f, m.persistedIDs, m.spawnRegions)
+	m.filteredPlays, pr = filterPlays(m.plays, f, m.persistedIDs, m.spawnRegions, m.fwdPortsByPlay())
 	m.playsTable.SetRows(pr)
 
 	m.filteredCat = m.filteredCat[:0]
@@ -587,6 +697,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.plays) == 0 {
 				m.tab = tabCatalog
 				m.focusActiveTable()
+			}
+		}
+		// Re-establish saved forwards once, for labs that are running again.
+		if !m.restored {
+			m.restored = true
+			running := make(map[string]bool, len(m.plays))
+			for _, p := range m.plays {
+				if p.StateIs(api.StateRunning) {
+					running[p.ID] = true
+				}
+			}
+			var cmds []tea.Cmd
+			for _, sf := range m.restore {
+				if running[sf.PlayID] {
+					cmds = append(cmds, m.startForward(sf.PlayID, sf.PlayName, sf.Spec))
+				}
+			}
+			m.restore = nil
+			if len(cmds) > 0 {
+				return m, tea.Batch(cmds...)
 			}
 		}
 		return m, nil
@@ -693,8 +823,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.region != "" {
 			m.spawnRegions[msg.id] = msg.region
 			m.region = msg.region
+			m.persistState()
 		}
 		return m, tea.Batch(m.loadPlays(), m.flash(okMark+" Started "+msg.name))
+
+	case forwardStartedMsg:
+		m.forwards = append(m.forwards, forward{
+			playID: msg.playID, playName: msg.playName, spec: msg.spec,
+			lport: msg.lport, rport: msg.rport, cancel: msg.cancel,
+		})
+		m.persistState()
+		m.refreshRows()
+		return m, m.flash(okMark + " Forwarding " + msg.lport + " → " + msg.rport)
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -763,6 +903,10 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleConfirmKey(msg)
 	case modalRegion:
 		return m.handleRegionKey(msg)
+	case modalForward:
+		return m.handleForwardKey(msg)
+	case modalStopForward:
+		return m.handleStopForwardKey(msg)
 	case modalHelp: // any key closes it
 		m.modal = modalNone
 		return m, nil
@@ -883,6 +1027,7 @@ func (m model) handleThemesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		m.modal = modalNone
+		uiConfig{Theme: m.theme}.save()
 		return m, m.flash("Theme: " + m.theme)
 	case "esc":
 		m.themeIdx = m.themePrevIdx
@@ -967,6 +1112,9 @@ func (m model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.confirmBtn = 0
 			m.confirmStage = 0
 			m.status = "Destroying..."
+			if m.stopForwards(id) > 0 { // drop now-dead forwards
+				m.persistState()
+			}
 			return m, m.destroyPlay(id)
 		}
 		fallthrough
@@ -1068,6 +1216,58 @@ func (m model) handleRegionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// handleForwardKey drives the port-forward input: enter starts it, esc cancels.
+func (m model) handleForwardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.modal = modalNone
+		m.input.Blur()
+		return m, nil
+	case "enter":
+		spec := strings.TrimSpace(m.input.Value())
+		tgt := m.fwdTarget
+		m.modal = modalNone
+		m.input.Blur()
+		if spec == "" {
+			m.status = errMark + " Port required"
+			return m, nil
+		}
+		m.status = "Forwarding..."
+		return m, m.startForward(tgt.id, tgt.name, spec)
+	default:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+}
+
+// handleStopForwardKey confirms stopping a lab's port-forwards.
+func (m model) handleStopForwardKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "down", "left", "right", "tab", "j", "k", "h", "l":
+		m.confirmBtn = 1 - m.confirmBtn
+		return m, nil
+	case "enter":
+		stop := m.confirmBtn == 1
+		id := m.fwdTarget.id
+		m.modal = modalNone
+		m.confirmBtn = 0
+		if !stop {
+			return m, nil
+		}
+		n := m.stopForwards(id)
+		m.persistState()
+		m.refreshRows()
+		return m, m.flash(fmt.Sprintf("%s Stopped %d forward(s)", okMark, n))
+	case "esc":
+		m.modal = modalNone
+		m.confirmBtn = 0
+		return m, nil
+	default:
+		return m, nil
+	}
+}
+
 // handlePromptKey drives the filter input (live-filters as you type).
 func (m model) handlePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -1124,6 +1324,12 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if p == nil {
 			return m, nil
 		}
+		// Either action drops the lab's tunnels; clear them so the PF column
+		// doesn't show stale ports.
+		if m.stopForwards(p.ID) > 0 {
+			m.persistState()
+			m.refreshRows()
+		}
 		if p.StateIs(api.StateStopped) {
 			m.status = "Starting..."
 			return m, m.restartPlay(p.ID)
@@ -1171,6 +1377,28 @@ func (m model) handlePlaysKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		m.input.Placeholder = "ports e.g. 8080, 9090"
 		return m, m.input.Focus()
+	case "F": // start a local background port-forward
+		if p == nil || !p.StateIs(api.StateRunning) {
+			m.status = errMark + " Select a running playground to forward a port"
+			return m, nil
+		}
+		m.modal = modalForward
+		m.fwdTarget = pending{id: p.ID, name: p.Playground.Name}
+		m.input.SetValue("")
+		m.input.Placeholder = "8080 or 3000:80"
+		return m, m.input.Focus()
+	case "ctrl+f": // stop this lab's background port-forwards (with confirmation)
+		if p == nil {
+			return m, nil
+		}
+		if len(m.fwdPortsByPlay()[p.ID]) == 0 {
+			m.status = errMark + " No forwards on this lab"
+			return m, nil
+		}
+		m.modal = modalStopForward
+		m.fwdTarget = pending{id: p.ID, name: p.Playground.Name}
+		m.confirmBtn = 0 // default to Cancel
+		return m, nil
 	case "ctrl+d": // destroy the playground (with confirmation)
 		if p == nil {
 			return m, nil
@@ -1298,12 +1526,13 @@ func (m *model) setSizes(w, h int) {
 
 	inner := w - 2 // titledBox eats one column per side
 
-	pc := distribute(inner-6, []int{4, 1, 2, 2}, []int{12, 6, 8, 9}) // NAME REGION STATUS AGE
+	pc := distribute(inner-8, []int{4, 1, 2, 2, 2}, []int{12, 6, 8, 8, 12}) // NAME REGION STATUS TTL PF
 	m.playsTable.SetColumns([]table.Column{
 		{Title: "NAME", Width: pc[0]},
 		{Title: "REGION", Width: pc[1]},
 		{Title: "STATUS", Width: pc[2]},
-		{Title: "AGE", Width: pc[3]},
+		{Title: "TTL", Width: pc[3]},
+		{Title: "PF", Width: pc[4]},
 	})
 	m.playsTable.SetWidth(inner)
 
@@ -1332,8 +1561,8 @@ func shortStatus(p *api.Play) string {
 	return string(st)
 }
 
-// playAge renders the elapsed/total lifetime, e.g. "12m/1h". For running labs
-// total = elapsed + remaining (ExpiresIn); otherwise just the elapsed time.
+// playAge renders the remaining lifetime for running labs, counting down
+// (e.g. "7h50m"); for non-running labs it shows the elapsed time.
 func playAge(p *api.Play) string {
 	created := parseTime(p.CreatedAt)
 	if created.IsZero() {
@@ -1343,9 +1572,21 @@ func playAge(p *api.Play) string {
 	if elapsed < 0 {
 		elapsed = 0
 	}
-	if p.StateIs(api.StateRunning) && p.ExpiresIn > 0 {
-		total := elapsed + time.Duration(p.ExpiresIn)*time.Millisecond
-		return fmtDur(elapsed) + "/" + fmtDur(total)
+	if p.StateIs(api.StateRunning) {
+		// Prefer the configured total (maxPlayTime, e.g. "480m"); fall back to
+		// elapsed + remaining when it's missing.
+		total, _ := time.ParseDuration(p.MaxPlayTime)
+		remaining := total - elapsed
+		if total <= 0 && p.ExpiresIn > 0 {
+			remaining = time.Duration(p.ExpiresIn) * time.Millisecond
+			total = elapsed + remaining
+		}
+		if total > 0 {
+			if remaining < 0 {
+				remaining = 0
+			}
+			return fmtDur(remaining)
+		}
 	}
 	return fmtDur(elapsed)
 }
@@ -1664,6 +1905,10 @@ func (m model) View() string {
 		return m.themeView()
 	case modalRegion:
 		return m.regionView()
+	case modalForward:
+		return m.forwardView()
+	case modalStopForward:
+		return m.stopForwardView()
 	case modalHelp:
 		return m.helpView()
 	default: // modalNone or modalFilter (filter renders as a footer bar)
@@ -1918,6 +2163,24 @@ func (m model) exposePortView() string {
 	}))
 }
 
+func (m model) forwardView() string {
+	return m.overlayCentered(kDialog("Port-forward", []string{
+		menuText.Render("Forward a local port (runs in the background)"),
+		"",
+		formField("Port:", m.input, true),
+	}))
+}
+
+func (m model) stopForwardView() string {
+	ports := strings.Join(m.fwdPortsByPlay()[m.fwdTarget.id], ", ")
+	return m.overlayCentered(kDialog("Stop forwards", []string{
+		menuText.Render("Stop port-forward(s) on " + m.fwdTarget.name + "?"),
+		infoVal.Render(ports),
+		"",
+		buttonRow([]string{"Cancel", "Stop"}, m.confirmBtn),
+	}))
+}
+
 func (m *model) selectedURL() string {
 	if m.tab == tabCatalog {
 		if pg := m.selectedPlayground(); pg != nil {
@@ -2066,8 +2329,8 @@ func (m model) menuView() string {
 	default: // tabPlays
 		items = [][2]string{
 			{"enter", "SSH"}, {"i", "Info"}, {"w", "Share"},
-			{"x", "Ports"}, {"P", "Persist"}, {":", "Filter"},
-			{"r", "Refresh"}, {"tab", "Switch"}, {"?", "Shortcuts"},
+			{"x", "Ports"}, {"F", "Forward"}, {"P", "Persist"},
+			{":", "Filter"}, {"r", "Refresh"}, {"?", "Shortcuts"},
 		}
 	}
 	return menuColumns(items)
@@ -2120,6 +2383,8 @@ func (m model) helpView() string {
 		hdr("Export"),
 		key("w", "share terminal"),
 		key("x", "expose port(s)"),
+		key("F", "port-forward (bg)"),
+		key("ctrl+f", "stop forwards"),
 		"",
 		hdr("Exports tab"),
 		key("enter", "copy url"),
