@@ -44,8 +44,21 @@ const (
 )
 
 type MachineStatus struct {
-	Name  string       `json:"name" yaml:"name"`
-	State MachineState `json:"state" yaml:"state"`
+	Name       string       `json:"name" yaml:"name"`
+	State      MachineState `json:"state" yaml:"state"`
+	Conditions []Condition  `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+}
+
+// machineReadyCondition is the conductor-reported condition that flips to "True"
+// once a machine is actually reachable (its sshd accepts connections), as opposed
+// to merely being RUNNING.
+const machineReadyCondition = "Ready"
+
+type Condition struct {
+	Name             string    `json:"name" yaml:"name"`
+	Status           string    `json:"status" yaml:"status"`
+	LastTransitionAt time.Time `json:"lastTransitionAt" yaml:"lastTransitionAt"`
+	Message          string    `json:"message,omitempty" yaml:"message,omitempty"`
 }
 
 type PlayStatus struct {
@@ -204,6 +217,51 @@ func (p *Play) AllMachinesRunning() bool {
 	}
 	for _, m := range p.Machines {
 		if p.MachineState(m.Name) != MachineStateRunning {
+			return false
+		}
+	}
+	return true
+}
+
+// MachineReady reports whether the named machine is ready - i.e. the conductor
+// observed its "Ready" condition flip to "True" (its sshd accepts connections).
+func (p *Play) MachineReady(name string) bool {
+	if p.Status == nil {
+		return false
+	}
+	for _, m := range p.Status.Machines {
+		if m.Name != name {
+			continue
+		}
+		for _, c := range m.Conditions {
+			if c.Name == machineReadyCondition {
+				return c.Status == "True"
+			}
+		}
+	}
+	return false
+}
+
+// CountReadyMachines returns how many of the play's machines currently report
+// readiness in the latest status.
+func (p *Play) CountReadyMachines() int {
+	count := 0
+	for _, m := range p.Machines {
+		if p.MachineReady(m.Name) {
+			count++
+		}
+	}
+	return count
+}
+
+// AllMachinesReady reports whether every machine of the play is ready. It returns
+// false until a status carrying the readiness conditions has been observed.
+func (p *Play) AllMachinesReady() bool {
+	if p.Status == nil || len(p.Machines) == 0 {
+		return false
+	}
+	for _, m := range p.Machines {
+		if !p.MachineReady(m.Name) {
 			return false
 		}
 	}

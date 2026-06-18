@@ -34,10 +34,13 @@ type startOptions struct {
 	ssh  bool
 	ide  string
 
-	forwardAgent     bool
-	skipWaitInit     bool
-	skipWaitRunning  bool
+	skipWaitRunning bool
+	skipWaitReady   bool
+	skipWaitInit    bool
+
 	withPortForwards bool
+
+	forwardAgent bool
 
 	safetyDisclaimerConsent bool
 
@@ -150,16 +153,22 @@ func newStartCommand(cli labcli.CLI) *cobra.Command {
 		`Acknowledge the safety disclaimer`,
 	)
 	flags.BoolVar(
-		&opts.skipWaitInit,
-		"skip-wait-init",
-		false,
-		`Skip waiting for the playground initialization (useful for debugging)`,
-	)
-	flags.BoolVar(
 		&opts.skipWaitRunning,
 		"skip-wait-running",
 		false,
 		`Skip waiting for all playground machines to reach the RUNNING state`,
+	)
+	flags.BoolVar(
+		&opts.skipWaitReady,
+		"skip-wait-ready",
+		false,
+		`Skip waiting for all playground machines to become ready (reachable via SSH)`,
+	)
+	flags.BoolVar(
+		&opts.skipWaitInit,
+		"skip-wait-init",
+		false,
+		`Skip waiting for the playground initialization (useful for debugging)`,
 	)
 	flags.BoolVarP(
 		&opts.quiet,
@@ -284,17 +293,21 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 		})
 	}
 
-	if opts.skipWaitInit {
-		cli.PrintAux("WARNING: Not waiting for the playground initialization tasks to complete...\n")
-	}
 	if opts.skipWaitRunning {
 		cli.PrintAux("WARNING: Not waiting for all playground machines to reach the RUNNING state...\n")
 	}
+	if opts.skipWaitReady {
+		cli.PrintAux("WARNING: Not waiting for all playground machines to become ready...\n")
+	}
+	if opts.skipWaitInit {
+		cli.PrintAux("WARNING: Not waiting for the playground initialization tasks to complete...\n")
+	}
 
-	waitRunning := !opts.skipWaitRunning
 	waitInit := !opts.skipWaitInit && len(play.Tasks) > 0
+	waitRunning := !opts.skipWaitRunning
+	waitReady := !opts.skipWaitReady
 
-	if waitRunning || waitInit {
+	if waitRunning || waitReady || waitInit {
 		playConn := api.NewPlayConn(ctx, play, cli.Client(), cli.Config().WebSocketOrigin())
 		if err := playConn.Start(); err != nil {
 			return fmt.Errorf("couldn't start play connection: %w", err)
@@ -306,6 +319,14 @@ func runStartPlayground(ctx context.Context, cli labcli.CLI, opts *startOptions)
 			spin.Writer = cli.AuxStream()
 			if err := playConn.WaitMachinesRunning(startPlaygroundTimeout, spin); err != nil {
 				return fmt.Errorf("couldn't wait for the playground machines to start: %w", err)
+			}
+		}
+
+		if waitReady {
+			spin := spinner.New(spinner.CharSets[38], 300*time.Millisecond)
+			spin.Writer = cli.AuxStream()
+			if err := playConn.WaitMachinesReady(startPlaygroundTimeout, spin); err != nil {
+				return fmt.Errorf("couldn't wait for the playground machines to become ready: %w", err)
 			}
 		}
 

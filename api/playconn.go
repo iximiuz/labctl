@@ -295,6 +295,66 @@ func (pc *PlayConn) WaitMachinesRunning(timeout time.Duration, s *spinner.Spinne
 	return ctx.Err()
 }
 
+// WaitMachinesReady blocks until every machine of the playground is ready - i.e.
+// actually reachable (its sshd accepts connections), as reported by the
+// conductor's "Ready" condition. This is a stronger guarantee than merely being
+// RUNNING, which doesn't imply the machine can yet be SSH-ed into. A non-positive
+// timeout means wait indefinitely (until the connection's context is cancelled).
+func (pc *PlayConn) WaitMachinesReady(timeout time.Duration, s *spinner.Spinner) error {
+	prefix := func() string {
+		return fmt.Sprintf(
+			"Waiting for machines to become ready... Ready: %d/%d ",
+			pc.play.CountReadyMachines(), pc.play.CountMachines(),
+		)
+	}
+
+	if s != nil {
+		s.Prefix = prefix()
+		s.Start()
+		defer s.Stop()
+	}
+
+	if pc.play.AllMachinesReady() {
+		if s != nil {
+			s.FinalMSG = "Waiting for machines to become ready... Done.\n"
+		}
+		return nil
+	}
+
+	ctx := pc.ctx
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(pc.ctx, timeout)
+		defer cancel()
+	}
+
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case err := <-pc.errCh:
+			slog.Warn("Play connection error", "error", err.Error())
+
+		case msg := <-pc.msgCh:
+			pc.applyMessage(msg)
+		}
+
+		if s != nil {
+			s.Prefix = prefix()
+		}
+
+		if pc.play.AllMachinesReady() {
+			if s != nil {
+				s.FinalMSG = "Waiting for machines to become ready... Done.\n"
+			}
+			return nil
+		}
+	}
+
+	return ctx.Err()
+}
+
 func (pc *PlayConn) WaitDone() error {
 	for pc.ctx.Err() == nil {
 		select {
