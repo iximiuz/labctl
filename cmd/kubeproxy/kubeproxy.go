@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -233,7 +234,7 @@ func patchKubeconfigServer(kubeconfigPath, localHost, localPort string) error {
 	}
 
 	newServer := "https://" + net.JoinHostPort(localHost, localPort)
-	setClusterServers(&doc, newServer)
+	patchClusters(&doc, newServer)
 
 	out, err := yaml.Marshal(&doc)
 	if err != nil {
@@ -242,13 +243,16 @@ func patchKubeconfigServer(kubeconfigPath, localHost, localPort string) error {
 	return os.WriteFile(kubeconfigPath, out, 0o600)
 }
 
-// setClusterServers walks the YAML node tree and replaces every scalar value
-// whose sibling key is "server" and whose parent chain goes through "cluster"
-// → "clusters". This is exactly the path kubeconfig uses.
-func setClusterServers(n *yaml.Node, server string) {
+// patchClusters walks the YAML node tree and, for every "cluster" mapping,
+// rewrites the "server" value to point at the local forwarding address. Because
+// the API server's TLS certificate is issued for the cluster-internal addresses
+// (e.g. the Service IP and the node's advertise address) and not for the local
+// host we forward through, we also pin "tls-server-name" to the original host
+// so certificate verification keeps working against a name the cert covers.
+func patchClusters(n *yaml.Node, server string) {
 	if n.Kind == yaml.DocumentNode || n.Kind == yaml.SequenceNode {
 		for _, child := range n.Content {
-			setClusterServers(child, server)
+			patchClusters(child, server)
 		}
 		return
 	}
@@ -257,10 +261,52 @@ func setClusterServers(n *yaml.Node, server string) {
 	}
 	for i := 0; i+1 < len(n.Content); i += 2 {
 		key, val := n.Content[i], n.Content[i+1]
-		if key.Value == "server" && val.Kind == yaml.ScalarNode {
-			val.Value = server
+		if key.Value == "cluster" && val.Kind == yaml.MappingNode {
+			patchCluster(val, server)
 		} else {
-			setClusterServers(val, server)
+			patchClusters(val, server)
 		}
 	}
+}
+
+// patchCluster rewrites the "server" of a single cluster mapping and sets
+// "tls-server-name" to the original server's host (unless one is already set).
+func patchCluster(cluster *yaml.Node, server string) {
+	var serverNode *yaml.Node
+	hasTLSServerName := false
+	for i := 0; i+1 < len(cluster.Content); i += 2 {
+		key, val := cluster.Content[i], cluster.Content[i+1]
+		switch key.Value {
+		case "server":
+			serverNode = val
+		case "tls-server-name":
+			hasTLSServerName = true
+		}
+	}
+	if serverNode == nil || serverNode.Kind != yaml.ScalarNode {
+		return
+	}
+
+	origHost := serverHost(serverNode.Value)
+	serverNode.Value = server
+
+	// Don't override an explicitly-set tls-server-name, and don't pin one if the
+	// original host can't be parsed.
+	if hasTLSServerName || origHost == "" {
+		return
+	}
+	cluster.Content = append(cluster.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Value: "tls-server-name"},
+		&yaml.Node{Kind: yaml.ScalarNode, Value: origHost},
+	)
+}
+
+// serverHost extracts the host (without port) from a kubeconfig server URL such
+// as "https://172.16.0.2:6443".
+func serverHost(server string) string {
+	u, err := url.Parse(server)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }
