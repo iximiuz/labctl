@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/moby/term"
 	"github.com/spf13/cobra"
@@ -23,6 +24,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/portforward"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
+	"github.com/iximiuz/labctl/cmd/tui"
 	"github.com/iximiuz/labctl/cmd/tutorial"
 	versioncmd "github.com/iximiuz/labctl/cmd/version"
 	"github.com/iximiuz/labctl/internal/config"
@@ -55,6 +57,14 @@ func main() {
 		Use:     "labctl <auth|playgrounds|port-forward|ssh|...>",
 		Short:   "labctl - iximiuz Labs command line interface.",
 		Version: cli.Version(),
+		// Bare `labctl` launches the TUI when LABCTL_TUI is truthy, otherwise
+		// prints help as before.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if tuiDefaultEnabled() {
+				return labcli.WrapStatusError(tui.Run(cli))
+			}
+			return cmd.Help()
+		},
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			setLogLevel(cli, logLevel)
 			cmd.SilenceUsage = true
@@ -88,6 +98,7 @@ func main() {
 		portforward.NewCommand(cli),
 		ssh.NewCommand(cli),
 		sshproxy.NewCommand(cli),
+		tui.NewCommand(cli),
 		tutorial.NewCommand(cli),
 		versioncmd.NewCommand(cli),
 	)
@@ -119,6 +130,20 @@ func main() {
 		slog.Debug("Exit error: " + err.Error())
 		os.Exit(1)
 	}
+}
+
+// tuiDefaultEnabled reports whether bare `labctl` should launch the TUI, based
+// on the LABCTL_TUI env var (e.g. 1, true, yes). Unset or a falsy value (0,
+// false) keeps the default help behavior.
+func tuiDefaultEnabled() bool {
+	v, ok := os.LookupEnv("LABCTL_TUI")
+	if !ok {
+		return false
+	}
+	if b, err := strconv.ParseBool(v); err == nil {
+		return b
+	}
+	return v != "" // tolerate non-canonical truthy values like "yes"/"on"
 }
 
 func loadConfigOrFail(cli labcli.CLI, overrides configOverrides) {
