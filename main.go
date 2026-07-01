@@ -21,6 +21,7 @@ import (
 	"github.com/iximiuz/labctl/cmd/kubeproxy"
 	"github.com/iximiuz/labctl/cmd/playground"
 	"github.com/iximiuz/labctl/cmd/portforward"
+	"github.com/iximiuz/labctl/cmd/search"
 	"github.com/iximiuz/labctl/cmd/ssh"
 	"github.com/iximiuz/labctl/cmd/sshproxy"
 	"github.com/iximiuz/labctl/cmd/tutorial"
@@ -86,6 +87,7 @@ func main() {
 		kubeproxy.NewCommand(cli),
 		playground.NewCommand(cli),
 		portforward.NewCommand(cli),
+		search.NewCommand(cli),
 		ssh.NewCommand(cli),
 		sshproxy.NewCommand(cli),
 		tutorial.NewCommand(cli),
