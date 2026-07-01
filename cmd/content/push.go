@@ -375,14 +375,14 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 }
 
 func listContentFilesRemote(ctx context.Context, client *api.Client, kind content.ContentKind, name string) (map[string]string, error) {
-	remoteFiles, err := client.ListContentFiles(ctx, kind, name)
+	remoteFiles, err := client.ListContentFilesV2(ctx, kind, name)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't list remote content files: %w", err)
 	}
 
 	result := make(map[string]string)
 	for _, file := range remoteFiles {
-		result[file] = ""
+		result[file.Path] = file.Digest
 	}
 
 	return result, nil

@@ -26,6 +26,33 @@ func (c *Client) ListContentFiles(
 	return files, nil
 }
 
+// ContentFile is a remote content file together with its MD5 digest, as returned
+// by the v2 files endpoint. An empty Digest means "unknown" (e.g. a multipart
+// upload whose ETag isn't an MD5), signaling the caller to (re-)push the file.
+type ContentFile struct {
+	Path   string `json:"path"`
+	Digest string `json:"digest"`
+}
+
+// ListContentFilesV2 lists remote content files with their MD5 digests, enabling
+// change detection. Returns api.ErrNotFound against servers that predate the
+// endpoint, so callers can fall back to the digest-less ListContentFiles.
+func (c *Client) ListContentFilesV2(
+	ctx context.Context,
+	kind content.ContentKind,
+	name string,
+) ([]ContentFile, error) {
+	var files []ContentFile
+	if err := c.GetInto(ctx, "/content/v2/files", url.Values{
+		"kind": []string{kind.String()},
+		"name": []string{name},
+	}, nil, &files); err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
 func (c *Client) PutContentMarkdown(
 	ctx context.Context,
 	kind content.ContentKind,
