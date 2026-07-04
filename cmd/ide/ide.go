@@ -95,7 +95,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	var opts options
 
 	cmd := &cobra.Command{
-		Use:   "ide <code|cursor|windsurf|zed> <playground-id>",
+		Use:   "ide <antigravity-ide|code|cursor|windsurf|zed> <playground-id>",
 		Short: `Open a playground in a local IDE`,
 		Long: `Start an SSH proxy to the playground and open it in the specified IDE.
 
@@ -170,6 +170,7 @@ func ideCompletion(cli labcli.CLI) completion.CompletionFunc {
 		switch len(args) {
 		case 0:
 			return []string{
+				ideutil.Antigravity + "\tAntigravity IDE",
 				ideutil.VSCode + "\tVisual Studio Code",
 				ideutil.Cursor + "\tCursor",
 				ideutil.Windsurf + "\tWindsurf",
