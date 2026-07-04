@@ -12,14 +12,15 @@ import (
 )
 
 const (
-	VSCode   = "code"
-	Cursor   = "cursor"
-	Windsurf = "windsurf"
-	Zed      = "zed"
+	Antigravity = "antigravity-ide"
+	VSCode      = "code"
+	Cursor      = "cursor"
+	Windsurf    = "windsurf"
+	Zed         = "zed"
 )
 
 // Supported lists the IDE CLI names labctl knows how to open, in display order.
-var Supported = []string{VSCode, Cursor, Windsurf, Zed}
+var Supported = []string{Antigravity, VSCode, Cursor, Windsurf, Zed}
 
 // IsSupported reports whether name is one of the supported IDEs.
 func IsSupported(name string) bool {
@@ -27,7 +28,7 @@ func IsSupported(name string) bool {
 }
 
 // SupportedList returns the supported IDE names as a quoted, comma-separated
-// string for help text and error messages, e.g. `"code", "cursor", "windsurf", "zed"`.
+// string for help text and error messages, e.g. `"antigravity-ide", "code", "cursor", "windsurf", "zed"`.
 func SupportedList() string {
 	quoted := make([]string, len(Supported))
 	for i, s := range Supported {
