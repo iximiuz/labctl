@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	Antigravity = "antigravity-ide"
+	Antigravity = "antigravity"
 	VSCode      = "code"
 	Cursor      = "cursor"
 	Windsurf    = "windsurf"
@@ -28,7 +28,7 @@ func IsSupported(name string) bool {
 }
 
 // SupportedList returns the supported IDE names as a quoted, comma-separated
-// string for help text and error messages, e.g. `"antigravity-ide", "code", "cursor", "windsurf", "zed"`.
+// string for help text and error messages.
 func SupportedList() string {
 	quoted := make([]string, len(Supported))
 	for i, s := range Supported {
