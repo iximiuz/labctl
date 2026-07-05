@@ -27,6 +27,16 @@ func IsSupported(name string) bool {
 	return slices.Contains(Supported, name)
 }
 
+// Binary returns the CLI binary name for the given IDE. For most IDEs the
+// user-facing name and the binary name coincide; Antigravity ships its CLI
+// as "antigravity-ide".
+func Binary(ide string) string {
+	if ide == Antigravity {
+		return "antigravity-ide"
+	}
+	return ide
+}
+
 // SupportedList returns the supported IDE names as a quoted, comma-separated
 // string for help text and error messages.
 func SupportedList() string {
@@ -39,8 +49,8 @@ func SupportedList() string {
 
 // EnsureInstalled returns a friendly error if the IDE's CLI binary isn't on PATH.
 func EnsureInstalled(ide string) error {
-	if _, err := exec.LookPath(ide); err != nil {
-		return fmt.Errorf("couldn't find the %q binary in PATH - is %s installed and its CLI command available?", ide, ide)
+	if _, err := exec.LookPath(Binary(ide)); err != nil {
+		return fmt.Errorf("couldn't find the %q binary in PATH - is %s installed and its CLI command available?", Binary(ide), ide)
 	}
 	return nil
 }
@@ -63,9 +73,9 @@ func LaunchArgs(ide, user, host, port, workDir string) []string {
 // the extra cmd /C wrapping required on Windows.
 func Command(ctx context.Context, ide string, args []string) *exec.Cmd {
 	if runtime.GOOS == "windows" {
-		return exec.CommandContext(ctx, "cmd", append([]string{"/C", ide}, args...)...)
+		return exec.CommandContext(ctx, "cmd", append([]string{"/C", Binary(ide)}, args...)...)
 	}
-	return exec.CommandContext(ctx, ide, args...)
+	return exec.CommandContext(ctx, Binary(ide), args...)
 }
 
 // UserHomeDir returns the remote home directory for the given login user.
