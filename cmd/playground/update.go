@@ -113,7 +113,7 @@ func runUpdate(ctx context.Context, cli labcli.CLI, name string, opts *updateOpt
 		return fmt.Errorf("couldn't read manifest: %w", err)
 	}
 
-	if !manifest.Playground.HasAccessControl() && manifest.Playground.Access.Mode != "" {
+	if !manifest.Playground.HasAccessControl() && manifest.Playground.Access != nil && manifest.Playground.Access.Mode != "" {
 		switch manifest.Playground.Access.Mode {
 		case "private":
 			// For backward compatibility

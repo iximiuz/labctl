@@ -2,10 +2,13 @@ package ssh
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -142,23 +145,38 @@ func StartSSHSession(
 		}
 	}()
 
+	// The local listener starts accepting connections before the tunnel is
+	// ready end-to-end, so a successful dial doesn't mean the remote sshd is
+	// reachable yet - the first SSH handshakes may be dropped with a
+	// connection reset. Retry the dial and the handshake together, with a
+	// fresh connection per attempt, bailing out early on permanent errors
+	// (e.g. authentication failures).
 	var (
 		dial net.Dialer
 		conn net.Conn
+		sess *ssh.Session
 		addr = "localhost:" + localPort
 	)
 	if err := retry.UntilSuccess(ctx, func() error {
 		conn, err = dial.DialContext(ctx, "tcp", addr)
-		return err
+		if err != nil {
+			return fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
+		}
+
+		sess, err = ssh.NewSession(conn, user, cli.Config().SSHIdentityFile, forwardAgent)
+		if err != nil {
+			conn.Close()
+			err = fmt.Errorf("couldn't create SSH session: %w", err)
+			if isTransientSSHError(err) {
+				return err
+			}
+			return retry.Unrecoverable(err)
+		}
+
+		return nil
 	}, 60, 1*time.Second); err != nil {
 		cancel()
-		return nil, nil, fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)
-	}
-
-	sess, err := ssh.NewSession(conn, user, cli.Config().SSHIdentityFile, forwardAgent)
-	if err != nil {
-		cancel()
-		return nil, nil, fmt.Errorf("couldn't create SSH session: %w", err)
+		return nil, nil, err
 	}
 
 	runErrCh := make(chan error, 1)
@@ -175,4 +193,23 @@ func StartSSHSession(
 	}()
 
 	return sess, runErrCh, nil
+}
+
+// isTransientSSHError tells apart transport failures that are likely to go
+// away on retry (the tunnel isn't ready end-to-end yet, or the connection
+// was dropped mid-handshake) from permanent ones, such as authentication
+// failures, that will only fail again.
+func isTransientSSHError(err error) bool {
+	if strings.Contains(err.Error(), "unable to authenticate") {
+		return false
+	}
+
+	var netErr net.Error
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.As(err, &netErr)
 }
