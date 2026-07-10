@@ -131,26 +131,34 @@ func StartSSHSession(
 		return nil, nil, fmt.Errorf("couldn't start tunnel: %w", err)
 	}
 
-	localPort := portforward.RandomLocalPort()
-
 	ctx, cancel := context.WithCancel(ctx)
 
-	go func() {
-		status := tunnel.StartForwarding(ctx, portforward.ForwardingSpec{
-			LocalPort:  localPort,
-			RemotePort: "22",
-		})
-		if err := <-status; err != nil {
-			slog.Debug("Tunnel forwarding exited with error", "error", err.Error())
-		}
-	}()
+	// Bind the local side of the forwarding synchronously, letting the kernel
+	// pick a guaranteed-free port (a fixed random port used to collide with
+	// the ephemeral port range, leaving the forwarder dead and every dial
+	// below refused). Bind errors surface right here instead of manifesting
+	// as a minute of connection-refused dials.
+	localAddr, fwdDoneCh, err := tunnel.ListenAndForward(ctx, portforward.ForwardingSpec{
+		LocalPort:  "0",
+		RemotePort: "22",
+	})
+	if err != nil {
+		cancel()
+		return nil, nil, fmt.Errorf("couldn't start local port forwarding: %w", err)
+	}
+
+	_, localPort, err := net.SplitHostPort(localAddr.String())
+	if err != nil {
+		cancel()
+		return nil, nil, fmt.Errorf("couldn't parse forwarder's local address %q: %w", localAddr, err)
+	}
 
 	// The local listener starts accepting connections before the tunnel is
 	// ready end-to-end, so a successful dial doesn't mean the remote sshd is
 	// reachable yet - the first SSH handshakes may be dropped with a
 	// connection reset. Retry the dial and the handshake together, with a
 	// fresh connection per attempt, bailing out early on permanent errors
-	// (e.g. authentication failures).
+	// (e.g. authentication failures or the forwarder having stopped).
 	var (
 		dial net.Dialer
 		conn net.Conn
@@ -158,6 +166,15 @@ func StartSSHSession(
 		addr = "localhost:" + localPort
 	)
 	if err := retry.UntilSuccess(ctx, func() error {
+		select {
+		case fwdErr, ok := <-fwdDoneCh:
+			if ok && fwdErr != nil {
+				return retry.Unrecoverable(fmt.Errorf("local port forwarding stopped: %w", fwdErr))
+			}
+			return retry.Unrecoverable(errors.New("local port forwarding stopped"))
+		default:
+		}
+
 		conn, err = dial.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			return fmt.Errorf("couldn't connect to the forwarded SSH port %s: %w", addr, err)

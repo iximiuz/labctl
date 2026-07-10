@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -82,9 +83,48 @@ func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan er
 		return c.ListenAndServe()
 	}
 
-	c := client.NewClient(ctx, spec.LocalAddr(), spec.RemoteAddr(), wsUrl, errCh)
-	c.SetHeader("Cookie", cookie)
+	c := t.newLocalClient(ctx, spec, errCh)
 	return c.ListenAndServe()
+}
+
+func (t *Tunnel) newLocalClient(ctx context.Context, spec ForwardingSpec, errCh chan error) *client.Client {
+	wsUrl := "wss://" + strings.Split(t.url, "://")[1]
+
+	c := client.NewClient(ctx, spec.LocalAddr(), spec.RemoteAddr(), wsUrl, errCh)
+	c.SetHeader("Cookie", conductorSessionCookieName+"="+t.token)
+
+	return c
+}
+
+// ListenAndForward binds the local side of a "local" forwarding spec
+// synchronously and only then starts serving in the background. Unlike
+// StartForwarding, a failure to bind the local port is reported immediately
+// instead of surfacing later as connection-refused dials against a port
+// nobody listens on. spec.LocalPort may be "0" to let the kernel pick a
+// guaranteed-free port - the actually bound address is returned. The done
+// channel receives the terminal result (nil or error) when forwarding stops.
+func (t *Tunnel) ListenAndForward(ctx context.Context, spec ForwardingSpec) (net.Addr, <-chan error, error) {
+	if spec.Kind == "remote" {
+		return nil, nil, fmt.Errorf("ListenAndForward supports only local forwarding specs")
+	}
+
+	errCh := make(chan error, 100)
+	c := t.newLocalClient(ctx, spec, errCh)
+
+	if err := c.Listen(); err != nil {
+		return nil, nil, err
+	}
+
+	doneCh := make(chan error, 1)
+
+	go func() {
+		doneCh <- c.Serve()
+		close(doneCh)
+	}()
+
+	go drainForwardingErrors(ctx, errCh)
+
+	return c.Addr(), doneCh, nil
 }
 
 // StartForwarding starts port forwarding in the background and logs transient
@@ -99,23 +139,27 @@ func (t *Tunnel) StartForwarding(ctx context.Context, spec ForwardingSpec) <-cha
 		close(doneCh)
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case err, ok := <-errCh:
-				if !ok {
-					return
-				}
-				if err != nil {
-					slog.Debug("Tunnel forwarding error", "error", err.Error())
-				}
-			}
-		}
-	}()
+	go drainForwardingErrors(ctx, errCh)
 
 	return doneCh
+}
+
+// drainForwardingErrors logs per-connection forwarding errors until the
+// context is done or the channel is closed.
+func drainForwardingErrors(ctx context.Context, errCh <-chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err, ok := <-errCh:
+			if !ok {
+				return
+			}
+			if err != nil {
+				slog.Debug("Tunnel forwarding error", "error", err.Error())
+			}
+		}
+	}
 }
 
 func authenticate(ctx context.Context, url string, name string) (string, error) {
