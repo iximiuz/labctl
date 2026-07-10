@@ -68,6 +68,8 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/iximiuz/wsmux v0.0.3-0.20260413101655-6879942ed09d h1:7fQfUQyfEplgzjem5KgKqy5bwOJQhb/Gfs/IU1A+BpI=
 github.com/iximiuz/wsmux v0.0.3-0.20260413101655-6879942ed09d/go.mod h1:+IvyRBzS/8aTWqvWpqg/7mb3zGYgALzUpC6IuXb/vIo=
+github.com/iximiuz/wsmux v0.0.3-0.20260710113425-28e755833bdb h1:1VCEMWKzNf0xLRgYgGNQKQn4+iKg2nijSDgi7EoAB9g=
+github.com/iximiuz/wsmux v0.0.3-0.20260710113425-28e755833bdb/go.mod h1:+IvyRBzS/8aTWqvWpqg/7mb3zGYgALzUpC6IuXb/vIo=
 github.com/kr/pretty v0.3.0 h1:WgNl7dwNpEZ6jJ9k1snq4pZsg7DOEN8hP9Xw0Tsjwk0=
 github.com/kr/pretty v0.3.0/go.mod h1:640gp4NfQd8pI5XOwp5fnNeVWj67G7CFk/SaSQn7NBk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=

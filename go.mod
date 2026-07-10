@@ -11,7 +11,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/iximiuz/wsmux v0.0.3-0.20260413101655-6879942ed09d
+	github.com/iximiuz/wsmux v0.0.3-0.20260710113425-28e755833bdb
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
 	github.com/moby/term v0.5.2
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
