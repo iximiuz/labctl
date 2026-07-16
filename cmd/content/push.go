@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -252,7 +253,10 @@ func RunPushWatch(ctx context.Context, cli labcli.CLI, config PushConfig) error 
 		case <-watcher.Events:
 			state.localFiles, err = listContentFilesLocal(config.Dir)
 			if err != nil {
-				return fmt.Errorf("couldn't list local content files: %w", err)
+				// Transient listing errors (e.g., caused by short-lived tmp files)
+				// shouldn't kill the watch loop - the next event will retry.
+				cli.PrintErr("\n⚠️ WARNING: couldn't list local content files: %s\n\n", err)
+				continue
 			}
 
 			if err := reconcileContentState(ctx, cli, config, state); err != nil {
@@ -303,6 +307,13 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 			if filepath.Ext(file) == ".md" {
 				content, err := os.ReadFile(filepath.Join(state.dir, file))
 				if err != nil {
+					// The file may have been removed since the snapshot was taken
+					// (e.g., a short-lived tmp file) - the next reconciliation
+					// will pick up the deletion.
+					if errors.Is(err, fs.ErrNotExist) {
+						cli.PrintAux("Skipping %s - the file no longer exists locally\n", file)
+						return nil
+					}
 					return fmt.Errorf("couldn't read content markdown file %q: %w", file, err)
 				}
 
@@ -323,6 +334,10 @@ func reconcileContentState(ctx context.Context, cli labcli.CLI, config PushConfi
 					file,
 					filepath.Join(state.dir, file),
 				); err != nil {
+					if errors.Is(err, fs.ErrNotExist) {
+						cli.PrintAux("Skipping %s - the file no longer exists locally\n", file)
+						return nil
+					}
 					return fmt.Errorf("couldn't upload content file %q: %w", file, err)
 				}
 			}
@@ -399,6 +414,11 @@ func listContentFilesLocal(dir string) (map[string]string, error) {
 	for _, abspath := range files {
 		checksum, err := fileChecksum(abspath)
 		if err != nil {
+			// Short-lived files (e.g., editor tmp files) may disappear between
+			// the directory listing and the checksum computation - skip them.
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
 			return nil, err
 		}
 
@@ -424,6 +444,11 @@ func addWatchDirs(cli labcli.CLI, watcher *fsnotify.Watcher, state pushState) er
 	for _, dir := range dirs {
 		if !slices.Contains(watcher.WatchList(), dir) {
 			if err := watcher.Add(dir); err != nil {
+				// The directory may have been removed after it was listed
+				// (e.g., a short-lived tmp directory) - skip it.
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
 				return fmt.Errorf("couldn't add watch directory %s: %w", dir, err)
 			}
 		}
@@ -480,6 +505,11 @@ func listDirs(dir string) ([]string, error) {
 func listDirsRecursive(dir string, ruleSets []ignoreRuleSet) ([]string, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
+		// The directory may have been removed mid-walk (e.g., a short-lived
+		// tmp directory created by an editor) - treat it as empty.
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("couldn't list directory: %w", err)
 	}
 
@@ -527,6 +557,11 @@ func listFiles(dir string) ([]string, error) {
 func listFilesRecursive(dir string, ruleSets []ignoreRuleSet) ([]string, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
+		// The directory may have been removed mid-walk (e.g., a short-lived
+		// tmp directory created by an editor) - treat it as empty.
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("couldn't list directory: %w", err)
 	}
 

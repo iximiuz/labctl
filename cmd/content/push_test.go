@@ -1,6 +1,7 @@
 package content
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -317,4 +318,28 @@ func TestListDirsLabctlIgnore(t *testing.T) {
 	slices.Sort(expected)
 
 	assert.Equal(t, expected, relPaths)
+}
+
+func TestListContentFilesLocalSkipsVanishedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("content"), 0644))
+
+	// A dangling symlink is listed by the directory walk but fails to open with
+	// ErrNotExist - the same failure mode as a short-lived editor tmp file that
+	// disappears between the listing and the checksum computation.
+	require.NoError(t, os.Symlink(filepath.Join(tmpDir, "gone"), filepath.Join(tmpDir, "vanished.md.tmp.47383")))
+
+	result, err := listContentFilesLocal(tmpDir)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"index.md"}, slices.Collect(maps.Keys(result)))
+}
+
+func TestListFilesToleratesVanishedDir(t *testing.T) {
+	_, err := listFilesRecursive(filepath.Join(t.TempDir(), "gone"), nil)
+	assert.NoError(t, err)
+
+	_, err = listDirsRecursive(filepath.Join(t.TempDir(), "gone"), nil)
+	assert.NoError(t, err)
 }
