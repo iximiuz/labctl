@@ -15,6 +15,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 	cmd.AddCommand(
 		newLoginCommand(cli),
 		newLogoutCommand(cli),
+		newSigninURLCommand(cli),
 		newWhoAmICommand(cli),
 	)
 

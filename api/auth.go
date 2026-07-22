@@ -25,3 +25,12 @@ func (c *Client) GetMe(ctx context.Context) (*Me, error) {
 	var me Me
 	return &me, c.GetInto(ctx, "/auth/me", url.Values{"authenticate": []string{"true"}}, nil, &me)
 }
+
+type SigninURL struct {
+	URL string `json:"url" yaml:"url"`
+}
+
+func (c *Client) GenerateSigninURL(ctx context.Context) (*SigninURL, error) {
+	var s SigninURL
+	return &s, c.PostInto(ctx, "/auth/signin-url", nil, nil, nil, &s)
+}
