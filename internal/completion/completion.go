@@ -430,6 +430,7 @@ var contentKinds = []string{
 	"skill-path\tSkill path content",
 	"training\tTraining content",
 	"vendor\tVendor content",
+	"blog-post\tBlog post content",
 }
 
 // ContentArgs completes content kind (first arg) and authored content names (second arg).
@@ -531,6 +532,15 @@ func completeAuthoredContentNames(cmd *cobra.Command, cli labcli.CLI, kind strin
 		}
 		for _, v := range items {
 			completions = append(completions, fmt.Sprintf("%s\t%s", v.Name, v.Title))
+		}
+
+	case content.KindBlogPost:
+		items, err := cli.Client().ListAuthoredBlogPosts(cmd.Context())
+		if err != nil {
+			return nil, noFileComp
+		}
+		for _, b := range items {
+			completions = append(completions, fmt.Sprintf("%s\t%s", b.Name, b.Title))
 		}
 	}
 

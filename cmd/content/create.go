@@ -31,7 +31,7 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	var opts createOptions
 
 	cmd := &cobra.Command{
-		Use:               "create [flags] <challenge|tutorial|skill-path|course|training> <name>",
+		Use:               "create [flags] <challenge|tutorial|skill-path|course|training|blog-post> <name>",
 		Short:             "Create a new piece of content (visible only to the author)",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completion.ContentCreateArgs,
@@ -106,6 +106,9 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 	case content.KindVendor:
 		cont, err = createVendor(ctx, cli, opts)
+
+	case content.KindBlogPost:
+		cont, err = createBlogPost(ctx, cli, opts)
 	}
 
 	if err != nil {
@@ -236,6 +239,17 @@ func createVendor(ctx context.Context, cli labcli.CLI, opts *createOptions) (con
 	}
 
 	return v, nil
+}
+
+func createBlogPost(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	b, err := cli.Client().CreateBlogPost(ctx, api.CreateBlogPostRequest{
+		Name: opts.name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create blog post: %w", err)
+	}
+
+	return b, nil
 }
 
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {

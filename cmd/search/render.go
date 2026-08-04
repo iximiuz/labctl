@@ -23,6 +23,7 @@ var kindColors = map[string]string{
 	"vendor":     "244", // gray
 	"lesson":     "78",  // teal
 	"doc":        "110", // slate blue
+	"blog-post":  "173", // copper
 }
 
 const badgeWidth = 10 // widest kind label ("skill-path"/"playground") for aligned badges

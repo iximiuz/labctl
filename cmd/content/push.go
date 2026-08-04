@@ -64,7 +64,7 @@ func newPushCommand(cli labcli.CLI) *cobra.Command {
 	var opts pushOptions
 
 	cmd := &cobra.Command{
-		Use:               "push [flags] <challenge|tutorial|skill-path|course|training> <name>",
+		Use:               "push [flags] <challenge|tutorial|skill-path|course|training|blog-post> <name>",
 		Short:             `Push content files from the local directory to the remote content repository (the "inner author loop").`,
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completion.ContentArgs(cli),

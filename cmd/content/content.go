@@ -89,6 +89,9 @@ func getContent(
 	case content.KindVendor:
 		return cli.Client().GetVendor(ctx, name)
 
+	case content.KindBlogPost:
+		return cli.Client().GetBlogPost(ctx, name)
+
 	default:
 		return nil, fmt.Errorf("unknown content kind %q", kind)
 	}

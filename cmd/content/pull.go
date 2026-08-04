@@ -26,7 +26,7 @@ func newPullCommand(cli labcli.CLI) *cobra.Command {
 	var opts pullOptions
 
 	cmd := &cobra.Command{
-		Use:               "pull [flags] <challenge|tutorial|skill-path|course|training> <name>",
+		Use:               "pull [flags] <challenge|tutorial|skill-path|course|training|blog-post> <name>",
 		Short:             "Pull remote content files to the local directory for backup or editing",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completion.ContentArgs(cli),

@@ -17,6 +17,7 @@ import (
 // indexableKinds is the set of content kinds the search endpoint accepts, kept
 // in sync with sherlock/indexable.js (SHERLOCK_INDEXABLE_KINDS).
 var indexableKinds = []string{
+	"blog-post",
 	"challenge",
 	"course",
 	"doc",

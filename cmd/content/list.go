@@ -20,7 +20,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	var opts listOptions
 
 	cmd := &cobra.Command{
-		Use:     "list [--kind challenge|tutorial|skill-path|course|training]",
+		Use:     "list [--kind challenge|tutorial|skill-path|course|training|blog-post]",
 		Aliases: []string{"ls"},
 		Short:   "List authored content, possibly filtered by kind.",
 		Args:    cobra.NoArgs,
@@ -34,7 +34,7 @@ func newListCommand(cli labcli.CLI) *cobra.Command {
 	flags.Var(
 		&opts.kind,
 		"kind",
-		`Content kind to filter by - one of 'challenge', 'tutorial', 'skill-path', 'course', or 'training' (an empty string means all content types)`,
+		`Content kind to filter by - one of 'challenge', 'tutorial', 'skill-path', 'course', 'training', or 'blog-post' (an empty string means all content types)`,
 	)
 
 	return cmd
@@ -48,6 +48,7 @@ type AuthoredContent struct {
 	Courses    []api.Course    `json:"courses"    yaml:"courses"`
 	Trainings  []api.Training  `json:"trainings"  yaml:"trainings"`
 	Vendors    []api.Vendor    `json:"vendors"    yaml:"vendors"`
+	BlogPosts  []api.BlogPost  `json:"blog-posts" yaml:"blog-posts"`
 }
 
 func runListContent(ctx context.Context, cli labcli.CLI, opts *listOptions) error {
@@ -114,6 +115,15 @@ func runListContent(ctx context.Context, cli labcli.CLI, opts *listOptions) erro
 		}
 
 		authored.Vendors = vendors
+	}
+
+	if opts.kind == "" || opts.kind == content.KindBlogPost {
+		blogPosts, err := cli.Client().ListAuthoredBlogPosts(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot list authored blog posts: %w", err)
+		}
+
+		authored.BlogPosts = blogPosts
 	}
 
 	if err := yaml.NewEncoder(cli.OutputStream()).Encode(authored); err != nil {
