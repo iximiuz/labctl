@@ -23,6 +23,8 @@ import (
 
 const startChallengeTimeout = 10 * time.Minute
 
+const confirmCompletionTimeout = 60 * time.Second
+
 type startOptions struct {
 	challenge string
 	machine   string
@@ -275,18 +277,22 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 				}
 
 			case EventChallengeCompletable:
-				if _, err := cli.Client().CompleteChallenge(ctx, chal.Name); err != nil {
-					slog.Debug("Error completing the challenge: " + err.Error())
-					go func() {
-						time.Sleep(5 * time.Second) // retry in 5 seconds without blocking the event loop
-						eventCh <- EventChallengeCompletable
-					}()
-				} else {
-					// cli.PrintAux("\033c\r") // Reset terminal
-					cli.PrintAux("\r\n\r\n")
-					cli.PrintAux("**********************************\r\n")
-					cli.PrintAux("** Yay! Challenge completed! 🎉 **\r\n")
-					cli.PrintAux("**********************************\r\n")
+				// All tasks passed in the playground - the server records the
+				// completion on its own; confirm it actually did before
+				// celebrating (and before EventChallengeCompleted stops the play).
+				cli.PrintAux("\r\n\r\nAll tasks completed! Waiting for the completion to be recorded...\r\n")
+
+				go func() {
+					if err := waitChallengeSolved(ctx, cli, chal.Name, confirmCompletionTimeout); err != nil {
+						cli.PrintAux("\r\nWARNING: %v\r\n", err)
+						cli.PrintAux("Please check the challenge page to confirm your solution was recorded: %s\r\n", chal.PageURL)
+					} else {
+						// cli.PrintAux("\033c\r") // Reset terminal
+						cli.PrintAux("\r\n\r\n")
+						cli.PrintAux("**********************************\r\n")
+						cli.PrintAux("** Yay! Challenge completed! 🎉 **\r\n")
+						cli.PrintAux("**********************************\r\n")
+					}
 
 					if opts.keepAlive {
 						cli.PrintAux("\r\n\r\n")
@@ -295,7 +301,7 @@ func runStartChallenge(ctx context.Context, cli labcli.CLI, opts *startOptions) 
 					}
 
 					eventCh <- EventChallengeCompleted
-				}
+				}()
 
 			case EventChallengeCompleted, EventChallengeFailed:
 				if chal.Play.IsFailed() {

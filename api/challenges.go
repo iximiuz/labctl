@@ -24,6 +24,9 @@ type Challenge struct {
 	AttemptCount    int `json:"attemptCount" yaml:"attemptCount"`
 	CompletionCount int `json:"completionCount" yaml:"completionCount"`
 
+	Status      string `json:"status,omitempty" yaml:"status,omitempty"`
+	CompletedAt string `json:"completedAt,omitempty" yaml:"completedAt,omitempty"`
+
 	Play *Play `json:"play,omitempty" yaml:"play,omitempty"`
 
 	Tasks map[string]PlayTask `json:"tasks,omitempty" yaml:"tasks,omitempty"`
@@ -123,16 +126,6 @@ func (c *Client) StartChallenge(ctx context.Context, name string, opts StartChal
 	}
 
 	body, err := toJSONBody(req)
-	if err != nil {
-		return nil, err
-	}
-
-	var ch Challenge
-	return &ch, c.PatchInto(ctx, "/challenges/"+name, nil, nil, body, &ch)
-}
-
-func (c *Client) CompleteChallenge(ctx context.Context, name string) (*Challenge, error) {
-	body, err := toJSONBody(map[string]any{"completed": true})
 	if err != nil {
 		return nil, err
 	}

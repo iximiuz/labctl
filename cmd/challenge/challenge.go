@@ -17,7 +17,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newCatalogCommand(cli),
 		newListCommand(cli),
 		newStartCommand(cli),
-		newCompleteCommand(cli),
+		newWaitCommand(cli),
 		newStopCommand(cli),
 	)
 
