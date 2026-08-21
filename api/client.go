@@ -23,6 +23,7 @@ var (
 	ErrGatewayTimeout         = errors.New("gateway timeout")
 	ErrNotFound               = errors.New("not found")
 	ErrRateLimitExceeded      = errors.New("rate limit exceeded")
+	ErrServiceUnavailable     = errors.New("service unavailable")
 )
 
 func isAuthenticationRequiredResponse(resp *http.Response) bool {
@@ -384,6 +385,11 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 
 			case http.StatusGatewayTimeout:
 				return nil, ErrGatewayTimeout
+
+			case http.StatusServiceUnavailable:
+				// "Not yet" rather than "no" - the server says so explicitly
+				// (e.g. a machine that's still booting), so it's retryable.
+				return nil, ErrServiceUnavailable
 
 			case http.StatusTooManyRequests:
 				if reset, e := strconv.ParseInt(resp.Header.Get("X-Ratelimit-Reset"), 10, 0); e == nil && reset > 0 {

@@ -77,6 +77,10 @@ type playStatusView struct {
 type machineStatusView struct {
 	Name  string `json:"name" yaml:"name"`
 	State string `json:"state" yaml:"state"`
+	// Ready is a stronger statement than a RUNNING state: the machine actually
+	// accepts SSH connections, so it can serve tunnels and run tasks. Scripts
+	// gate on this before driving a freshly started playground.
+	Ready bool `json:"ready" yaml:"ready"`
 }
 
 type taskStatusView struct {
@@ -94,6 +98,7 @@ func newPlayStatusView(play *api.Play) playStatusView {
 		machines = append(machines, machineStatusView{
 			Name:  m.Name,
 			State: string(play.MachineState(m.Name)),
+			Ready: play.MachineReady(m.Name),
 		})
 	}
 
@@ -155,7 +160,11 @@ func printStatusTable(w io.Writer, view playStatusView) {
 
 	var machines []string
 	for _, m := range view.Machines {
-		machines = append(machines, fmt.Sprintf("%s=%s", m.Name, m.State))
+		entry := fmt.Sprintf("%s=%s", m.Name, m.State)
+		if m.Ready {
+			entry += " (ready)"
+		}
+		machines = append(machines, entry)
 	}
 
 	tasks := fmt.Sprintf("%d/%d completed", view.Tasks.Completed, view.Tasks.Total)

@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
+
 	"github.com/iximiuz/wsmux/pkg/client"
 
 	"github.com/iximiuz/labctl/api"
-	"github.com/iximiuz/labctl/internal/retry"
+	"github.com/iximiuz/labctl/internal/labcli"
 	"github.com/iximiuz/labctl/internal/ssh"
 )
 
@@ -25,12 +27,35 @@ type TunnelOptions struct {
 	Machine         string
 	SSHUser         string
 	SSHIdentityFile string
+
+	// Out, when set, reports progress while the tunnel is being established.
+	// A cold-booting machine can take minutes, and silence for that long is
+	// indistinguishable from a hang.
+	Out labcli.Outputer
 }
 
 type Tunnel struct {
 	url   string
 	token string
 }
+
+const (
+	// tunnelStartTimeout bounds the wait for a tunnel. Most machines are ready
+	// within seconds, but a cold-booting one can take up to ~20 minutes, and
+	// giving up on it early is what makes `labctl ssh` feel broken.
+	tunnelStartTimeout = 25 * time.Minute
+
+	// authenticateTimeout bounds the token exchange that follows. The tunnel
+	// already exists at that point, so anything beyond a transient blip here is
+	// a real failure, not a slow boot.
+	authenticateTimeout = 1 * time.Minute
+
+	// The server holds the request while the machine boots, so progress has to
+	// be reported on a timer rather than per attempt - otherwise the first sign
+	// of life would come a full server-side wait in.
+	progressAfter = 10 * time.Second
+	progressEvery = 30 * time.Second
+)
 
 func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*Tunnel, error) {
 	var (
@@ -44,26 +69,35 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 		}
 	}
 
-	var resp *api.StartTunnelResponse
-	if err := retry.UntilSuccess(ctx, func() error {
-		var err error
-		resp, err = client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
+	stopProgress := opts.reportProgress(ctx)
+
+	// The tunnel endpoint itself absorbs the wait: it holds the request while
+	// the machine comes up and only answers 503 once its own budget runs out,
+	// so the common case (a machine ready within seconds) costs exactly one
+	// request and no control-plane traffic. Only the slow-boot tail retries,
+	// which keeps a 20-minute boot at tens of requests rather than the hundreds
+	// a fixed interval would cost.
+	resp, err := backoff.Retry(ctx, func() (*api.StartTunnelResponse, error) {
+		return client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
 			Machine:          opts.Machine,
 			Access:           api.PortAccessPrivate,
 			GenerateLoginURL: true,
 			SSHUser:          opts.SSHUser,
 			SSHPubKey:        sshPubKey,
 		})
-		return err
-	}, 10, 1*time.Second); err != nil {
+	}, retryOptions(tunnelStartTimeout)...)
+
+	if waited := stopProgress(); waited && err == nil {
+		opts.Out.PrintAux("Machine is ready.\n")
+	}
+	if err != nil {
 		return nil, fmt.Errorf("client.StartTunnel(): %w", err)
 	}
 
-	var token string
-	if err := retry.UntilSuccess(ctx, func() error {
-		token, err = authenticate(ctx, resp.LoginURL, conductorSessionCookieName)
-		return err
-	}, 10, 1*time.Second); err != nil {
+	token, err := backoff.Retry(ctx, func() (string, error) {
+		return authenticate(ctx, resp.LoginURL, conductorSessionCookieName)
+	}, retryOptions(authenticateTimeout)...)
+	if err != nil {
 		return nil, fmt.Errorf("authenticate(): %w", err)
 	}
 
@@ -71,6 +105,77 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 		url:   resp.URL,
 		token: token,
 	}, nil
+}
+
+// reportProgress starts printing "still waiting" lines once the tunnel has been
+// pending for progressAfter, and keeps them coming every progressEvery. The
+// returned stop function ends the reporting and says whether anything was
+// printed, so the caller can close the sequence off. Reporting on a timer (not
+// per attempt) is what keeps the feedback honest: the server holds each request
+// for up to a minute, so attempts are far too coarse to show liveness.
+func (o TunnelOptions) reportProgress(ctx context.Context) (stop func() (printed bool)) {
+	if o.Out == nil {
+		return func() bool { return false }
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
+	printed := false
+
+	go func() {
+		defer close(done)
+
+		t0 := time.Now()
+		timer := time.NewTimer(progressAfter)
+		defer timer.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+
+			case <-timer.C:
+				o.Out.PrintAux("Waiting for %s to become ready... (%s)\n",
+					o.machineLabel(), time.Since(t0).Round(time.Second))
+				printed = true
+				timer.Reset(progressEvery)
+			}
+		}
+	}()
+
+	return func() bool {
+		cancel()
+		<-done // the goroutine owns `printed` until it returns
+		return printed
+	}
+}
+
+// retryOptions is the single retry policy behind tunnel setup. The server
+// already spends most of a minute waiting before it answers, so these intervals
+// are only the gap on top of that - keeping them short costs nothing and adds
+// no idle time to a boot that's about to finish. A play that's gone answers
+// 404/410, which the client treats as permanent and stops on.
+func retryOptions(maxElapsed time.Duration) []backoff.RetryOption {
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = time.Second
+	b.MaxInterval = 5 * time.Second
+	b.RandomizationFactor = 0.3
+
+	return []backoff.RetryOption{
+		backoff.WithBackOff(b),
+		backoff.WithMaxElapsedTime(maxElapsed),
+	}
+}
+
+// machineLabel names the machine being tunneled into for progress messages. An
+// empty name means the server picks the play's first machine, which the client
+// can't name yet without asking for it.
+func (o TunnelOptions) machineLabel() string {
+	if o.Machine == "" {
+		return "the machine"
+	}
+	return "machine " + o.Machine
 }
 
 func (t *Tunnel) Forward(ctx context.Context, spec ForwardingSpec, errCh chan error) error {

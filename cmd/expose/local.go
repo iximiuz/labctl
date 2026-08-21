@@ -202,6 +202,7 @@ func runLocal(ctx context.Context, cli labcli.CLI, opts *localOptions) error {
 	tunnel, err := portforward.StartTunnel(ctx, cli.Client(), portforward.TunnelOptions{
 		PlayID:  p.ID,
 		Machine: opts.machine,
+		Out:     cli,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start tunnel: %w", err)

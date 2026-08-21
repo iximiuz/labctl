@@ -51,6 +51,7 @@ func RestoreSavedForwards(
 				tunnel, err := StartTunnel(ctx, client, TunnelOptions{
 					PlayID:  playID,
 					Machine: machine,
+					Out:     out,
 				})
 				if err != nil {
 					return fmt.Errorf("couldn't start tunnel for machine %s: %w", machine, err)

@@ -54,4 +54,10 @@ type PlayTaskDetails struct {
 	// DataPlaneOnly flags tasks reported by the conductor (data plane) that
 	// aren't present in the control-plane task list.
 	DataPlaneOnly bool `json:"dataPlaneOnly,omitempty" yaml:"dataPlaneOnly,omitempty"`
+
+	// ControlPlaneOnly is the mirror image: the conductor didn't report this
+	// task, so the row is the cached control-plane view rather than the live
+	// one. Every row of a still-booting play carries it, since there's no
+	// examiner to ask yet.
+	ControlPlaneOnly bool `json:"controlPlaneOnly,omitempty" yaml:"controlPlaneOnly,omitempty"`
 }

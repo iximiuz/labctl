@@ -136,6 +136,7 @@ func RunSSHProxy(ctx context.Context, cli labcli.CLI, opts *Options) error {
 		Machine:         opts.Machine,
 		SSHUser:         opts.User,
 		SSHIdentityFile: cli.Config().SSHIdentityFile,
+		Out:             cli,
 	})
 	if err != nil {
 		return fmt.Errorf("couldn't start tunnel: %w", err)

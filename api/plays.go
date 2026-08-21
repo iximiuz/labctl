@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -602,36 +601,20 @@ type StartTunnelResponse struct {
 	LoginURL string `json:"loginUrl"`
 }
 
+// StartTunnel asks the server for a tunnel into the machine. It does not retry:
+// waiting out a machine that isn't up yet is the caller's job (see
+// portforward.StartTunnel), and a retry loop here only multiplied with the
+// caller's own.
 func (c *Client) StartTunnel(ctx context.Context, id string, req StartTunnelRequest) (*StartTunnelResponse, error) {
-	// A hacky workaround for the fact that the CLI currently
-	// doesn't check for playground readiness before establishing
-	// a tunnel.
-	backoff := 200 * time.Millisecond
-	for attempt := range 5 {
-		body, err := toJSONBody(req)
-		if err != nil {
-			return nil, err
-		}
-
-		var resp StartTunnelResponse
-		err = c.PostInto(ctx, "/plays/"+id+"/tunnels", nil, nil, body, &resp)
-		if err == nil {
-			return &resp, nil
-		}
-		if !errors.Is(err, ErrGatewayTimeout) {
-			return nil, err
-		}
-		if attempt == 2 {
-			return nil, fmt.Errorf("max retries exceeded: %w", err)
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(backoff):
-		}
-		backoff *= 2
+	body, err := toJSONBody(req)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, ctx.Err()
+	var resp StartTunnelResponse
+	if err := c.PostInto(ctx, "/plays/"+id+"/tunnels", nil, nil, body, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
 }

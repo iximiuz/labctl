@@ -126,6 +126,7 @@ func StartSSHSession(
 		Machine:         machine,
 		SSHUser:         user,
 		SSHIdentityFile: cli.Config().SSHIdentityFile,
+		Out:             cli,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("couldn't start tunnel: %w", err)
