@@ -49,6 +49,18 @@ The command below will open a browser page with a one-time use URL.
 labctl auth login
 ```
 
+If you need to connect an AI tool to the [Labs MCP server](https://labs.iximiuz.com/labs-mcp)
+from a remote VM or sandbox (where the browser-based OAuth flow isn't an option),
+mint a long-lived access token instead:
+
+```sh
+labctl auth token
+```
+
+The token is printed once and can be revoked at any time in Account -> Connected apps.
+Use `labctl auth token -q` to print just the token (handy for command substitution),
+`--scope` to narrow down the granted permissions, and `--expires-in` to set the lifetime in days.
+
 ### Starting playgrounds
 
 Once you have authenticated, you can start a new playground with a simple:

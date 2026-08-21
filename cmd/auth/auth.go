@@ -8,7 +8,7 @@ import (
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "auth <login|logout|whoami>",
+		Use:   "auth <login|logout|token|whoami>",
 		Short: "Authenticate the current CLI session with iximiuz Labs",
 	}
 
@@ -16,6 +16,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newLoginCommand(cli),
 		newLogoutCommand(cli),
 		newSigninURLCommand(cli),
+		newTokenCommand(cli),
 		newWhoAmICommand(cli),
 	)
 

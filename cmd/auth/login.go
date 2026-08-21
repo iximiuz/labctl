@@ -163,6 +163,7 @@ func runLogin(ctx context.Context, cli labcli.CLI, opts loginOptions) error {
 			}
 
 			cli.PrintAux("\nSession authorized. You can now use labctl commands.\n")
+			cli.PrintAux("Connecting an AI tool to Labs MCP from this machine? Run 'labctl auth token' to mint an access token.\n")
 			if opts.sshPassphrase != "" {
 				cli.PrintAux("\n")
 				cli.PrintAux("\n")
