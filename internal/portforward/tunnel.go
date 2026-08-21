@@ -158,14 +158,19 @@ func (o TunnelOptions) reportProgress(ctx context.Context) (stop func() (printed
 }
 
 // retryableTunnelError reports whether a failed tunnel start is worth another
-// attempt. Only "not yet" answers are: the machine is still coming up, or the
-// hop in front of it timed out. Everything else - a play that's gone, a machine
-// whose agents have had their full budget and aren't coming up, a rejected
-// request - is the server's final answer, and the client must stop on it. The
-// api package classifies these once, but flattens them back to plain errors on
-// the way out, so the decision has to be re-made here.
+// attempt. Only "not yet" answers are: the machine is still coming up, the hop
+// in front of it timed out, or we're being rate limited. Everything else - a
+// play that's gone, a machine whose agents have had their full budget and aren't
+// coming up, a rejected request - is the server's final answer, and the client
+// must stop on it. The api package classifies these once, but flattens them
+// back to plain errors on the way out, so the decision has to be re-made here.
 func retryableTunnelError(err error) bool {
-	return errors.Is(err, api.ErrServiceUnavailable) || errors.Is(err, api.ErrGatewayTimeout)
+	var retryAfter *backoff.RetryAfterError
+
+	return errors.Is(err, api.ErrServiceUnavailable) ||
+		errors.Is(err, api.ErrGatewayTimeout) ||
+		errors.Is(err, api.ErrRateLimitExceeded) ||
+		errors.As(err, &retryAfter)
 }
 
 // retryOptions is the single retry policy behind tunnel setup. The server
