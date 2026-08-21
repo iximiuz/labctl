@@ -2,6 +2,7 @@ package portforward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -78,13 +79,18 @@ func StartTunnel(ctx context.Context, client *api.Client, opts TunnelOptions) (*
 	// which keeps a 20-minute boot at tens of requests rather than the hundreds
 	// a fixed interval would cost.
 	resp, err := backoff.Retry(ctx, func() (*api.StartTunnelResponse, error) {
-		return client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
+		resp, err := client.StartTunnel(ctx, opts.PlayID, api.StartTunnelRequest{
 			Machine:          opts.Machine,
 			Access:           api.PortAccessPrivate,
 			GenerateLoginURL: true,
 			SSHUser:          opts.SSHUser,
 			SSHPubKey:        sshPubKey,
 		})
+		if err != nil && !retryableTunnelError(err) {
+			return nil, backoff.Permanent(err)
+		}
+
+		return resp, err
 	}, retryOptions(tunnelStartTimeout)...)
 
 	if waited := stopProgress(); waited && err == nil {
@@ -151,11 +157,21 @@ func (o TunnelOptions) reportProgress(ctx context.Context) (stop func() (printed
 	}
 }
 
+// retryableTunnelError reports whether a failed tunnel start is worth another
+// attempt. Only "not yet" answers are: the machine is still coming up, or the
+// hop in front of it timed out. Everything else - a play that's gone, a machine
+// whose agents have had their full budget and aren't coming up, a rejected
+// request - is the server's final answer, and the client must stop on it. The
+// api package classifies these once, but flattens them back to plain errors on
+// the way out, so the decision has to be re-made here.
+func retryableTunnelError(err error) bool {
+	return errors.Is(err, api.ErrServiceUnavailable) || errors.Is(err, api.ErrGatewayTimeout)
+}
+
 // retryOptions is the single retry policy behind tunnel setup. The server
 // already spends most of a minute waiting before it answers, so these intervals
 // are only the gap on top of that - keeping them short costs nothing and adds
-// no idle time to a boot that's about to finish. A play that's gone answers
-// 404/410, which the client treats as permanent and stops on.
+// no idle time to a boot that's about to finish.
 func retryOptions(maxElapsed time.Duration) []backoff.RetryOption {
 	b := backoff.NewExponentialBackOff()
 	b.InitialInterval = time.Second
