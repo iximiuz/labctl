@@ -307,6 +307,34 @@ func StartedTutorialNames(cli labcli.CLI) CompletionFunc {
 	}
 }
 
+// --- Shell gym completions ---
+
+// ShellGymNames completes all shell gym names from the catalog.
+// Use for: shell-gym start, shell-gym stop.
+func ShellGymNames(cli labcli.CLI) CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, noFileComp
+		}
+
+		if cli.Client() == nil {
+			return nil, noFileComp
+		}
+
+		shellGyms, err := cli.Client().ListShellGyms(cmd.Context())
+		if err != nil {
+			return nil, noFileComp
+		}
+
+		var completions []string
+		for _, g := range shellGyms {
+			completions = append(completions, fmt.Sprintf("%s\t%s", g.Name, g.Title))
+		}
+
+		return completions, noFileComp
+	}
+}
+
 // --- Course completions ---
 
 // CourseArgs completes course names (first arg) and lesson names (second arg) from the full catalog.
@@ -431,6 +459,7 @@ var contentKinds = []string{
 	"training\tTraining content",
 	"vendor\tVendor content",
 	"blog-post\tBlog post content",
+	"shell-gym\tShell gym content",
 }
 
 // ContentArgs completes content kind (first arg) and authored content names (second arg).
@@ -541,6 +570,15 @@ func completeAuthoredContentNames(cmd *cobra.Command, cli labcli.CLI, kind strin
 		}
 		for _, b := range items {
 			completions = append(completions, fmt.Sprintf("%s\t%s", b.Name, b.Title))
+		}
+
+	case content.KindShellGym:
+		items, err := cli.Client().ListAuthoredShellGyms(cmd.Context())
+		if err != nil {
+			return nil, noFileComp
+		}
+		for _, g := range items {
+			completions = append(completions, fmt.Sprintf("%s\t%s", g.Name, g.Title))
 		}
 	}
 

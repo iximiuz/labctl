@@ -24,6 +24,7 @@ var kindColors = map[string]string{
 	"lesson":     "78",  // teal
 	"doc":        "110", // slate blue
 	"blog-post":  "173", // copper
+	"shell-gym":  "84",  // spring green
 }
 
 const badgeWidth = 10 // widest kind label ("skill-path"/"playground") for aligned badges

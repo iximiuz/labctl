@@ -92,6 +92,9 @@ func getContent(
 	case content.KindBlogPost:
 		return cli.Client().GetBlogPost(ctx, name)
 
+	case content.KindShellGym:
+		return cli.Client().GetShellGym(ctx, name)
+
 	default:
 		return nil, fmt.Errorf("unknown content kind %q", kind)
 	}

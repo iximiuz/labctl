@@ -31,7 +31,7 @@ func newCreateCommand(cli labcli.CLI) *cobra.Command {
 	var opts createOptions
 
 	cmd := &cobra.Command{
-		Use:               "create [flags] <challenge|tutorial|skill-path|course|training|blog-post> <name>",
+		Use:               "create [flags] <challenge|tutorial|skill-path|course|training|blog-post|shell-gym> <name>",
 		Short:             "Create a new piece of content (visible only to the author)",
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completion.ContentCreateArgs,
@@ -109,6 +109,9 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 
 	case content.KindBlogPost:
 		cont, err = createBlogPost(ctx, cli, opts)
+
+	case content.KindShellGym:
+		cont, err = createShellGym(ctx, cli, opts)
 	}
 
 	if err != nil {
@@ -250,6 +253,17 @@ func createBlogPost(ctx context.Context, cli labcli.CLI, opts *createOptions) (c
 	}
 
 	return b, nil
+}
+
+func createShellGym(ctx context.Context, cli labcli.CLI, opts *createOptions) (content.Content, error) {
+	g, err := cli.Client().CreateShellGym(ctx, api.CreateShellGymRequest{
+		Name: opts.name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create shell gym: %w", err)
+	}
+
+	return g, nil
 }
 
 func hasAuthorProfile(ctx context.Context, cli labcli.CLI) (bool, error) {

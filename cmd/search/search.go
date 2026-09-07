@@ -24,6 +24,7 @@ var indexableKinds = []string{
 	"lesson",
 	"playground",
 	"roadmap",
+	"shell-gym",
 	"skill-path",
 	"tutorial",
 	"vendor",

@@ -14,6 +14,7 @@ const (
 	KindPlayground ContentKind = "playground"
 	KindVendor     ContentKind = "vendor"
 	KindBlogPost   ContentKind = "blog-post"
+	KindShellGym   ContentKind = "shell-gym"
 )
 
 func (k *ContentKind) Set(v string) error {
@@ -36,6 +37,8 @@ func (k *ContentKind) Set(v string) error {
 		*k = KindVendor
 	case string(KindBlogPost):
 		*k = KindBlogPost
+	case string(KindShellGym):
+		*k = KindShellGym
 	default:
 		return fmt.Errorf("unknown content kind: %s", v)
 	}
@@ -67,6 +70,8 @@ func (k *ContentKind) Plural() string {
 		return "vendors"
 	case KindBlogPost:
 		return "blog-posts"
+	case KindShellGym:
+		return "shell-gyms"
 	default:
 		panic(fmt.Sprintf("unknown content kind: %s", k))
 	}

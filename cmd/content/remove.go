@@ -22,7 +22,7 @@ func newRemoveCommand(cli labcli.CLI) *cobra.Command {
 	var opts removeOptions
 
 	cmd := &cobra.Command{
-		Use:               "remove [flags] <challenge|tutorial|skill-path|course|training|blog-post> <name>",
+		Use:               "remove [flags] <challenge|tutorial|skill-path|course|training|blog-post|shell-gym> <name>",
 		Aliases:           []string{"rm"},
 		Short:             "Remove a piece of content you authored.",
 		Args:              cobra.ExactArgs(2),
@@ -86,6 +86,9 @@ func runRemoveContent(ctx context.Context, cli labcli.CLI, opts *removeOptions) 
 
 	case content.KindBlogPost:
 		return cli.Client().DeleteBlogPost(ctx, opts.name)
+
+	case content.KindShellGym:
+		return cli.Client().DeleteShellGym(ctx, opts.name)
 
 	default:
 		return fmt.Errorf("unknown content kind %q", opts.kind)
