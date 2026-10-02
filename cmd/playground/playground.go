@@ -1,9 +1,11 @@
 package playground
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -38,6 +40,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newTasksCommand(cli),
 		newWaitCommand(cli),
 		newStatusCommand(cli),
+		newOpenCommand(cli),
 	)
 
 	return cmd
@@ -69,4 +72,25 @@ func readManifestFile(filePath string) (*api.PlaygroundManifest, error) {
 	}
 
 	return &manifest, nil
+}
+
+// findPlayByTitle looks up the play whose title starts with the given prefix.
+// It fails if no play matches or if the prefix is ambiguous.
+func findPlayByTitle(plays []*api.Play, title string) (*api.Play, error) {
+	var matches []*api.Play
+	for _, p := range plays {
+		if p.Title != "" && strings.HasPrefix(p.Title, title) {
+			matches = append(matches, p)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil, errors.New("could not find a play with the given title")
+	}
+
+	if len(matches) > 1 {
+		return nil, errors.New("ambiguous title, please use the full title of a play or a longer prefix")
+	}
+
+	return matches[0], nil
 }

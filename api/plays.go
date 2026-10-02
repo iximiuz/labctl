@@ -422,6 +422,37 @@ func (c *Client) ListPlays(ctx context.Context, listPlaysQueryParams ListPlaysQu
 	return plays, c.GetInto(ctx, "/plays", query, nil, &plays)
 }
 
+// ListAllPlays returns the recent plays merged with the persistent ones,
+// deduplicated by ID. Stopped playgrounds are persistent plays, which the API
+// only returns when queried with Persistent: true, so callers that need to
+// see both running and stopped playgrounds should use this method.
+func (c *Client) ListAllPlays(ctx context.Context) ([]*Play, error) {
+	recent, err := c.ListPlays(ctx, ListPlaysQueryParams{})
+	if err != nil {
+		return nil, err
+	}
+
+	persistent, err := c.ListPlays(ctx, ListPlaysQueryParams{Persistent: true})
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool, len(recent))
+	plays := make([]*Play, 0, len(recent)+len(persistent))
+	for _, p := range recent {
+		seen[p.ID] = true
+		plays = append(plays, p)
+	}
+	for _, p := range persistent {
+		if !seen[p.ID] {
+			seen[p.ID] = true
+			plays = append(plays, p)
+		}
+	}
+
+	return plays, nil
+}
+
 func (c *Client) SetPlayTitle(ctx context.Context, id string, title string) (*Play, error) {
 	body, err := toJSONBody(map[string]any{"action": "set_title", "title": title})
 	if err != nil {

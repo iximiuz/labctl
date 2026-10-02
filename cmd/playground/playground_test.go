@@ -392,3 +392,60 @@ func createTempManifest(t *testing.T, content string) string {
 
 	return tmpFile
 }
+
+func TestFindPlayByTitle(t *testing.T) {
+	plays := []*api.Play{
+		{ID: "id-1", Title: "web-app"},
+		{ID: "id-2", Title: "web-app-staging"},
+		{ID: "id-3", Title: "database"},
+		{ID: "id-4", Title: ""},
+	}
+
+	tests := []struct {
+		name    string
+		title   string
+		wantID  string
+		wantErr string
+	}{
+		{name: "exact unique match", title: "database", wantID: "id-3"},
+		{name: "unique prefix", title: "data", wantID: "id-3"},
+		{name: "ambiguous prefix", title: "web", wantErr: "ambiguous title"},
+		{name: "exact match shadowed by longer title", title: "web-app", wantErr: "ambiguous title"},
+		{name: "longer prefix disambiguates", title: "web-app-", wantID: "id-2"},
+		{name: "no match", title: "nope", wantErr: "could not find a play"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			play, err := findPlayByTitle(plays, tt.title)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if play.ID != tt.wantID {
+				t.Errorf("expected play %q, got %q", tt.wantID, play.ID)
+			}
+		})
+	}
+}
+
+func TestFindPlayByTitle_SkipsUntitledPlays(t *testing.T) {
+	plays := []*api.Play{
+		{ID: "untitled", Title: ""},
+		{ID: "titled", Title: "only-one"},
+	}
+
+	// An empty prefix matches every title, but untitled plays must not count.
+	play, err := findPlayByTitle(plays, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if play.ID != "titled" {
+		t.Errorf("expected play %q, got %q", "titled", play.ID)
+	}
+}

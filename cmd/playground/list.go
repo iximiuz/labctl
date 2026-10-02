@@ -84,23 +84,9 @@ func runListPlays(ctx context.Context, cli labcli.CLI, opts *listOptions) error 
 		return err
 	}
 
-	recentPlays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{})
+	plays, err := cli.Client().ListAllPlays(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't list playgrounds: %w", err)
-	}
-
-	persistentPlays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{Persistent: true})
-	if err != nil {
-		return fmt.Errorf("couldn't list stopped playgrounds: %w", err)
-	}
-
-	plays := append([]*api.Play{}, recentPlays...)
-	for _, play := range persistentPlays {
-		if !slices.ContainsFunc(plays, func(p *api.Play) bool {
-			return p.ID == play.ID
-		}) {
-			plays = append(plays, play)
-		}
 	}
 	slices.SortFunc(plays, func(a, b *api.Play) int {
 		return strings.Compare(b.UpdatedAt, a.UpdatedAt)

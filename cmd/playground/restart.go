@@ -2,10 +2,8 @@ package playground
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -128,28 +126,18 @@ func runRestartPlayground(ctx context.Context, cli labcli.CLI, opts *restartOpti
 
 	// If the provided identifier is not a play ID, search for
 	// a play with matching title and, if found one, restart it.
-	var matches []*api.Play
-
 	cli.PrintAux("Searching for a playground with title: %s\n", opts.playId)
 	plays, err := cli.Client().ListPlays(ctx, api.ListPlaysQueryParams{Persistent: true})
 	if err != nil {
 		return fmt.Errorf("couldn't get a list of playgrounds: %w", err)
 	}
-	for _, p := range plays {
-		if strings.HasPrefix(p.Title, opts.playId) {
-			matches = append(matches, p)
-		}
+
+	play, err := findPlayByTitle(plays, opts.playId)
+	if err != nil {
+		return err
 	}
 
-	if len(matches) == 0 {
-		return errors.New("could not find a play with the given title")
-	}
-
-	if len(matches) > 1 {
-		return errors.New("ambiguous title, please use the full title of a play or a longer prefix")
-	}
-
-	opts.playId = matches[0].ID
+	opts.playId = play.ID
 	return restartPlay(ctx, cli, opts)
 }
 

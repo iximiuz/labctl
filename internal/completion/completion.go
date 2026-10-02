@@ -37,45 +37,60 @@ func StoppedPlays(cli labcli.CLI) CompletionFunc {
 		}
 
 		// Stopped playgrounds that can be restarted are persistent plays, which
-		// the API only returns when queried with Persistent: true. Merge them
-		// with the recent plays (deduping by ID) the same way `playground ls` does.
-		plays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{})
+		// the API only returns when queried with Persistent: true.
+		plays, err := cli.Client().ListAllPlays(cmd.Context())
 		if err != nil {
 			return nil, noFileComp
 		}
 
-		persistentPlays, err := cli.Client().ListPlays(cmd.Context(), api.ListPlaysQueryParams{Persistent: true})
-		if err != nil {
-			return nil, noFileComp
-		}
-
-		seen := map[string]bool{}
-		for _, p := range plays {
-			seen[p.ID] = true
-		}
-		for _, p := range persistentPlays {
-			if !seen[p.ID] {
-				seen[p.ID] = true
-				plays = append(plays, p)
-			}
-		}
-
-		var completions []string
-		for _, p := range plays {
-			if !p.StateIs(api.StateStopped) {
-				continue
-			}
-
-			desc := fmt.Sprintf("%s (%s)", p.Playground.Name, p.State())
-			completions = append(completions, fmt.Sprintf("%s\t%s", p.ID, desc))
-
-			if p.Title != "" {
-				completions = append(completions, fmt.Sprintf("%s\t%s", p.Title, desc))
-			}
-		}
-
-		return completions, noFileComp
+		return playsAndTitles(plays, func(p *api.Play) bool {
+			return p.StateIs(api.StateStopped)
+		}), noFileComp
 	}
+}
+
+// NonDestroyedPlaysAndTitles completes playground IDs and titles (running or
+// stopped) that are not destroyed.
+// Use for: open.
+func NonDestroyedPlaysAndTitles(cli labcli.CLI) CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, noFileComp
+		}
+
+		if cli.Client() == nil {
+			return nil, noFileComp
+		}
+
+		plays, err := cli.Client().ListAllPlays(cmd.Context())
+		if err != nil {
+			return nil, noFileComp
+		}
+
+		return playsAndTitles(plays, func(p *api.Play) bool {
+			return !p.StateIs(api.StateDestroyed)
+		}), noFileComp
+	}
+}
+
+// playsAndTitles builds completions with both the ID and (if set) the title
+// of every play that passes the filter.
+func playsAndTitles(plays []*api.Play, filter func(*api.Play) bool) []string {
+	var completions []string
+	for _, p := range plays {
+		if !filter(p) {
+			continue
+		}
+
+		desc := fmt.Sprintf("%s (%s)", p.Playground.Name, p.State())
+		completions = append(completions, fmt.Sprintf("%s\t%s", p.ID, desc))
+
+		if p.Title != "" {
+			completions = append(completions, fmt.Sprintf("%s\t%s", p.Title, desc))
+		}
+	}
+
+	return completions
 }
 
 // NonDestroyedPlays completes playground IDs that are not destroyed.

@@ -81,6 +81,17 @@ labctl playground start k3s --open
 labctl playground start ubuntu-24-04 --ssh
 ```
 
+### Opening a playground in a browser
+
+Any playground run, running or stopped, can be opened in a browser by its ID or title with:
+
+```sh
+labctl playground open <playground-id|title>
+```
+
+The command also prints the playground URL to stdout (use `-q` to print only the URL),
+and if it can't open the browser automatically, it warns you and shows the URL to open manually.
+
 ### SSH into a playground
 
 Once you have started a playground, you can access it with:
