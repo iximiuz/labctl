@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +20,10 @@ import (
 // playground's (non-helper) tasks ended up in the failed state.
 var ErrPlayTasksFailed = errors.New("one or more playground tasks failed")
 
+// ErrPlayBroken is returned by the Wait* methods when the play itself has
+// failed or is being destroyed, so the awaited condition will never hold.
+var ErrPlayBroken = errors.New("playground failed")
+
 type PlayConnMessage struct {
 	Kind    string      `json:"kind"`
 	Machine string      `json:"machine,omitempty"`
@@ -27,6 +32,7 @@ type PlayConnMessage struct {
 }
 
 type PlayConn struct {
+	parent context.Context
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -44,14 +50,15 @@ type PlayConn struct {
 }
 
 func NewPlayConn(
-	ctx context.Context,
+	parent context.Context,
 	play *Play,
 	client *Client,
 	origin string,
 ) *PlayConn {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(parent)
 
 	return &PlayConn{
+		parent: parent,
 		ctx:    ctx,
 		cancel: cancel,
 		play:   play,
@@ -194,53 +201,29 @@ func (pc *PlayConn) applyMessage(msg PlayConnMessage) {
 }
 
 func (pc *PlayConn) WaitPlayReady(timeout time.Duration, s *spinner.Spinner) error {
-	if s != nil {
-		s.Prefix = fmt.Sprintf(
+	prefix := func() string {
+		return fmt.Sprintf(
 			"Warming up playground... Init tasks completed: %d/%d ",
 			pc.play.CountCompletedInitTasks(), pc.play.CountInitTasks(),
 		)
-		s.Start()
-		defer s.Stop()
 	}
 
-	if pc.play.IsInitialized() {
-		if s != nil {
-			s.FinalMSG = "Warming up playground... Done.\n"
-		}
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(pc.ctx, timeout)
-	defer cancel()
-
-	for ctx.Err() == nil {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-
-		case err := <-pc.errCh:
-			slog.Warn("Play connection error", "error", err.Error())
-
-		case msg := <-pc.msgCh:
-			pc.applyMessage(msg)
-		}
-
-		if s != nil {
-			s.Prefix = fmt.Sprintf(
-				"Warming up playground... Init tasks completed: %d/%d ",
-				pc.play.CountCompletedInitTasks(), pc.play.CountInitTasks(),
-			)
-		}
-
-		if pc.play.IsInitialized() {
-			if s != nil {
-				s.FinalMSG = "Warming up playground... Done.\n"
+	return pc.waitUntil(timeout, s, prefix, "Warming up playground... Done.\n",
+		func() (bool, error) {
+			if pc.play.IsInitialized() {
+				return true, nil
 			}
-			return nil
-		}
-	}
-
-	return ctx.Err()
+			// Init tasks are retried until they succeed, so a failed one
+			// will never complete.
+			if failed := pc.play.FailedInitTasks(); len(failed) > 0 {
+				return true, fmt.Errorf("%w: %s", ErrPlayTasksFailed, pc.describeTasks(failed))
+			}
+			return false, nil
+		},
+		func() string {
+			return "init tasks not completed: " + pc.describeTasks(pc.play.PendingInitTasks())
+		},
+	)
 }
 
 // WaitMachinesRunning blocks until every machine of the playground has reached
@@ -255,51 +238,12 @@ func (pc *PlayConn) WaitMachinesRunning(timeout time.Duration, s *spinner.Spinne
 		)
 	}
 
-	if s != nil {
-		s.Prefix = prefix()
-		s.Start()
-		defer s.Stop()
-	}
-
-	if pc.play.AllMachinesRunning() {
-		if s != nil {
-			s.FinalMSG = "Waiting for machines to start... Done.\n"
-		}
-		return nil
-	}
-
-	ctx := pc.ctx
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(pc.ctx, timeout)
-		defer cancel()
-	}
-
-	for ctx.Err() == nil {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-
-		case err := <-pc.errCh:
-			slog.Warn("Play connection error", "error", err.Error())
-
-		case msg := <-pc.msgCh:
-			pc.applyMessage(msg)
-		}
-
-		if s != nil {
-			s.Prefix = prefix()
-		}
-
-		if pc.play.AllMachinesRunning() {
-			if s != nil {
-				s.FinalMSG = "Waiting for machines to start... Done.\n"
-			}
-			return nil
-		}
-	}
-
-	return ctx.Err()
+	return pc.waitUntil(timeout, s, prefix, "Waiting for machines to start... Done.\n",
+		func() (bool, error) { return pc.play.AllMachinesRunning(), nil },
+		func() string {
+			return fmt.Sprintf("machines running: %d/%d", pc.play.CountRunningMachines(), pc.play.CountMachines())
+		},
+	)
 }
 
 // WaitMachinesReady blocks until every machine of the playground is ready - i.e.
@@ -315,17 +259,49 @@ func (pc *PlayConn) WaitMachinesReady(timeout time.Duration, s *spinner.Spinner)
 		)
 	}
 
+	return pc.waitUntil(timeout, s, prefix, "Waiting for machines to become ready... Done.\n",
+		func() (bool, error) { return pc.play.AllMachinesReady(), nil },
+		func() string {
+			return fmt.Sprintf("machines ready: %d/%d", pc.play.CountReadyMachines(), pc.play.CountMachines())
+		},
+	)
+}
+
+// waitUntil applies play connection messages to the local play snapshot until
+// done reports true. It also gives up as soon as the play itself breaks (fails
+// or gets destroyed), when the connection closes, or when the timeout expires
+// (a non-positive timeout means no timeout). pending describes what is still
+// missing for the timeout error. The spinner (if any) shows prefix() while
+// waiting and finalMsg on success.
+func (pc *PlayConn) waitUntil(
+	timeout time.Duration,
+	s *spinner.Spinner,
+	prefix func() string,
+	finalMsg string,
+	done func() (bool, error),
+	pending func() string,
+) error {
 	if s != nil {
 		s.Prefix = prefix()
 		s.Start()
 		defer s.Stop()
 	}
 
-	if pc.play.AllMachinesReady() {
-		if s != nil {
-			s.FinalMSG = "Waiting for machines to become ready... Done.\n"
+	check := func() (bool, error) {
+		if ok, err := done(); ok {
+			if err == nil && s != nil {
+				s.FinalMSG = finalMsg
+			}
+			return true, err
 		}
-		return nil
+		if broken, reason := pc.play.IsBroken(); broken {
+			return true, fmt.Errorf("%w: %s", ErrPlayBroken, reason)
+		}
+		return false, nil
+	}
+
+	if ok, err := check(); ok {
+		return err
 	}
 
 	ctx := pc.ctx
@@ -335,31 +311,92 @@ func (pc *PlayConn) WaitMachinesReady(timeout time.Duration, s *spinner.Spinner)
 		defer cancel()
 	}
 
-	for ctx.Err() == nil {
+	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return pc.waitError(ctx, timeout, pending)
 
-		case err := <-pc.errCh:
-			slog.Warn("Play connection error", "error", err.Error())
+		case err, ok := <-pc.errCh:
+			if ok {
+				slog.Warn("Play connection error", "error", err.Error())
+			}
 
-		case msg := <-pc.msgCh:
-			pc.applyMessage(msg)
+		case msg, ok := <-pc.msgCh:
+			if ok {
+				pc.applyMessage(msg)
+			}
 		}
 
 		if s != nil {
 			s.Prefix = prefix()
 		}
 
-		if pc.play.AllMachinesReady() {
-			if s != nil {
-				s.FinalMSG = "Waiting for machines to become ready... Done.\n"
-			}
-			return nil
+		if ok, err := check(); ok {
+			return err
+		}
+	}
+}
+
+// waitError explains why waitUntil's context is done: the wait timed out, the
+// caller gave up, or the server closed the play connection - which usually
+// means that the play has failed and is being destroyed. In the latter case,
+// the play is re-fetched to report the actual failure reason.
+func (pc *PlayConn) waitError(ctx context.Context, timeout time.Duration, pending func() string) error {
+	if pc.parent.Err() != nil {
+		return pc.parent.Err()
+	}
+
+	if pc.ctx.Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("timed out after %s (%s)", timeout, pending())
+	}
+
+	fetchCtx, cancel := context.WithTimeout(pc.parent, 15*time.Second)
+	defer cancel()
+
+	if play, err := pc.client.GetPlay(fetchCtx, pc.play.ID); err == nil {
+		if broken, reason := play.IsBroken(); broken {
+			return fmt.Errorf("%w: %s", ErrPlayBroken, reason)
 		}
 	}
 
-	return ctx.Err()
+	return fmt.Errorf("the play connection closed unexpectedly (%s)", pending())
+}
+
+// describeTasks returns the task names, each followed by the last line of its
+// most recent output, when the API exposes it to the caller.
+func (pc *PlayConn) describeTasks(names []string) string {
+	ctx, cancel := context.WithTimeout(pc.parent, 15*time.Second)
+	defer cancel()
+
+	lastLines := map[string]string{}
+	if tasks, err := pc.client.GetPlayTasks(ctx, pc.play.ID, nil); err == nil {
+		for _, t := range tasks {
+			if line := lastLine(t.Stderr); line != "" {
+				lastLines[t.Name] = line
+			} else if line := lastLine(t.Stdout); line != "" {
+				lastLines[t.Name] = line
+			}
+		}
+	}
+
+	descs := make([]string, 0, len(names))
+	for _, name := range names {
+		if line, ok := lastLines[name]; ok {
+			descs = append(descs, fmt.Sprintf("%s (last output: %q)", name, line))
+		} else {
+			descs = append(descs, name)
+		}
+	}
+	return strings.Join(descs, ", ")
+}
+
+func lastLine(out string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	line := strings.TrimSpace(lines[len(lines)-1])
+	if len(line) > 200 {
+		line = line[:200] + "..."
+	}
+	return line
 }
 
 func (pc *PlayConn) WaitDone() error {
@@ -407,12 +444,6 @@ func (pc *PlayConn) WaitTasks(timeout time.Duration, initOnly bool, s *spinner.S
 		)
 	}
 
-	if s != nil {
-		s.Prefix = prefix()
-		s.Start()
-		defer s.Stop()
-	}
-
 	done := func() (bool, error) {
 		if initOnly {
 			if pc.play.IsInitialized() {
@@ -427,37 +458,5 @@ func (pc *PlayConn) WaitTasks(timeout time.Duration, initOnly bool, s *spinner.S
 		return false, nil
 	}
 
-	if ok, err := done(); ok {
-		return err
-	}
-
-	ctx := pc.ctx
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(pc.ctx, timeout)
-		defer cancel()
-	}
-
-	for ctx.Err() == nil {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-
-		case err := <-pc.errCh:
-			slog.Warn("Play connection error", "error", err.Error())
-
-		case msg := <-pc.msgCh:
-			pc.applyMessage(msg)
-		}
-
-		if s != nil {
-			s.Prefix = prefix()
-		}
-
-		if ok, err := done(); ok {
-			return err
-		}
-	}
-
-	return ctx.Err()
+	return pc.waitUntil(timeout, s, prefix, "", done, prefix)
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -169,6 +171,63 @@ func (p *Play) IsInitialized() bool {
 		}
 	}
 	return true
+}
+
+// IsBroken reports whether the play itself (not one of its tasks) has failed
+// or is being torn down, so it will never become ready. The second return
+// value explains why, using the failed machine conditions when there are any
+// (e.g. "target-01: drive 0: could not create overlay drive volume").
+func (p *Play) IsBroken() (bool, string) {
+	if p.Status == nil {
+		return false, ""
+	}
+
+	failed := false
+	for _, ev := range p.Status.StateEvents {
+		if ev.Error || ev.State == StateFailed {
+			failed = true
+		}
+	}
+
+	var reasons []string
+	for _, m := range p.Status.Machines {
+		for _, c := range m.Conditions {
+			if c.Name != machineReadyCondition && c.Status == "False" && c.Message != "" {
+				reasons = append(reasons, m.Name+": "+c.Message)
+			}
+		}
+	}
+
+	switch {
+	case failed && len(reasons) > 0:
+		return true, strings.Join(reasons, "; ")
+	case failed:
+		return true, "the playground entered the FAILED state"
+	case p.StateIs(StateDestroying) || p.StateIs(StateDestroyed):
+		return true, "the playground is being destroyed"
+	}
+	return false, ""
+}
+
+// FailedInitTasks returns the names of the init tasks that have failed.
+func (p *Play) FailedInitTasks() []string {
+	return p.initTasks(func(t PlayTask) bool { return t.Status == PlayTaskStatusFailed })
+}
+
+// PendingInitTasks returns the names of the init tasks that haven't completed yet.
+func (p *Play) PendingInitTasks() []string {
+	return p.initTasks(func(t PlayTask) bool { return t.Status != PlayTaskStatusCompleted })
+}
+
+func (p *Play) initTasks(match func(PlayTask) bool) []string {
+	var names []string
+	for _, task := range p.Tasks {
+		if task.Init && match(task) {
+			names = append(names, task.Name)
+		}
+	}
+	slices.Sort(names)
+	return names
 }
 
 func (p *Play) IsFailed() bool {
