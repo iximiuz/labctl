@@ -9,10 +9,11 @@ import (
 // Known regions mirror the backend's KNOWN_REGIONS (see foreman/shared/utils/geo.js).
 const (
 	RegionEU = "eu"
+	RegionAM = "am"
 	RegionAP = "ap"
 )
 
-var KnownRegions = []string{RegionEU, RegionAP}
+var KnownRegions = []string{RegionEU, RegionAM, RegionAP}
 
 func IsKnownRegion(region string) bool {
 	return slices.Contains(KnownRegions, region)
