@@ -7,136 +7,116 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
-	"sync"
+	"os"
+	"strings"
+	"time"
 
-	"github.com/iximiuz/labctl/internal/labcli"
+	"github.com/docker/cli/cli/streams"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/sys/windows"
 )
 
-const defaultTermEnv = "xterm-256color"
+// The named pipe of the Windows built-in OpenSSH agent (the ssh-agent service).
+const defaultAgentPipe = `\\.\pipe\openssh-ssh-agent`
 
-type Session struct {
-	client *ssh.Client
-}
-
-func NewSession(
-	conn net.Conn,
-	user string,
-	sshKeyPath string,
-	forwardAgent bool,
-) (*Session, error) {
-	var authMethods []ssh.AuthMethod
-
-	privateKey, err := readPrivateKey(sshKeyPath)
-	if err != nil {
-		slog.Debug("Failed to read SSH private key", "error", err)
-	} else {
-		keySigner, err := ssh.ParsePrivateKey([]byte(privateKey))
+// dialAgent connects to the SSH agent: a named pipe or an AF_UNIX socket from
+// $SSH_AUTH_SOCK, or the Windows OpenSSH agent's pipe by default. It returns
+// nil (and no error) if the default agent isn't running.
+func dialAgent() (io.ReadWriteCloser, error) {
+	sock := os.Getenv("SSH_AUTH_SOCK")
+	if isNamedPipe(sock) {
+		f, err := openPipe(sock)
 		if err != nil {
-			slog.Debug("Failed to parse SSH private key", "error", err)
-		} else {
-			authMethods = append(authMethods, ssh.PublicKeys(keySigner))
+			return nil, fmt.Errorf("open named pipe %s: %w", sock, err)
 		}
+		return f, nil
 	}
 
-	if forwardAgent {
-		slog.Warn("SSH agent forwarding is not supported on Windows")
+	if sock != "" {
+		conn, err := net.Dial("unix", sock)
+		if err == nil {
+			return conn, nil
+		}
+		// E.g., an MSYS/Cygwin agent socket from Git Bash, which isn't a real
+		// AF_UNIX socket - fall back to the Windows OpenSSH agent.
+		slog.Debug("Failed to connect to SSH agent from SSH_AUTH_SOCK; trying the Windows OpenSSH agent",
+			"SSH_AUTH_SOCK", sock, "error", err)
 	}
 
-	sshConn, chans, reqs, err := ssh.NewClientConn(conn, conn.RemoteAddr().String(), &ssh.ClientConfig{
-		User:              user,
-		Auth:              authMethods,
-		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
-		HostKeyAlgorithms: []string{ssh.KeyAlgoED25519},
-	})
+	f, err := openPipe(defaultAgentPipe)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("create SSH client connection: %w", err)
+		return nil, fmt.Errorf("open named pipe %s: %w", defaultAgentPipe, err)
 	}
-
-	client := ssh.NewClient(sshConn, chans, reqs)
-	return &Session{client: client}, nil
+	return f, nil
 }
 
-func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) error {
-	sess, err := s.client.NewSession()
+// openPipe opens a named pipe client handle for overlapped (asynchronous)
+// I/O, which os.NewFile hands over to the runtime poller. A pipe opened with
+// os.OpenFile gets a synchronous handle instead, and the agent client hangs
+// on its second request.
+func openPipe(path string) (*os.File, error) {
+	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		return fmt.Errorf("create SSH session: %w", err)
-	}
-	defer sess.Close()
-
-	if streams.InputStream().IsTerminal() {
-		if err := streams.InputStream().SetRawTerminal(); err != nil {
-			slog.Warn("Could not enable raw terminal mode", "error", err.Error())
-		} else {
-			defer streams.InputStream().RestoreTerminal()
-
-			height, width := streams.OutputStream().GetTtySize()
-			if height == 0 {
-				height = 40
-			}
-			if width == 0 {
-				width = 80
-			}
-
-			if err := sess.RequestPty(defaultTermEnv, int(height), int(width), ssh.TerminalModes{
-				ssh.TTY_OP_ISPEED: 14400,
-				ssh.TTY_OP_OSPEED: 14400,
-			}); err != nil {
-				return fmt.Errorf("request PTY: %w", err)
-			}
-		}
+		return nil, err
 	}
 
-	sess.Stdout = streams.OutputStream()
-	sess.Stderr = streams.ErrorStream()
-
-	var closeStdin sync.Once
-	stdin, err := sess.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("get stdin pipe: %w", err)
-	}
-
-	go func() {
-		defer closeStdin.Do(func() {
-			stdin.Close()
-		})
-
-		io.Copy(stdin, streams.InputStream())
-	}()
-
-	cmdC := make(chan error, 1)
-	go func() {
-		defer close(cmdC)
-
-		var err error
-		if cmd == "" {
-			err = sess.Shell()
-			if err == nil {
-				err = sess.Wait()
-			}
-		} else {
-			err = sess.Run(cmd)
+	for attempt := 0; ; attempt++ {
+		h, err := windows.CreateFile(
+			name,
+			windows.GENERIC_READ|windows.GENERIC_WRITE,
+			0,
+			nil,
+			windows.OPEN_EXISTING,
+			windows.FILE_FLAG_OVERLAPPED|windows.SECURITY_SQOS_PRESENT|windows.SECURITY_ANONYMOUS,
+			0,
+		)
+		if err == nil {
+			return os.NewFile(uintptr(h), path), nil
 		}
 
-		if err != nil && err != io.EOF {
-			cmdC <- err
+		// All pipe instances are busy serving other clients - retry shortly.
+		if errors.Is(err, windows.ERROR_PIPE_BUSY) && attempt < 10 {
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-	}()
-
-	select {
-	case err := <-cmdC:
-		return err
-	case <-ctx.Done():
-		return errors.New("session forcibly closed; the remote process may still be running")
+		return nil, err
 	}
 }
 
-func (s *Session) Close() error {
-	return s.client.Close()
+func isNamedPipe(path string) bool {
+	return strings.HasPrefix(path, `\\.\pipe\`) || strings.HasPrefix(path, `//./pipe/`)
 }
 
-func (s *Session) Wait() error {
-	return s.client.Wait()
+// Windows has no SIGWINCH, so the console size is polled instead.
+const windowSizePollInterval = 250 * time.Millisecond
+
+func watchWindowSize(ctx context.Context, out *streams.Out, sess *ssh.Session) error {
+	lastHeight, lastWidth := out.GetTtySize()
+
+	ticker := time.NewTicker(windowSizePollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return nil
+		}
+
+		height, width := out.GetTtySize()
+		if height == 0 || width == 0 || (height == lastHeight && width == lastWidth) {
+			continue
+		}
+		lastHeight, lastWidth = height, width
+
+		if err := sess.WindowChange(int(height), int(width)); err != nil {
+			return err
+		}
+	}
 }
