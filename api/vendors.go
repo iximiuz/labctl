@@ -61,7 +61,7 @@ func (c *Client) CreateVendor(ctx context.Context, req CreateVendorRequest) (*Ve
 
 func (c *Client) GetVendor(ctx context.Context, name string) (*Vendor, error) {
 	var v Vendor
-	return &v, c.GetInto(ctx, "/vendors/"+name, nil, nil, &v)
+	return &v, c.GetInto(ctx, "/vendors/"+pathSegment(name), nil, nil, &v)
 }
 
 func (c *Client) ListVendors(ctx context.Context) ([]Vendor, error) {

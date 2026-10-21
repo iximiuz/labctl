@@ -165,7 +165,7 @@ func (c *Client) CreateCourse(ctx context.Context, req CreateCourseRequest) (*Co
 
 func (c *Client) GetCourse(ctx context.Context, name string) (*Course, error) {
 	var course Course
-	return &course, c.GetInto(ctx, "/courses/"+name, nil, nil, &course)
+	return &course, c.GetInto(ctx, "/courses/"+pathSegment(name), nil, nil, &course)
 }
 
 func (c *Client) ListCourses(ctx context.Context) ([]Course, error) {

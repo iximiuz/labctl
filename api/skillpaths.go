@@ -66,7 +66,7 @@ func (c *Client) CreateSkillPath(ctx context.Context, req CreateSkillPathRequest
 
 func (c *Client) GetSkillPath(ctx context.Context, name string) (*SkillPath, error) {
 	var t SkillPath
-	return &t, c.GetInto(ctx, "/skill-paths/"+name, nil, nil, &t)
+	return &t, c.GetInto(ctx, "/skill-paths/"+pathSegment(name), nil, nil, &t)
 }
 
 func (c *Client) ListSkillPaths(ctx context.Context) ([]SkillPath, error) {

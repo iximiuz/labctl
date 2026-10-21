@@ -8,7 +8,7 @@ import (
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "challenge <list|start|stop> [challenge-name]",
+		Use:     "challenge <catalog|list|start|wait|stop> [challenge-name]",
 		Aliases: []string{"ch", "challenges"},
 		Short:   "Solve DevOps challenges from the comfort of your terminal",
 	}

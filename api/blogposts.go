@@ -61,7 +61,7 @@ func (c *Client) CreateBlogPost(ctx context.Context, req CreateBlogPostRequest) 
 
 func (c *Client) GetBlogPost(ctx context.Context, name string) (*BlogPost, error) {
 	var b BlogPost
-	return &b, c.GetInto(ctx, "/blog-posts/"+name, nil, nil, &b)
+	return &b, c.GetInto(ctx, "/blog-posts/"+pathSegment(name), nil, nil, &b)
 }
 
 func (c *Client) ListBlogPosts(ctx context.Context) ([]BlogPost, error) {

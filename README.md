@@ -61,6 +61,17 @@ The token is printed once and can be revoked at any time in Account -> Connected
 Use `labctl auth token -q` to print just the token (handy for command substitution),
 `--scope` to narrow down the granted permissions, and `--expires-in` to set the lifetime in days.
 
+### Reading feedback on authored content
+
+Pass the content kind and name or URL to read all of its feedback threads and messages:
+
+```sh
+labctl content feedback challenge graphql-vuln-lab-ca696b14
+labctl content feedback challenge 'https://labs.iximiuz.com/challenges/graphql-vuln-lab-ca696b14?feedback' --output json
+```
+
+The default output is YAML. The command uses your authenticated CLI session and requires author access to the content.
+
 ### Starting playgrounds
 
 Once you have authenticated, you can start a new playground with a simple:

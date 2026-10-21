@@ -66,7 +66,7 @@ func (c *Client) CreateTraining(ctx context.Context, req CreateTrainingRequest) 
 
 func (c *Client) GetTraining(ctx context.Context, name string) (*Training, error) {
 	var t Training
-	return &t, c.GetInto(ctx, "/trainings/"+name, nil, nil, &t)
+	return &t, c.GetInto(ctx, "/trainings/"+pathSegment(name), nil, nil, &t)
 }
 
 func (c *Client) ListTrainings(ctx context.Context) ([]Training, error) {

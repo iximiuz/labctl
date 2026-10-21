@@ -80,7 +80,7 @@ func (c *Client) CreateChallenge(ctx context.Context, req CreateChallengeRequest
 
 func (c *Client) GetChallenge(ctx context.Context, name string) (*Challenge, error) {
 	var ch Challenge
-	return &ch, c.GetInto(ctx, "/challenges/"+name, nil, nil, &ch)
+	return &ch, c.GetInto(ctx, "/challenges/"+pathSegment(name), nil, nil, &ch)
 }
 
 type ListChallengesOptions struct {
