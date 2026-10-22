@@ -470,6 +470,7 @@ var contentKinds = []string{
 	"challenge\tChallenge content",
 	"tutorial\tTutorial content",
 	"course\tCourse content",
+	"roadmap\tRoadmap content",
 	"skill-path\tSkill path content",
 	"training\tTraining content",
 	"vendor\tVendor content",
@@ -478,7 +479,7 @@ var contentKinds = []string{
 }
 
 // ContentArgs completes content kind (first arg) and authored content names (second arg).
-// Use for: content pull, push, remove.
+// Use for: content pull, push, remove, feedback.
 func ContentArgs(cli labcli.CLI) CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		switch len(args) {

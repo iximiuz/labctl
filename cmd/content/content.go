@@ -16,7 +16,7 @@ var _ pflag.Value = (*content.ContentKind)(nil)
 
 func NewCommand(cli labcli.CLI) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "content <create|list|pull|files|sync|rm> <content-name> [flags]",
+		Use:     "content <create|list|pull|files|sync|rm|feedback> <content-name> [flags]",
 		Aliases: []string{"c", "contents"},
 		Short:   "Author and manage content (challenge, tutorial, course, etc.)",
 	}
@@ -27,6 +27,7 @@ func NewCommand(cli labcli.CLI) *cobra.Command {
 		newPullCommand(cli),
 		newPushCommand(cli),
 		newRemoveCommand(cli),
+		newFeedbackCommand(cli),
 	)
 
 	return cmd

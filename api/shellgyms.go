@@ -74,7 +74,7 @@ func (c *Client) CreateShellGym(ctx context.Context, req CreateShellGymRequest) 
 
 func (c *Client) GetShellGym(ctx context.Context, name string) (*ShellGym, error) {
 	var g ShellGym
-	return &g, c.GetInto(ctx, "/shell-gyms/"+name, nil, nil, &g)
+	return &g, c.GetInto(ctx, "/shell-gyms/"+pathSegment(name), nil, nil, &g)
 }
 
 func (c *Client) ListShellGyms(ctx context.Context) ([]ShellGym, error) {

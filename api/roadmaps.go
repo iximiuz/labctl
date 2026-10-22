@@ -66,7 +66,7 @@ func (c *Client) CreateRoadmap(ctx context.Context, req CreateRoadmapRequest) (*
 
 func (c *Client) GetRoadmap(ctx context.Context, name string) (*Roadmap, error) {
 	var t Roadmap
-	return &t, c.GetInto(ctx, "/roadmaps/"+name, nil, nil, &t)
+	return &t, c.GetInto(ctx, "/roadmaps/"+pathSegment(name), nil, nil, &t)
 }
 
 func (c *Client) ListRoadmaps(ctx context.Context) ([]Roadmap, error) {

@@ -75,7 +75,7 @@ func (c *Client) CreateTutorial(ctx context.Context, req CreateTutorialRequest) 
 
 func (c *Client) GetTutorial(ctx context.Context, name string) (*Tutorial, error) {
 	var t Tutorial
-	return &t, c.GetInto(ctx, "/tutorials/"+name, nil, nil, &t)
+	return &t, c.GetInto(ctx, "/tutorials/"+pathSegment(name), nil, nil, &t)
 }
 
 type ListTutorialsOptions struct {

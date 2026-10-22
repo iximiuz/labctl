@@ -79,7 +79,12 @@ func NewClient(opts ClientOptions) *Client {
 		sessionID:   opts.SessionID,
 		accessToken: opts.AccessToken,
 		userAgent:   opts.UserAgent,
-		httpClient:  http.DefaultClient,
+		httpClient: &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 0 && via[0].Header.Get("Authorization") != "" && !sameOrigin(req.URL, via[0].URL) {
+				return fmt.Errorf("authenticated request redirected to a different origin")
+			}
+			return nil
+		}},
 	}
 }
 
@@ -317,6 +322,9 @@ func (c *Client) Upload(
 	if err != nil {
 		return nil, err
 	}
+	// Upload URLs are presigned by the service and need no CLI credentials,
+	// even when they happen to point at the configured API origin.
+	req.Header.Del("Authorization")
 
 	return c.doRequest(req)
 }
@@ -362,7 +370,7 @@ func (c *Client) newRequest(
 	req.Header = headers.Clone()
 	req.Header.Set("User-Agent", c.userAgent)
 
-	if strings.HasPrefix(url, c.baseURL) || strings.HasPrefix(url, c.apiBaseURL) {
+	if sameOriginWithURL(req.URL, c.baseURL) || sameOriginWithURL(req.URL, c.apiBaseURL) {
 		if c.sessionID != "" && c.accessToken != "" {
 			req.Header.Set("Authorization", "Basic "+base64Encode(c.sessionID+":"+c.accessToken))
 		}
@@ -373,6 +381,34 @@ func (c *Client) newRequest(
 	}
 
 	return req, nil
+}
+
+func sameOriginWithURL(request *url.URL, configured string) bool {
+	base, err := url.Parse(configured)
+	return err == nil && sameOrigin(request, base)
+}
+
+func sameOrigin(a, b *url.URL) bool {
+	if a == nil || b == nil || a.Host == "" || b.Host == "" ||
+		(a.Scheme != "http" && a.Scheme != "https") || !strings.EqualFold(a.Scheme, b.Scheme) ||
+		!strings.EqualFold(a.Hostname(), b.Hostname()) {
+		return false
+	}
+	return effectivePort(a) == effectivePort(b)
+}
+
+func effectivePort(u *url.URL) string {
+	if port := u.Port(); port != "" {
+		return port
+	}
+	if strings.EqualFold(u.Scheme, "https") {
+		return "443"
+	}
+	return "80"
+}
+
+func pathSegment(value string) string {
+	return url.PathEscape(value)
 }
 
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
