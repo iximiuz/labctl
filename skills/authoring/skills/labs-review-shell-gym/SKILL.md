@@ -26,7 +26,9 @@ Report the findings explicitly, including "nothing found".
 Each of the following is a **blocker**:
 
 - **Malicious or suspicious code** anywhere in the gym.
-- **Mutable external code fetched at init** - `curl ... | sh` from a third-party URL, a `latest` download, or a container image pulled by a moving tag. The gym can break or change under the student later. Pin versions (or digests) and prefer official sources.
+- **Unpinned external software that can plausibly break the gym** - an install script (`curl ... | sh`), a `latest` download, or a moving image tag of a fast-moving tool in active development, whose next release can change what the units depend on (a CLI flag, an output format, a config schema, a bundled tool). The gym can break or change under the student later. Pin these versions (or digests) and prefer official sources.
+
+Assess every unpinned install case by case. Stable software tolerates it, and an unpinned install is usually better than a pinned version, which ages and needs regular bumps. Examples are official images like `alpine`, `busybox`, or `nginx:alpine`, and the official install script or `latest` release of a mature tool. Don't flag these unless the units depend on a detail that changes between releases, for example output that a check compares or a package that a newer release may rename. An install script or download from an unofficial source is a security question first: review it as possible malicious code.
 
 ## 3. Training value
 
@@ -39,7 +41,7 @@ Each of the following is a **blocker**:
 - **Too little repetition.** A single rep forms no skill. Every command the path teaches should come up in many reps across the path.
 - **Repetition without variation.** Five identical reps in a row, or units with no `vars:` or scenarios, so that a second session is a copy of the first. The command should keep coming up on its own in small realistic scenarios, each hitting the same skill from a different angle.
 - **The units are not quick, one-action reps.** One skill per unit, and most units should complete in under a minute. A multi-step exercise that takes minutes belongs in a challenge.
-- **The text gives the solution away.** The problem statement must never contain the exact command. Hints may point at it, but not paste it.
+- **The always-visible text gives the solution away.** The unit body, `::tip`, `::note`, `::warn`, and the `#active` and `#completed` slots of `::task` must never contain the exact command. Collapsed `::hint` boxes may point at it or hold the full solution, for example in a last "Solution" hint. The student opens them only when stuck, and typing the answer after looking it up is still practice. Don't flag solution hints.
 
 Don't downgrade these to optional polish because the solver passes or the texts are polished.
 When unsure whether a non-technical issue blocks, treat it as a blocker and explain why.

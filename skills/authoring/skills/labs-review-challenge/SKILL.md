@@ -26,7 +26,9 @@ Report the findings explicitly, including "nothing found".
 Each of the following is a **blocker**:
 
 - **Malicious or suspicious code** anywhere in the challenge.
-- **Mutable external code fetched at init** - `curl ... | sh` from a third-party URL, a `latest` download, or a container image pulled by a moving tag. The challenge can break or change under the learner later. Pin versions (or digests) and prefer official sources.
+- **Unpinned external software that can plausibly break the challenge** - an install script (`curl ... | sh`), a `latest` download, or a moving image tag of a fast-moving tool in active development, whose next release can change what the challenge depends on (a CLI flag, an output format, a config schema, a bundled tool). The challenge can break or change under the learner later. Pin these versions (or digests) and prefer official sources.
+
+Assess every unpinned install case by case. Stable software tolerates it, and an unpinned install is usually better than a pinned version, which ages and needs regular bumps. Examples are official images like `alpine`, `busybox`, or `nginx:alpine`, and the official install script or `latest` release of a mature tool. Don't flag these unless the challenge depends on a detail that changes between releases, for example output that the checks compare or a package that a newer release may rename. An install script or download from an unofficial source is a security question first: review it as possible malicious code.
 
 ## 3. Learning value
 
