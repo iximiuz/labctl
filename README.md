@@ -230,6 +230,32 @@ To dispose of a running or stopped playground, completely erasing its data, use 
 labctl playground destroy <playground-id>
 ```
 
+### Skills for AI agents
+
+`labctl` ships skills and rules that teach AI agents to use `labctl`:
+to start, inspect, and destroy playgrounds, and to create, push, and debug content (challenges, tutorials, courses, skill paths, and Shell Gyms).
+Install them into the current project for the agents you use:
+
+```sh
+labctl skills install --agent claude
+```
+
+The skills go to `.claude/skills/` (Claude Code) and `.agents/skills/` (the other agents).
+The rules are written in each agent's own format - `.claude/rules/`, `.cursor/rules/`, `.github/instructions/`, or `.agents/rules/` -
+and for the agents that read only `AGENTS.md` (or `GEMINI.md`), `labctl` adds a section to that file that lists the rules.
+
+The authoring bundle assumes a content repository with the `challenges/`, `tutorials/`, `courses/`, `skill-paths/`, and `shell-gyms/` folders at its root.
+To get only the playground skills for all your projects, install them into your home directory:
+
+```sh
+labctl skills install playgrounds --user --agent codex
+```
+
+The skills are versioned with `labctl` - run `labctl skills install` again after upgrading `labctl` to update them.
+
+Use `labctl skills list` to see what is installed, `labctl skills show <name>` to print a skill or a rule, and `labctl skills uninstall` to remove them (all of them, some bundles, or `--agent <name>`).
+The sources live in the [skills/](skills/) folder.
+
 ### Signing out and deleting the CLI
 
 You can sign out and delete the CLI session with:

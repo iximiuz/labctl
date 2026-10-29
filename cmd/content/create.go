@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/cmd/skills"
 	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/browser"
 	"github.com/iximiuz/labctl/internal/completion"
@@ -162,6 +163,8 @@ func runCreateContent(ctx context.Context, cli labcli.CLI, opts *createOptions) 
 	}
 
 	cli.PrintAux("Happy authoring!\n")
+	skills.PrintTip(cli, dir)
+
 	cli.PrintOut("%s\n", cont.GetName())
 	return nil
 }

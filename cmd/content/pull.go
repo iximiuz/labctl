@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/iximiuz/labctl/cmd/skills"
 	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
@@ -103,5 +104,7 @@ func runPullContent(ctx context.Context, cli labcli.CLI, opts *pullOptions) erro
 	}
 
 	cli.PrintAux("Done!\n")
+
+	skills.PrintTip(cli, dir)
 	return nil
 }

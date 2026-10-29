@@ -23,18 +23,25 @@ func TestListFiles(t *testing.T) {
 	//   │   ├── config
 	//   │   └── objects/
 	//   │       └── test.obj
+	//   ├── .claude/
+	//   │   └── skills/labs-content/SKILL.md
+	//   ├── .labctl-skills.json
+	//   ├── .solution.sh
 	//   └── subdir/
 	//       ├── file3.txt
 	//       └── .git/
 	//           └── config
 
 	files := map[string]string{
-		"file1.txt":             "content1",
-		"file2.txt":             "content2",
-		".git/config":           "git config",
-		".git/objects/test.obj": "test object",
-		"subdir/file3.txt":      "content3",
-		"subdir/.git/config":    "subdir git config",
+		"file1.txt":                            "content1",
+		"file2.txt":                            "content2",
+		".git/config":                          "git config",
+		".git/objects/test.obj":                "test object",
+		".claude/skills/labs-content/SKILL.md": "skill",
+		".labctl-skills.json":                  "{}",
+		".solution.sh":                         "solution",
+		"subdir/file3.txt":                     "content3",
+		"subdir/.git/config":                   "subdir git config",
 	}
 
 	for path, content := range files {
@@ -55,8 +62,9 @@ func TestListFiles(t *testing.T) {
 		relPaths = append(relPaths, filepath.ToSlash(relPath))
 	}
 
-	// Expected files (only non-.git files)
+	// Expected files (no .git and AI agent files, but other dot files)
 	expected := []string{
+		".solution.sh",
 		"file1.txt",
 		"file2.txt",
 		"subdir/file3.txt",
@@ -82,6 +90,8 @@ func TestListDirs(t *testing.T) {
 	// tmpDir/
 	//   ├── .git/
 	//   │   └── objects/
+	//   ├── .agents/
+	//   │   └── skills/
 	//   ├── dir1/
 	//   │   └── subdir/
 	//   └── dir2/
@@ -89,6 +99,7 @@ func TestListDirs(t *testing.T) {
 
 	dirs := []string{
 		".git/objects",
+		".agents/skills",
 		"dir1/subdir",
 		"dir2/.git",
 	}
@@ -109,7 +120,7 @@ func TestListDirs(t *testing.T) {
 		relPaths = append(relPaths, filepath.ToSlash(relPath))
 	}
 
-	// Expected directories (only non-.git directories)
+	// Expected directories (no .git and AI agent directories)
 	expected := []string{
 		"dir1",
 		"dir1/subdir",

@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iximiuz/labctl/api"
+	"github.com/iximiuz/labctl/cmd/skills"
 	"github.com/iximiuz/labctl/content"
 	"github.com/iximiuz/labctl/internal/completion"
 	"github.com/iximiuz/labctl/internal/labcli"
@@ -126,10 +127,16 @@ func runPushContent(ctx context.Context, cli labcli.CLI, opts *pushOptions) erro
 	cli.PrintAux("Found %s at %s\n", opts.kind, cont.GetPageURL())
 
 	if opts.watch {
+		skills.PrintTip(cli, config.Dir)
 		return RunPushWatch(ctx, cli, config)
-	} else {
-		return RunPushOnce(ctx, cli, config)
 	}
+
+	if err := RunPushOnce(ctx, cli, config); err != nil {
+		return err
+	}
+
+	skills.PrintTip(cli, config.Dir)
+	return nil
 }
 
 type PushConfig struct {
@@ -568,6 +575,20 @@ func matchesAnyRuleSet(fullPath string, isDir bool, ruleSets []ignoreRuleSet) bo
 	return false
 }
 
+// agentFiles are the AI agent folders and files (e.g., the ones written by
+// 'labctl skills install') that never belong to the content, so push skips
+// them like the .git* ones.
+var agentFiles = []string{
+	".agents",
+	".claude",
+	".codex",
+	".cursor",
+	".gemini",
+	".opencode",
+	".windsurf",
+	".labctl-skills.json",
+}
+
 func listDirs(dir string) ([]string, error) {
 	ruleSets, err := loadRuleSets(dir, nil)
 	if err != nil {
@@ -590,7 +611,7 @@ func listDirsRecursive(dir string, ruleSets []ignoreRuleSet) ([]string, error) {
 	var result []string
 	for _, file := range files {
 		fullPath := filepath.Join(dir, file.Name())
-		if strings.Contains(fullPath, ".git") {
+		if strings.Contains(fullPath, ".git") || slices.Contains(agentFiles, file.Name()) {
 			continue
 		}
 
@@ -641,7 +662,7 @@ func listFilesRecursive(dir string, ruleSets []ignoreRuleSet) ([]string, error) 
 
 	var result []string
 	for _, file := range files {
-		if strings.HasPrefix(file.Name(), ".git") {
+		if strings.HasPrefix(file.Name(), ".git") || slices.Contains(agentFiles, file.Name()) {
 			continue
 		}
 
