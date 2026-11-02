@@ -20,18 +20,27 @@ Small edits (a typo, a reworded hint) don't need a full review.
 Use simple, clear, and concise "International English". Avoid fancy words and overly complex sentences. Write each challenge as a natural story, tailored for the corresponding problem statement in the index.md file. Using structured prose is preferred over bullet points.
 
 The problem statement in the index.md file should focus on the challenge itself, not the solution.
-Hinting at the solution is fine, especially in (collapsed by default) hint boxes.
-Hints may name commands and show their flags and arguments (e.g., "the `--add-host <name>:host-gateway` flag of `docker run`"),
-but not every hint should spell out the command the learner needs - most hints should point to the idea or the place to look.
+Hinting at the solution is fine, especially in (collapsed by default) hint boxes (see the Hints section below).
 The only strict no-go (unless the author asks otherwise) is the exact copy/pastable command that solves the task.
 
 Always try to connect the dots between the challenge and the real-world scenarios it prepares the student for and/or particular skills it helps develop.
-
-Challenge descriptions should be concrete and factual. It should both outline the problem to be solved and the value the exercise provides to the learner.
-But do not add an explicit "Why This Matters" section, especially at the end of the problem statement.
-Instead, the importance of the problem should be naturally highlighted by the problem statement's framing and phrasing.
+Do not add an explicit "Why This Matters" section for that, especially at the end of the problem statement.
+Let the framing and phrasing of the problem statement show why the problem matters.
 
 Per-machine welcome messages should be concise and factual. They shouldn't restate the problem. Instead, they should describe the machine and its purpose, as well as highlighting its key components (if relevant for the challenge).
+
+### Description
+
+The frontmatter `description:` is a concrete and factual summary of the challenge in one or two sentences.
+It names the problem and the skill the learner gains by solving it.
+
+Outline the problem first, then end with one call to action that starts with an imperative verb ("Learn how to ...", "Practice ...").
+If the problem fits into the call to action, one sentence is enough.
+Never start two or more sentences with an imperative verb, and don't join two commands into one sentence with a colon or "and".
+A chain of commands reads like a task list and leaves the problem unexplained.
+
+- Bad: "Inspect the interfaces of a dual-homed server. Find out why a private service is reachable from another network and block the access."
+- Good: "A service bound to a private IP address may still be reachable from another network. Learn how to block this access without breaking legitimate connections."
 
 ## Task Conventions
 

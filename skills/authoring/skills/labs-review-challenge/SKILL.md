@@ -58,7 +58,12 @@ Also flag **narrative/diagnostic mismatches**: the symptom the text tells the le
 For example, a "the pod is OOMKilled, run `kubectl describe pod`" story when the pod is in fact *rejected at admission* and never exists to describe.
 The fix the challenge teaches may still be correct while the explanation misleads the learner.
 
-Then go through the `challenge-authoring` rules and the general style guides section by section and flag every violation, naming the rule: the title and name conventions, the task conventions, user input tasks, hints, completion and welcome messages, solution files, and the prose style.
+Then go through the `challenge-authoring` rules and the general style guides section by section and flag every violation, naming the rule: the title and name conventions, the description, the task conventions, user input tasks, hints, completion and welcome messages, solution files, and the prose style.
+
+Check the frontmatter `description:` against the Description rules.
+Flag a description that gives the learner more than one command: two or more sentences that start with an imperative verb, or a second command joined to the first with a colon or "and".
+Also flag a description that names no problem, or one that runs longer than two sentences.
+Quote it and propose a rewrite that outlines the problem first and ends with a single call to action.
 
 ## 5. Test it on a live playground
 
