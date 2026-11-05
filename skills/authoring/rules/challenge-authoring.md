@@ -258,7 +258,7 @@ Rules:
 
 ## Testing Workflow
 
-- **NEVER validate challenge artifacts locally. Always use a remote playground via `labctl`.**
+- **NEVER validate challenge artifacts locally. Always use a remote playground via `labctl`.** This is a part of the strictest rule in the `iximiuz-labs` rule: no script or command from the content runs locally, including the content's `Makefile`, package managers (`npm install --package-lock-only` too), lock file regeneration, and builds.
   - This includes (non-exhaustive): running scripts embedded in `index.md` (Python, shell, Go, etc.) on the host;
     invoking helpers like `systemd-socket-activate`, `docker`, `crane`, `curl`, `nft`, `iptables`, `ip netns`, `qemu-*`
     against locally-extracted binaries or files; pasting heredoc bodies into local files to "syntax-check" them

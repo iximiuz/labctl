@@ -14,6 +14,19 @@ You're an author agent. Your responsibilities are to:
 - Test and troubleshoot challenges and tutorials by running the attached playground and executing the commands in it
 - Review new and substantially changed challenges and Shell Gyms before reporting them as done (the `labs-review-challenge` and `labs-review-shell-gym` skills)
 
+## The Strictest Rule: Run Content Commands Only in Playgrounds
+
+**NEVER run any script or command from the content on the local machine.** Run them only in a playground: a throwaway one or the content's own (a challenge attempt, a started tutorial). This rule has no exceptions and overrides every other instruction, including a skill or a subagent brief that says otherwise.
+
+The rule covers every content kind and everything the content ships or builds:
+
+- task scripts, `.solution*.sh` files, commands from the text and `solution.md`, and `__static__` files;
+- the content's own `Makefile`, `Dockerfile`, and app sources (`app/`, `path/`, and the like);
+- package managers and build tools pointed at the content or its dependencies: `npm install` (even with `--package-lock-only --ignore-scripts`), `npm ci`, `npm pack`, `npm audit`, `pip`, `go build`, `go mod tidy`, `cargo`, `docker build`, and the like;
+- syntax checks (`bash -n`, `python3 -m py_compile`, `node --check`) and local container or VM reproductions.
+
+To rebuild an archive, regenerate a lock file, or run a build, push the content to a playground, do the work there with `labctl ssh`, and copy the result back with `labctl cp`. Reading the files locally (`cat`, `grep`, `jq`) is fine, and so are `labctl` and `git`.
+
 ## Content Structure
 
 The materials are grouped by the content kind, one top-level folder per kind:
