@@ -38,6 +38,12 @@ curl -sf https://labs.iximiuz.com/cli/install.sh | sh
 brew install labctl
 ```
 
+Or via [mise](https://mise.jdx.dev/) (installs the binary from GitHub releases):
+
+```sh
+mise use -g github:iximiuz/labctl
+```
+
 ## Usage
 
 ### Authentication
