@@ -134,7 +134,9 @@ Benefits:
 
 ### Task Design Pitfalls
 
-- **Negative-condition verification tasks need a baseline.** If a verification task checks that something is NOT true (e.g., port unreachable), add an init task that first confirms the condition IS true. Otherwise the task auto-solves before the environment is ready.
+- **Negative-condition verification tasks need a baseline.** If a verification task checks that something is NOT true (e.g., port unreachable, unused volumes removed), the init task that sets up the opposite must also confirm it and exit non-zero when it is missing. Otherwise the task completes before the learner does anything.
+  - The check also catches setup drift. An init task can keep exiting 0 after an upstream change makes it stop creating the state. For example, `redis:alpine` stopped declaring `VOLUME /data` in Redis 8.6, so `docker run redis:alpine` no longer creates an anonymous volume, and a "prune the unused volumes" task passed right after init for months.
+  - Running the solution doesn't reveal the problem, because the task still ends up completed. To test for it, look at the verification tasks right after the init tasks finish (`labctl playground tasks <play-id> --kind regular`). None of them should be `completed` yet.
 - **Cross-machine `needs:` for init tasks should be explicitly defined.** Regular tasks automatically get the init tasks of the same machine added to the `needs:` list, but cross-machine dependencies must be defined explicitly.
 - **Always use `-nT` flag with `ssh` when using it in a task.** This prevents the SSH process from hijacking the run script's standard input (which usually leads to extremely obscure failures). The only exception is when stdin is explicitly redirected for the SSH command (e.g., to provide a lengthy script to run or pipe the output of another command).
 

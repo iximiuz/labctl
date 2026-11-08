@@ -30,6 +30,7 @@ labctl playground tasks <play-id> -o yaml
 
 The YAML output includes each task's status, exit code, and the stdout/stderr of its last run on all machines, including the `noSSH` ones.
 Tasks are edge-activated and never regress: once a task shows `completed` (`40`), it stays there for the life of the playground.
+A verification task that is already `completed` right after the init tasks finish passes before the learner does anything. Usually the init tasks no longer create the state it checks (see the baseline pitfall in the `iximiuz-labs` rule).
 See the `labs-playground-tasks` skill for the details.
 
 ## 3. Troubleshoot on the VMs
