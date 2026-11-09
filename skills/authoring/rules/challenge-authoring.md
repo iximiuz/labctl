@@ -249,8 +249,8 @@ tasks:
 
 Rules:
 - `hintcheck:` **must always exit 0**, regardless of what it outputs. It is informational only.
-- `failcheck:` exits non-zero to fail a task that `run:` passed. Use it when the main check
-  is expensive and a secondary invariant must also hold. It follows the same file pattern.
+- `failcheck:` runs before each `run:` and fails the task for good on a non-zero exit. It never
+  runs after a passing `run:`, so a `run:` that leaves it a marker must `exit 1`.
 - Clean up the hint file at the top of `run:` (`rm -f`) so a stale file from a previous run
   does not mislead the user after a fix.
 - Hint messages should point to what is wrong or where to look - not how to fix it. Never print the exact

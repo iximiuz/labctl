@@ -51,7 +51,7 @@ Flag authoring issues even when the platform tolerates them, for example:
 
 - malformed YAML indentation in `tasks:`, broken `needs:` chains, or a task depending on another machine's init task without listing it in `needs:` (cross-machine `needs:` is supported but never implicit);
 - a negative-condition verification task (e.g., "the port is unreachable") without an init task that first confirms the opposite and fails when it is missing, so it can pass before the learner does anything (also later, when an upstream change, such as an image that drops a `VOLUME`, silently stops the setup from creating that state);
-- `ssh` in a task without `-nT`, a `hintcheck:` that can exit non-zero, a `failcheck:` with the wrong exit code logic;
+- `ssh` in a task without `-nT`, a `hintcheck:` that can exit non-zero, a `failcheck:` with the wrong exit code logic, a `run:` that writes a failcheck marker and still exits 0 (the failcheck never sees it);
 - scripts, servers, or configs longer than a dozen lines inlined into a task's `run:` instead of shipped as startup files.
 
 Also flag **narrative/diagnostic mismatches**: the symptom the text tells the learner to look for differs from what actually happens (cross-check against the live state in step 5).

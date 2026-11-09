@@ -142,7 +142,15 @@ Benefits:
 
 ### Hint and Failure Checks
 
-Verification tasks can include `hintcheck:` and `failcheck:` scripts that run when the task fails. These provide context-aware feedback to help the user understand what went wrong. A `hintcheck:` script SHOULD exit with code 0 regardless of its output. A `failcheck:` script MUST exit with a non-zero code if the task should fail (i.e., when its output is not empty) and with code 0 if the task should succeed.
+Verification tasks can include `hintcheck:` and `failcheck:` scripts. The examiner evaluates a task in a loop, about once a second, and each iteration runs the scripts in this order:
+
+1. `failcheck:` - a non-zero exit fails the task for good (`failed`, `35`), and its output tells the user why.
+2. `run:` - exit code 0 completes the task (`completed`, `40`) and ends the loop.
+3. `hintcheck:` - runs only after a failed `run:`. Its output is shown to the user as a hint.
+
+A `hintcheck:` script SHOULD exit with code 0 regardless of its output. A `failcheck:` script MUST exit with code 0 while the task can still succeed, and with a non-zero code (and a message) only when the attempt is lost, e.g., the user removed a container the challenge depends on. It also runs before the very first `run:`, so it must exit 0 in the initial state.
+
+A `failcheck:` never runs after a passing `run:`. A `run:` that records a reason for the failcheck (e.g., writes a marker file) must therefore `exit 1` right after it. The next iteration's failcheck then reads the marker and fails the task. If the `run:` writes the marker and exits 0, the task completes and the marker is never read.
 
 ## labctl CLI
 
