@@ -38,6 +38,8 @@ curl -sf https://labs.iximiuz.com/cli/install.sh | sh
 brew install labctl
 ```
 
+On Windows, download `labctl_windows_amd64.zip` (or `labctl_windows_arm64.zip`) from the [latest release](https://github.com/iximiuz/labctl/releases/latest), extract `labctl.exe` and put it on your `PATH`.
+
 ## Usage
 
 ### Authentication

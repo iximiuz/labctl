@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -179,16 +178,7 @@ func buildArchive(folder string, compress bool) ([]byte, error) {
 	}
 	slices.Sort(files)
 
-	var buf bytes.Buffer
-	var gz *gzip.Writer
-	var tw *tar.Writer
-	if compress {
-		gz = gzip.NewWriter(&buf)
-		tw = tar.NewWriter(gz)
-	} else {
-		tw = tar.NewWriter(&buf)
-	}
-
+	var entries []archiveEntry
 	for _, file := range files {
 		info, err := os.Stat(file)
 		if err != nil {
@@ -203,24 +193,49 @@ func buildArchive(folder string, compress bool) ([]byte, error) {
 			return nil, err
 		}
 
+		entries = append(entries, archiveEntry{path: file, name: filepath.ToSlash(rel), info: info})
+	}
+
+	modes := archiveFileModes(folder, entries)
+
+	var buf bytes.Buffer
+	var gz *gzip.Writer
+	var tw *tar.Writer
+	if compress {
+		gz = gzip.NewWriter(&buf)
+		tw = tar.NewWriter(gz)
+	} else {
+		tw = tar.NewWriter(&buf)
+	}
+
+	var crlfScripts []string
+	for _, entry := range entries {
+		data, err := os.ReadFile(entry.path)
+		if err != nil {
+			return nil, err
+		}
+		if isCRLFScript(data) {
+			crlfScripts = append(crlfScripts, entry.name)
+		}
+
 		if err := tw.WriteHeader(&tar.Header{
-			Name:    filepath.ToSlash(rel),
-			Mode:    int64(info.Mode().Perm()),
-			Size:    info.Size(),
+			Name:    entry.name,
+			Mode:    modes[entry.name],
+			Size:    int64(len(data)),
 			ModTime: archiveModTime,
 		}); err != nil {
 			return nil, err
 		}
+		if _, err := tw.Write(data); err != nil {
+			return nil, err
+		}
+	}
 
-		f, err := os.Open(file)
-		if err != nil {
-			return nil, err
-		}
-		_, err = io.Copy(tw, f)
-		f.Close()
-		if err != nil {
-			return nil, err
-		}
+	if len(crlfScripts) > 0 {
+		warnOnce("crlf\x00"+folder+"\x00"+strings.Join(crlfScripts, "\x00"),
+			"Scripts with CRLF line endings won't run in the playground (e.g. `/bin/sh^M: bad interpreter`); "+
+				"convert them to LF - with git on Windows, add `*.sh text eol=lf` (or similar) to .gitattributes",
+			"folder", folder, "files", crlfScripts)
 	}
 
 	if err := tw.Close(); err != nil {
@@ -233,4 +248,15 @@ func buildArchive(folder string, compress bool) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// isCRLFScript reports whether data is a script (has a shebang) whose shebang
+// line ends with CRLF, which makes the kernel look for an interpreter named
+// e.g. "/bin/sh\r".
+func isCRLFScript(data []byte) bool {
+	if !bytes.HasPrefix(data, []byte("#!")) {
+		return false
+	}
+	line, _, _ := bytes.Cut(data, []byte("\n"))
+	return bytes.HasSuffix(line, []byte("\r"))
 }

@@ -6,7 +6,9 @@ import (
 	"compress/gzip"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -50,6 +52,47 @@ func writeFile(t *testing.T, path, content string, mode os.FileMode) {
 	require.NoError(t, os.WriteFile(path, []byte(content), mode))
 }
 
+// markExecutable makes file (relative to dir) executable in the eyes of the
+// archiver. Windows has no executable bit, so it's recorded in the git index.
+func markExecutable(t *testing.T, dir, file string) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required to track the executable bit on Windows")
+	}
+
+	for _, args := range [][]string{
+		{"init", "--quiet"},
+		{"add", file},
+		{"update-index", "--chmod=+x", file},
+	} {
+		out, err := gitCommand(dir, args...).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
+}
+
+func TestParseGitIndexModes(t *testing.T) {
+	out := []byte("100644 0123456789abcdef0123456789abcdef01234567 0\tmain.go\x00" +
+		"100755 0123456789abcdef0123456789abcdef01234567 0\tsub dir/run.sh\x00")
+
+	modes, err := parseGitIndexModes(out)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{
+		"main.go":        "100644",
+		"sub dir/run.sh": "100755",
+	}, modes)
+
+	modes, err = parseGitIndexModes(nil)
+	require.NoError(t, err)
+	assert.Empty(t, modes)
+
+	_, err = parseGitIndexModes([]byte("garbage\x00"))
+	assert.Error(t, err)
+}
+
 func TestCreateStartupFileArchives_MarkdownFrontMatter(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -68,6 +111,7 @@ playground:
 	writeFile(t, filepath.Join(tmpDir, "app", "main.go"), "package main\n", 0644)
 	writeFile(t, filepath.Join(tmpDir, "app", "sub", "x.txt"), "hello", 0644)
 	writeFile(t, filepath.Join(tmpDir, "app", "run.sh"), "#!/bin/sh\n", 0755)
+	markExecutable(t, tmpDir, filepath.Join("app", "run.sh"))
 
 	folders, err := createStartupFileArchives(tmpDir)
 	require.NoError(t, err)
@@ -277,4 +321,13 @@ playground:
 	assert.Contains(t, entries, "keep.txt")
 	assert.NotContains(t, entries, "secret.txt")
 	assert.NotContains(t, entries, ".labctlignore")
+}
+
+func TestIsCRLFScript(t *testing.T) {
+	assert.True(t, isCRLFScript([]byte("#!/bin/sh\r\necho hi\r\n")))
+	assert.True(t, isCRLFScript([]byte("#!/bin/sh\r")))
+	assert.False(t, isCRLFScript([]byte("#!/bin/sh\necho hi\n")))
+	assert.False(t, isCRLFScript([]byte("#!/bin/sh")))
+	assert.False(t, isCRLFScript([]byte("plain text\r\n")))
+	assert.False(t, isCRLFScript(nil))
 }
