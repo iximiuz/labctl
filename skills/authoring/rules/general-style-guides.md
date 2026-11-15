@@ -52,6 +52,17 @@ Avoid shortcut sentences: clipped, telegram-style fragments that drop the subjec
 
 The exception is a short label that is meant to be a label, such as a table cell, a diagram caption, or a list item that is a bare name.
 
+Start every sentence with a capital letter, including task messages and hints. A sentence never starts with a lowercase word or an inline code token. Capitalize a product name that has a capitalized form (Nginx, Redis) at the start of a sentence and in the rest of the prose, too. Keep the lowercase form inside code, image names, and paths (`nginx:alpine`, `/etc/nginx`). If a sentence would start with a command, a flag, or an always-lowercase name (containerd, runc, kubectl), put a short noun phrase in front of it:
+
+- Bad: "nginx shuts down right away."
+- Good: "Nginx shuts down right away."
+- Bad: "`docker stop` sends the main process a signal."
+- Good: "The `docker stop` command sends the main process a signal."
+- Bad: "`-d` makes `docker run` return right away."
+- Good: "The `-d` flag makes `docker run` return right away."
+- Bad: "containerd pulls the image."
+- Good: "The containerd daemon pulls the image."
+
 Avoid the word "reflex" (and "reflexes") when writing about command-line skills or muscle memory. Describe the skill or the habit plainly instead:
 
 - Bad: "This module drills `type` until asking becomes a reflex."
