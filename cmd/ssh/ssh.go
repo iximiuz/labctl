@@ -200,7 +200,8 @@ func StartSSHSession(
 	runErrCh := make(chan error, 1)
 
 	go func() {
-		defer conn.Close()
+		// Closes the SSH client (and conn with it) and the SSH agent connection.
+		defer sess.Close()
 		defer cancel()
 		defer close(runErrCh)
 

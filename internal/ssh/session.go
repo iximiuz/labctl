@@ -1,5 +1,3 @@
-//go:build !windows
-
 package ssh
 
 import (
@@ -9,12 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 
-	"github.com/docker/cli/cli/streams"
 	"github.com/iximiuz/labctl/internal/labcli"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -24,6 +18,7 @@ const defaultTermEnv = "xterm-256color"
 
 type Session struct {
 	client       *ssh.Client
+	agentConn    io.Closer
 	forwardAgent bool
 }
 
@@ -37,18 +32,16 @@ func NewSession(
 
 	// Try SSH agent first
 	var sshAgent agent.Agent
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		agentConn, err := net.Dial("unix", sock)
+	agentConn, err := dialAgent()
+	if err != nil {
+		slog.Debug("Failed to connect to SSH agent", "error", err)
+	} else if agentConn != nil {
+		sshAgent = agent.NewClient(agentConn)
+		signers, err := sshAgent.Signers()
 		if err != nil {
-			slog.Debug("Failed to connect to SSH agent", "error", err)
-		} else {
-			sshAgent = agent.NewClient(agentConn)
-			signers, err := sshAgent.Signers()
-			if err != nil {
-				slog.Debug("Failed to retrieve signers from SSH agent", "error", err)
-			} else if len(signers) > 0 {
-				authMethods = append(authMethods, ssh.PublicKeys(signers...))
-			}
+			slog.Debug("Failed to retrieve signers from SSH agent", "error", err)
+		} else if len(signers) > 0 {
+			authMethods = append(authMethods, ssh.PublicKeys(signers...))
 		}
 	}
 
@@ -72,11 +65,17 @@ func NewSession(
 		HostKeyAlgorithms: []string{ssh.KeyAlgoED25519},
 	})
 	if err != nil {
+		if agentConn != nil {
+			agentConn.Close()
+		}
 		return nil, fmt.Errorf("create SSH client connection: %w", err)
 	}
 
 	client := ssh.NewClient(sshConn, chans, reqs)
 
+	if forwardAgent && sshAgent == nil {
+		slog.Warn("SSH agent forwarding requested, but no SSH agent is available")
+	}
 	forwardAgent = forwardAgent && sshAgent != nil
 	if forwardAgent {
 		agent.ForwardToAgent(client, sshAgent)
@@ -84,11 +83,16 @@ func NewSession(
 
 	return &Session{
 		client:       client,
+		agentConn:    agentConn,
 		forwardAgent: forwardAgent,
 	}, nil
 }
 
 func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) error {
+	// Stops the window size watcher when the session ends.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	sess, err := s.client.NewSession()
 	if err != nil {
 		return fmt.Errorf("create SSH session: %w", err)
@@ -178,29 +182,12 @@ func (s *Session) Run(ctx context.Context, streams labcli.Streams, cmd string) e
 }
 
 func (s *Session) Close() error {
+	if s.agentConn != nil {
+		s.agentConn.Close()
+	}
 	return s.client.Close()
 }
 
 func (s *Session) Wait() error {
 	return s.client.Wait()
-}
-
-func watchWindowSize(ctx context.Context, out *streams.Out, sess *ssh.Session) error {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGWINCH)
-
-	for {
-		select {
-		case <-sigCh:
-		case <-ctx.Done():
-			return nil
-		}
-
-		height, width := out.GetTtySize()
-		if height > 0 && width > 0 {
-			if err := sess.WindowChange(int(height), int(width)); err != nil {
-				return err
-			}
-		}
-	}
 }

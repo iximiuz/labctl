@@ -13,6 +13,7 @@ builds:
     goos:
       - linux
       - darwin
+      - windows
     goarch:
       - amd64
       - arm64
@@ -29,12 +30,61 @@ builds:
 
 archives:
   - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
+
+# Windows Package Manager (winget) manifests for `winget install labctl`.
+# They're generated into dist/winget/ on every release. Submitting them to
+# microsoft/winget-pkgs is opt-in - it only happens when WINGET_GITHUB_TOKEN
+# is set, i.e. after:
+#   1. Forking https://github.com/microsoft/winget-pkgs to the iximiuz account.
+#   2. Adding a WINGET_GITHUB_TOKEN repository secret: a GitHub token that can
+#      push to that fork (classic PAT with `public_repo` is enough).
+#   3. Signing the Microsoft CLA once, via the bot comment on the first PR.
+# New packages are reviewed by winget moderators; later versions are usually
+# merged automatically once validation passes.
+winget:
+  - name: labctl
+    package_identifier: iximiuz.labctl
+    publisher: iximiuz Labs
+    publisher_url: https://labs.iximiuz.com
+    publisher_support_url: https://github.com/iximiuz/labctl/issues
+    author: Ivan Velichko
+    homepage: https://github.com/iximiuz/labctl
+    license: Apache-2.0
+    license_url: https://github.com/iximiuz/labctl/blob/main/LICENSE
+    short_description: iximiuz Labs control - start remote microVM playgrounds from the command line.
+    description: |-
+      labctl is the command-line client for iximiuz Labs (https://labs.iximiuz.com).
+      Start and access Linux, Docker, Kubernetes, networking, and other DevOps playgrounds from your terminal.
+    release_notes_url: "https://github.com/iximiuz/labctl/releases/tag/{{ .Tag }}"
+    tags:
+      - cli
+      - devops
+      - docker
+      - kubernetes
+      - linux
+      - playground
+      - ssh
+    skip_upload: '{{ if isEnvSet "WINGET_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
+    repository:
+      owner: iximiuz
+      name: winget-pkgs
+      branch: "iximiuz.labctl-{{ .Version }}"
+      token: '{{ envOrDefault "WINGET_GITHUB_TOKEN" "" }}'
+      pull_request:
+        enabled: true
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
 
 changelog:
   sort: asc
